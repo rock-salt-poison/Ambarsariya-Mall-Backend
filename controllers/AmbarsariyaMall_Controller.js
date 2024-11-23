@@ -6,7 +6,7 @@ const ambarsariyaPool = createDbPool();
 // Fetch all domains from the AmbarsariyaMall database
 const get_domains = async (req, res) => {
   try {
-    const result = await ambarsariyaPool.query('SELECT * FROM domains');
+    const result = await ambarsariyaPool.query('SELECT * FROM domains ORDER BY domain_id');
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching domains', err);
@@ -16,7 +16,7 @@ const get_domains = async (req, res) => {
 
 const get_sectors = async(req, res) => {
     try{
-        const result = await ambarsariyaPool.query('SELECT * FROM sectors');
+        const result = await ambarsariyaPool.query('SELECT * FROM sectors ORDER BY sector_id');
         res.json(result.rows);
     }
     catch(err){
@@ -24,6 +24,19 @@ const get_sectors = async(req, res) => {
         res.status(500).json({message : 'Error fetching sectors.', error: err.message});
     }
 }
+
+const get_categories = async(req, res) => {
+  try{
+      const result = await ambarsariyaPool.query('SELECT * FROM categories ORDER BY category_id');
+      res.json(result.rows);
+  }
+  catch(err){
+      console.log('Error fetching sectors : ' + err);
+      res.status(500).json({message : 'Error fetching sectors.', error: err.message});
+  }
+}
+
+
 
 const get_domainSectors = async(req, res) => {
     try{
@@ -36,13 +49,37 @@ const get_domainSectors = async(req, res) => {
             FROM domain_sector ds 
             JOIN domains d ON d.domain_id = ${id}
             JOIN sectors s ON s.sector_id = ds.sector_id
-            where ds.domain_id = ${id}`);
+            where ds.domain_id = ${id}
+            ORDER BY ds.sector_id`);
         res.json(result.rows);
     }
     catch(err){
         console.log('Error fetching sectors : ' + err);
         res.status(500).json({message : 'Error fetching sectors.', error: err.message});
     }
+}
+
+
+const get_categoriesList = async (req, res) => {
+  try{
+    const {domain_id, sector_id} = req.query;
+    const result = await ambarsariyaPool.query(`
+          SELECT d.domain_id, d.domain_name, s.sector_id, s.sector_name, c.category_id, c.category_name
+          FROM sector_category sc
+          JOIN sectors s ON sc.sector_id = s.sector_id
+          JOIN domains d ON sc.domain_id = d.domain_id
+          JOIN categories c ON sc.category_id = c.category_id
+          WHERE sc.sector_id = $2
+          and d.domain_id = $1
+          ORDER BY c.category_name
+        `, [domain_id, sector_id]);
+        res.json(result.rows);
+  }catch(e){
+    console.log("Error fetching categories : ", e);
+    res.status(500).json({message:'Error fetching categories.',
+      error : e.message
+    });
+  }
 }
 
 // Example of creating a domain (POST request)
@@ -72,4 +109,4 @@ const get_typeOfServices = async(req, res) => {
 }
 
 // Export the functions for use in routes
-module.exports = { get_domains, get_sectors, get_domainSectors, createDomain, get_typeOfServices };
+module.exports = { get_domains, get_sectors,get_categories, get_domainSectors, createDomain, get_typeOfServices, get_categoriesList };

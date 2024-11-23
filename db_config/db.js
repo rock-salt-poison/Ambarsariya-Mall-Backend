@@ -1,46 +1,23 @@
 const { Pool } = require('pg');
+require('dotenv').config();
 
-// Function to get the database configuration based on the environment
-function getDbConfig(dbName) {
-  const dbConfig = {
-    user: 'Merchant',         
-    host: 'localhost',          
-    password: 'merchant123', 
-    database:'AmbrsariyaMall' ,
-    port: 5432,                 
+// Function to get database configuration
+function getDbConfig(dbName = 'AmbrsariyaMall') {
+  return {
+    user: process.env.DB_USER || 'Merchant',          // Default to 'Merchant' if not set
+    host: process.env.DB_HOST || 'localhost',         // Default to 'localhost'
+    password: process.env.DB_PASSWORD || 'merchant123', // Default password
+    database: process.env.DB_NAME || dbName,          // Default database name
+    port: parseInt(process.env.DB_PORT, 10) || 5432,  // Default port 5432
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false, // SSL for production
   };
-
-  // Assign database name dynamically
-  // switch (dbName) {
-  //   case 'AmbarsariyaMall':
-  //     dbConfig.database = 'AmbrsariyaMall';
-  //     break;
-  //   case 'Sell':
-  //     dbConfig.database = 'Sell';
-  //     break;
-  //   case 'Serve':
-  //     dbConfig.database = 'Serve';
-  //     break;
-  //   case 'Socialize':
-  //     dbConfig.database = 'Socialize';
-  //     break;
-  //   default:
-  //     dbConfig.database = 'default_database';  // Add a default if needed
-  // }
-
-  return dbConfig;
 }
 
-// Function to create a pool connection for a specific database
-// function createDbPool(dbName) {
-//   const dbConfig = getDbConfig(dbName);
-//   return new Pool(dbConfig);
-// }
-
-function createDbPool() {
-  const dbConfig = getDbConfig();
+// Function to create a new connection pool
+function createDbPool(dbName) {
+  const dbConfig = getDbConfig(dbName);
   return new Pool(dbConfig);
 }
 
-// Export function to create pool connections for different databases
+// Export the function to create a pool
 module.exports = { createDbPool };

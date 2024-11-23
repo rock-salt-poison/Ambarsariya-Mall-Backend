@@ -120,6 +120,84 @@ const post_book_eshop = async (req, resp) => {
 }
 
 
+const post_member_data = async (req, resp) => {
+    const {
+        name,
+        username,
+        password,
+        address,
+        phone,
+        gender,
+        age
+    } = req.body;
+
+    // Validate that required fields are provided
+    if (!name || !username || !password) {
+        return resp.status(400).json({ message: 'Full name, username, and password are required.' });
+    }
+
+    // Determine title based on gender
+    let title = '';
+    if (gender === 'male') {
+        title = 'Mr.';
+    } else if (gender === 'female') {
+        title = 'Ms.';
+    } else {
+        title = 'Other'; // or set a default title if needed
+    }
+
+    try {
+        // Start a transaction
+        await ambarsariyaPool.query('BEGIN');
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insert into users table
+        const userResult = await ambarsariyaPool.query(
+            `INSERT INTO Sell.users 
+            (name, title, phone_no_1, user_type, address, gender, age)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING user_id`,
+            [name, title, phone, 'member', address, gender, age]  // Assuming user_type is 'member' here
+        );
+        const newUserId = userResult.rows[0].user_id;
+
+        // Insert into user_credentials table
+        const user_credentials = await ambarsariyaPool.query(
+            `INSERT INTO Sell.user_credentials 
+            (user_id, username, password)
+            VALUES ($1, $2, $3)
+            RETURNING access_token`,
+            [newUserId, username, hashedPassword]
+        );
+
+        const user_access_token = user_credentials.rows[0].access_token;
+
+        // Insert into user_shops table (if necessary)
+        // Assuming `newShopNo` is defined elsewhere in your code
+        await ambarsariyaPool.query(
+            `INSERT INTO Sell.user_shops
+            (user_id, shop_no)
+            VALUES ($1, $2)`,
+            [newUserId, newShopNo]  // newShopNo should be defined elsewhere
+        );
+
+        // Commit the transaction
+        await ambarsariyaPool.query('COMMIT');
+        resp.status(201).json({
+            message: 'User successfully created.',
+            user_access_token
+        });
+
+    } catch (err) {
+        // Rollback the transaction in case of error
+        await ambarsariyaPool.query('ROLLBACK');
+        console.error('Error storing data', err);
+        resp.status(500).json({ message: 'Error storing data', error: err.message });
+    }
+};
+
+
 const update_eshop = async (req, resp) => {
     const {
         business_name,
@@ -192,7 +270,6 @@ const update_eshop = async (req, resp) => {
     }
 };
 
-
 const get_shopUserData = async (req, res) => {
     try {
         const { shop_access_token } = req.query;
@@ -208,14 +285,17 @@ const get_shopUserData = async (req, res) => {
                 ef.user_id AS "user_id",
                 u.user_type AS "user_type",
                 uc.username AS "username",
-                uc.password AS "password",
                 u.title AS "title",
                 u.full_name AS "full_name",
                 ef.address AS "address",
                 u.phone_no_1 AS "phone_no_1",
                 u.phone_no_2 AS "phone_no_2",
+                ef.domain AS "domain_id",
                 d.domain_name AS "domain_name",
+                ef.created_domain AS "created_domain",
+                ef.sector AS "sector_id",
                 s.sector_name AS "sector_name",
+                ef.created_sector AS "created_sector",
                 ef.ontime AS "ontime", 
                 ef.offtime AS "offtime", 
                 array_agg(st.service) AS "type_of_service", 
@@ -246,9 +326,9 @@ const get_shopUserData = async (req, res) => {
             JOIN public.sectors s ON s.sector_id = ef.sector
             LEFT JOIN public.type_of_services st ON st.id = ANY(ef.type_of_service)
             WHERE ef.shop_access_token = $1
-            GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, uc.password, u.title, 
-                     u.full_name, ef.address, u.phone_no_1, u.phone_no_2, d.domain_name, 
-                     s.sector_name, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
+            GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title, 
+                     u.full_name, ef.address, u.phone_no_1, u.phone_no_2, d.domain_name,ef.created_domain, 
+                     s.sector_name, ef.created_sector, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
                      u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
                      ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
                      ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
@@ -269,9 +349,11 @@ const get_shopUserData = async (req, res) => {
 };
 
 
-const get_allShops = async (req, res) => {
+const get_otherShops = async (req, res) => {
     try{
-        const result = await ambarsariyaPool.query('SELECT * FROM Sell.eshop_form');
+        const { shopAccessToken } = req.query;
+        const result = await ambarsariyaPool.query(`SELECT * FROM Sell.eshop_form 
+                WHERE shop_access_token != $1 AND business_name IS NOT NULL`, [shopAccessToken]);
         res.json(result.rows);
     }
     catch(err){
@@ -280,4 +362,55 @@ const get_allShops = async (req, res) => {
     }
 }
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_allShops };
+const post_authLogin = async (req, res) => {
+    const { username, password } = req.body;
+  
+    // Input validation (basic example)
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username and password are required.' });
+    }
+  
+    try {
+      // Query to find the user credentials by username
+      const result = await ambarsariyaPool.query('SELECT * FROM Sell.user_credentials WHERE username = $1', [username]);
+  
+      // If no user found with the given username
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Username not found.' });
+      }
+  
+      // Iterate through all users with that username
+      for (let i = 0; i < result.rows.length; i++) {
+        const storedPassword = result.rows[i].password;
+        const userAccessToken = result.rows[i].access_token;
+        const userId = result.rows[i].user_id; // Get user_id
+  
+        // Query to get the user type based on user_id
+        const userResult = await ambarsariyaPool.query('SELECT user_type FROM Sell.users WHERE user_id = $1', [userId]);
+        const userType = userResult.rows[0]?.user_type;
+  
+        // Compare the provided password with the stored password (hashed)
+        const isPasswordValid = await bcrypt.compare(password, storedPassword);
+  
+        if (isPasswordValid) {
+          // Return the user access token and user type if password matches
+          return res.status(200).json({
+            message: 'Login successful.',
+            user_access_token: userAccessToken,
+            user_type: userType,  // Include user type in the response
+          });
+        }
+      }
+  
+      // If no password matched
+      return res.status(401).json({ message: 'Invalid credentials.' });
+  
+    } catch (error) {
+      console.error('Error logging in:', error);
+      res.status(500).json({ message: 'Internal server error.' });
+    }
+  };
+  
+  
+
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data };
