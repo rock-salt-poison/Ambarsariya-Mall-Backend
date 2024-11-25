@@ -138,9 +138,9 @@ const post_member_data = async (req, resp) => {
 
     // Determine title based on gender
     let title = '';
-    if (gender === 'male') {
+    if (gender === 'Male') {
         title = 'Mr.';
-    } else if (gender === 'female') {
+    } else if (gender === 'Female') {
         title = 'Ms.';
     } else {
         title = 'Other'; // or set a default title if needed
@@ -154,8 +154,8 @@ const post_member_data = async (req, resp) => {
 
         // Insert into users table
         const userResult = await ambarsariyaPool.query(
-            `INSERT INTO Sell.users 
-            (name, title, phone_no_1, user_type, address, gender, age)
+            `INSERT INTO sell.users 
+            (full_name, title, phone_no_1, user_type, address, gender, age)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING user_id`,
             [name, title, phone, 'member', address, gender, age]  // Assuming user_type is 'member' here
@@ -164,7 +164,7 @@ const post_member_data = async (req, resp) => {
 
         // Insert into user_credentials table
         const user_credentials = await ambarsariyaPool.query(
-            `INSERT INTO Sell.user_credentials 
+            `INSERT INTO sell.user_credentials 
             (user_id, username, password)
             VALUES ($1, $2, $3)
             RETURNING access_token`,
@@ -173,19 +173,10 @@ const post_member_data = async (req, resp) => {
 
         const user_access_token = user_credentials.rows[0].access_token;
 
-        // Insert into user_shops table (if necessary)
-        // Assuming `newShopNo` is defined elsewhere in your code
-        await ambarsariyaPool.query(
-            `INSERT INTO Sell.user_shops
-            (user_id, shop_no)
-            VALUES ($1, $2)`,
-            [newUserId, newShopNo]  // newShopNo should be defined elsewhere
-        );
-
         // Commit the transaction
         await ambarsariyaPool.query('COMMIT');
         resp.status(201).json({
-            message: 'User successfully created.',
+            message: 'Form submitted successfully.',
             user_access_token
         });
 
@@ -348,12 +339,71 @@ const get_shopUserData = async (req, res) => {
     }
 };
 
+const get_memberData = async (req,res) => {
+    try {
+        const { memberAccessToken } = req.query;
+
+        // Validate that the member_access_token is provided
+        if (!memberAccessToken) {
+            return res.status(400).json({ message: 'Member access token is required.' });
+        }
+
+        const query = `
+            SELECT
+                u.user_id AS "user_id",
+                u.user_type AS "user_type",
+                uc.username AS "username",
+                u.title AS "title",
+                u.full_name AS "full_name",
+                u.phone_no_1 AS "phone_no_1",
+                u.gender AS "gender",
+                u.age AS "age",
+                u.address AS "address"
+            FROM Sell.users u
+            JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
+            WHERE uc.access_token = $1`;
+
+        const result = await ambarsariyaPool.query(query, [memberAccessToken]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'No data found for the provided member access token.' });
+        }
+
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('Error fetching user data:', err);
+        res.status(500).json({ message: 'Error fetching user data.', error: err.message });
+    }
+}
+
 
 const get_otherShops = async (req, res) => {
     try{
         const { shopAccessToken } = req.query;
         const result = await ambarsariyaPool.query(`SELECT * FROM Sell.eshop_form 
                 WHERE shop_access_token != $1 AND business_name IS NOT NULL`, [shopAccessToken]);
+        res.json(result.rows);
+    }
+    catch(err){
+        console.log('Error fetching sectors : ' + err);
+        res.status(500).json({message : 'Error fetching sectors.', error: err.message});
+    }
+}
+
+const get_userData = async (req, res) => {
+    try{
+        const { userAccessToken } = req.query;
+        const result = await ambarsariyaPool.query(`SELECT 
+            u.user_type, 
+            ef.shop_access_token AS "shop_access_token",
+            uc.access_token AS "user_access_token"
+        FROM sell.users u
+        JOIN sell.user_credentials uc 
+            ON u.user_id = uc.user_id
+        LEFT JOIN sell.eshop_form ef
+            ON u.user_id = ef.user_id
+        WHERE uc.access_token = $1;`, [userAccessToken]);
         res.json(result.rows);
     }
     catch(err){
@@ -403,14 +453,14 @@ const post_authLogin = async (req, res) => {
       }
   
       // If no password matched
-      return res.status(401).json({ message: 'Invalid credentials.' });
+      return res.status(401).json({ message: 'Incorrect Password.' });
   
     } catch (error) {
       console.error('Error logging in:', error);
       res.status(500).json({ message: 'Internal server error.' });
     }
   };
-  
+
   
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data };
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData };

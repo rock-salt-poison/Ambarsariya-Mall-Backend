@@ -15,5 +15,7 @@ router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
 router.get('/sell/shop-user-data', eshopController.get_shopUserData);
 router.get('/sell/shops', eshopController.get_otherShops);
 router.post('/sell/login', eshopController.post_authLogin);
-
+router.post('/sell/member', eshopController.post_member_data);
+router.get('/sell/member', eshopController.get_memberData);
+router.get('/sell/user', eshopController.get_userData);
 module.exports = router;
