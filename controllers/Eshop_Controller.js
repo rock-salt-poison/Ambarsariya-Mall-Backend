@@ -272,58 +272,78 @@ const get_shopUserData = async (req, res) => {
 
         const query = `
             SELECT
-                ef.shop_no AS "shop_no",
-                ef.user_id AS "user_id",
-                u.user_type AS "user_type",
-                uc.username AS "username",
-                u.title AS "title",
-                u.full_name AS "full_name",
-                ef.address AS "address",
-                u.phone_no_1 AS "phone_no_1",
-                u.phone_no_2 AS "phone_no_2",
-                ef.domain AS "domain_id",
-                d.domain_name AS "domain_name",
-                ef.created_domain AS "created_domain",
-                ef.sector AS "sector_id",
-                s.sector_name AS "sector_name",
-                ef.created_sector AS "created_sector",
-                ef.ontime AS "ontime", 
-                ef.offtime AS "offtime", 
-                array_agg(st.service) AS "type_of_service", 
-                ef.paid_version AS "paid_version", 
-                ef.gst AS "gst",
-                ef.msme AS "msme",
-                u.pan_no AS "pan_no",
-                u.cin_no AS "cin_no",
-                ef.is_merchant AS "is_merchant",
-                ef.member_username_or_phone_no AS "member_username_or_phone_no",
-                ef.premium_service AS "premium_service",
-                ef.business_name AS "business_name",
-                ef.establishment_date AS "establishment_date", 
-                ef.usp_values_url AS "usp_values_url",
-                ef.product_sample_url AS "product_sample_url",
-                ef.similar_options AS "similar_options",
-                ef.key_players AS "key_players",
-                ef.cost_sensitivity AS "cost_sensitivity",
-                ef.daily_walkin AS "daily_walkin",
-                ef.parking_availability AS "parking_availability",
-                ef.category AS "category",
-                ef.advertisement_video_url
-            FROM Sell.users u
-            JOIN Sell.eshop_form ef ON ef.user_id = u.user_id
-            JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
-            JOIN Sell.user_shops us ON us.user_id = u.user_id
-            JOIN public.domains d ON d.domain_id = ef.domain
-            JOIN public.sectors s ON s.sector_id = ef.sector
-            LEFT JOIN public.type_of_services st ON st.id = ANY(ef.type_of_service)
-            WHERE ef.shop_access_token = $1
-            GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title, 
-                     u.full_name, ef.address, u.phone_no_1, u.phone_no_2, d.domain_name,ef.created_domain, 
-                     s.sector_name, ef.created_sector, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
-                     u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
-                     ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
-                     ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
-                     ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url`;
+    ef.shop_no AS "shop_no",
+    ef.user_id AS "user_id",
+    u.user_type AS "user_type",
+    uc.username AS "username",
+    u.title AS "title",
+    u.full_name AS "full_name",
+    ef.address AS "address",
+    u.phone_no_1 AS "phone_no_1",
+    u.phone_no_2 AS "phone_no_2",
+    ef.domain AS "domain_id",
+    d.domain_name AS "domain_name",
+    ef.created_domain AS "created_domain",
+    ef.sector AS "sector_id",
+    s.sector_name AS "sector_name",
+    ef.created_sector AS "created_sector",
+    ef.ontime AS "ontime", 
+    ef.offtime AS "offtime", 
+    array_agg(st.service) AS "type_of_service", 
+    ef.paid_version AS "paid_version", 
+    ef.gst AS "gst",
+    ef.msme AS "msme",
+    u.pan_no AS "pan_no",
+    u.cin_no AS "cin_no",
+    ef.is_merchant AS "is_merchant",
+    ef.member_username_or_phone_no AS "member_username_or_phone_no",
+    ef.premium_service AS "premium_service",
+    ef.business_name AS "business_name",
+    ef.establishment_date AS "establishment_date", 
+    ef.usp_values_url AS "usp_values_url",
+    ef.product_sample_url AS "product_sample_url",
+    ef.similar_options AS "similar_options",
+    -- Fetch similar options names
+    (SELECT array_agg(ef2.business_name) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.similar_options)) AS "similar_options_name",
+    -- Fetch similar options tokens, casting UUID to TEXT
+    (SELECT array_agg(ef2.shop_access_token::TEXT) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.similar_options)) AS "similar_options_token",
+    ef.key_players AS "key_players",
+    -- Fetch key players names
+    (SELECT array_agg(ef2.business_name) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.key_players)) AS "key_players_name",
+    -- Fetch key players tokens, casting UUID to TEXT
+    (SELECT array_agg(ef2.shop_access_token::TEXT) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.key_players)) AS "key_players_token",
+    ef.cost_sensitivity AS "cost_sensitivity",
+    ef.daily_walkin AS "daily_walkin",
+    ef.parking_availability AS "parking_availability",
+    ef.category AS "category",
+    array_agg(DISTINCT c.category_name) AS "category_name",  
+    ef.advertisement_video_url,
+    ef.shop_access_token AS "shop_access_token"
+FROM Sell.users u
+JOIN Sell.eshop_form ef ON ef.user_id = u.user_id
+JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
+JOIN Sell.user_shops us ON us.user_id = u.user_id
+JOIN public.domains d ON d.domain_id = ef.domain
+JOIN public.sectors s ON s.sector_id = ef.sector
+LEFT JOIN public.type_of_services st ON st.id = ANY(ef.type_of_service)
+LEFT JOIN public.categories c ON c.category_id = ANY(ef.category)
+WHERE ef.shop_access_token = $1
+GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title, 
+         u.full_name, ef.address, u.phone_no_1, u.phone_no_2, d.domain_name, ef.created_domain, 
+         s.sector_name, ef.created_sector, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
+         u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
+         ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
+         ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
+         ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.shop_access_token;
+`;
 
         const result = await ambarsariyaPool.query(query, [shop_access_token]);
 
@@ -461,6 +481,119 @@ const post_authLogin = async (req, res) => {
     }
   };
 
-  
+const get_allShops = async (req, res) => {
+    try {
+        const result = await ambarsariyaPool.query(`
+            SELECT
+                ef.shop_no AS "shop_no",
+    ef.user_id AS "user_id",
+    u.user_type AS "user_type",
+    uc.username AS "username",
+    u.title AS "title",
+    u.full_name AS "full_name",
+    ef.address AS "address",
+    u.phone_no_1 AS "phone_no_1",
+    u.phone_no_2 AS "phone_no_2",
+    ef.domain AS "domain_id",
+    d.domain_name AS "domain_name",
+    ef.created_domain AS "created_domain",
+    ef.sector AS "sector_id",
+    s.sector_name AS "sector_name",
+    ef.created_sector AS "created_sector",
+    ef.ontime AS "ontime", 
+    ef.offtime AS "offtime", 
+    array_agg(st.service) AS "type_of_service", 
+    ef.paid_version AS "paid_version", 
+    ef.gst AS "gst",
+    ef.msme AS "msme",
+    u.pan_no AS "pan_no",
+    u.cin_no AS "cin_no",
+    ef.is_merchant AS "is_merchant",
+    ef.member_username_or_phone_no AS "member_username_or_phone_no",
+    ef.premium_service AS "premium_service",
+    ef.business_name AS "business_name",
+    ef.establishment_date AS "establishment_date", 
+    ef.usp_values_url AS "usp_values_url",
+    ef.product_sample_url AS "product_sample_url",
+    ef.similar_options AS "similar_options",
+    -- Fetch similar options names
+    (SELECT array_agg(ef2.business_name) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.similar_options)) AS "similar_options_name",
+    -- Fetch similar options tokens, casting UUID to TEXT
+    (SELECT array_agg(ef2.shop_access_token::TEXT) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.similar_options)) AS "similar_options_token",
+    ef.key_players AS "key_players",
+    -- Fetch key players names
+    (SELECT array_agg(ef2.business_name) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.key_players)) AS "key_players_name",
+    -- Fetch key players tokens, casting UUID to TEXT
+    (SELECT array_agg(ef2.shop_access_token::TEXT) 
+     FROM Sell.eshop_form ef2 
+     WHERE ef2.shop_no = ANY(ef.key_players)) AS "key_players_token",
+    ef.cost_sensitivity AS "cost_sensitivity",
+    ef.daily_walkin AS "daily_walkin",
+    ef.parking_availability AS "parking_availability",
+    ef.category AS "category",
+    array_agg(DISTINCT c.category_name) AS "category_name",  
+    ef.advertisement_video_url,
+    ef.shop_access_token AS "shop_access_token"
+            FROM Sell.users u
+            JOIN Sell.eshop_form ef ON ef.user_id = u.user_id
+            JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
+            JOIN Sell.user_shops us ON us.user_id = u.user_id
+            JOIN public.domains d ON d.domain_id = ef.domain
+            JOIN public.sectors s ON s.sector_id = ef.sector
+            LEFT JOIN public.type_of_services st ON st.id = ANY(ef.type_of_service)
+            LEFT JOIN public.categories c ON c.category_id = ANY(ef.category)  -- Using ANY for array comparison
+            WHERE ef.business_name IS NOT NULL
+            GROUP BY 
+                ef.shop_no,
+                ef.user_id,
+                u.user_type,
+                uc.username,
+                u.title,
+                u.full_name,
+                ef.address,
+                u.phone_no_1,
+                u.phone_no_2,
+                ef.domain,
+                d.domain_name,
+                ef.created_domain,
+                ef.sector,
+                s.sector_name,
+                ef.created_sector,
+                ef.ontime,
+                ef.offtime,
+                ef.paid_version,
+                ef.gst,
+                ef.msme,
+                u.pan_no,
+                u.cin_no,
+                ef.is_merchant,
+                ef.member_username_or_phone_no,
+                ef.premium_service,
+                ef.business_name,
+                ef.establishment_date,
+                ef.usp_values_url,
+                ef.product_sample_url,
+                ef.similar_options,
+                ef.key_players,
+                ef.cost_sensitivity,
+                ef.daily_walkin,
+                ef.parking_availability,
+                ef.category,
+                ef.advertisement_video_url,
+                ef.shop_access_token;
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData };
+            `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching domains', err);
+        res.status(500).json({ message: 'Error fetching shops', error: err.message });
+    }
+}
+
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops };
