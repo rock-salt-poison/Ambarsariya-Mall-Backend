@@ -432,55 +432,6 @@ const get_userData = async (req, res) => {
     }
 }
 
-// const post_authLogin = async (req, res) => {
-//     const { username, password, type } = req.body;
-  
-//     // Input validation (basic example)
-//     if (!username || !password) {
-//       return res.status(400).json({ message: 'Username and password are required.' });
-//     }
-  
-//     try {
-//       // Query to find the user credentials by username
-//       const result = await ambarsariyaPool.query('SELECT * FROM Sell.user_credentials WHERE username = $1', [username]);
-  
-//       // If no user found with the given username
-//       if (result.rows.length === 0) {
-//         return res.status(404).json({ message: 'Username not found.' });
-//       }
-  
-//       // Iterate through all users with that username
-//       for (let i = 0; i < result.rows.length; i++) {
-//         const storedPassword = result.rows[i].password;
-//         const userAccessToken = result.rows[i].access_token;
-//         const userId = result.rows[i].user_id; // Get user_id
-  
-//         // Query to get the user type based on user_id
-//         const userResult = await ambarsariyaPool.query('SELECT user_type FROM Sell.users WHERE user_id = $1', [userId]);
-//         const userType = userResult.rows[0]?.user_type;
-  
-//         // Compare the provided password with the stored password (hashed)
-//         const isPasswordValid = await bcrypt.compare(password, storedPassword);
-  
-//         if (isPasswordValid) {
-//           // Return the user access token and user type if password matches
-//           return res.status(200).json({
-//             message: 'Login successful.',
-//             user_access_token: userAccessToken,
-//             user_type: userType,  // Include user type in the response
-//           });
-//         }
-//       }
-  
-//       // If no password matched
-//       return res.status(401).json({ message: 'Incorrect Password.' });
-  
-//     } catch (error) {
-//       console.error('Error logging in:', error);
-//       res.status(500).json({ message: 'Internal server error.' });
-//     }
-//   };
-
 
 const post_authLogin = async (req, res) => {
     const { username, password, type } = req.body;
@@ -532,13 +483,13 @@ const post_authLogin = async (req, res) => {
       }
   
       // If no matching credentials were found
-      return res.status(401).json({ message: 'Incorrect password' });
+      return res.status(401).json({ message: 'Incorrect password.' });
     } catch (error) {
       console.error('Error logging in:', error);
       res.status(500).json({ message: 'Internal server error.' });
     }
-  };
-  
+};
+
 
 const get_allShops = async (req, res) => {
     try {
@@ -655,4 +606,129 @@ const get_allShops = async (req, res) => {
     }
 }
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops };
+const post_support_name_password = async (req, resp) => {
+    const {
+        name,
+        phone_no,
+        otp
+    } = req.body;
+
+    // Validate that required fields are provided
+    if (!name || !phone_no) {
+        return resp.status(400).json({ message: 'Name and phone no. are required.' });
+    }
+
+    try {
+        // Start a transaction
+        await ambarsariyaPool.query('BEGIN');
+
+        // Insert into users table
+        const userResult = await ambarsariyaPool.query(
+            `INSERT INTO sell.support 
+            (name, phone_no, otp)
+            VALUES ($1, $2, $3)
+            RETURNING access_token`,
+            [name, phone_no, otp]  // Assuming user_type is 'member' here
+        );
+        const newAccessToken = userResult.rows[0].access_token;
+
+        // Commit the transaction
+        await ambarsariyaPool.query('COMMIT');
+        resp.status(201).json({
+            message: 'Form submitted successfully.',
+            newAccessToken
+        });
+
+    } catch (err) {
+        await ambarsariyaPool.query('ROLLBACK');
+        console.error('Error storing data', err);
+        resp.status(500).json({ message: 'Error storing data', error: err.message });
+    }
+}
+
+const get_visitorData = async (req, res) => {
+    try {
+        const { token } = req.params; // Extract the token from the request
+
+        // Query for full visitor data
+        const query = `
+            SELECT  
+                v.name,
+                v.phone_no,
+                v.otp,
+                v.domain_id,
+                d.domain_name,
+                v.sector_id,
+                s.sector_name,
+                v.purpose,
+                v.message,
+                v.file_attached,
+                v.response,
+                v.created_at,
+                v.updated_at,
+                v.access_token
+            FROM sell.support v
+            LEFT JOIN domains d ON d.domain_id = v.domain_id
+            LEFT JOIN sectors s ON s.sector_id = v.sector_id
+            WHERE access_token = $1
+        `;
+        const result = await ambarsariyaPool.query(query, [token]);
+
+        if (result.rowCount === 0) {
+            // If no rows are found, assume the token is invalid
+            res.status(404).json({ valid: false, message: 'Invalid token' });
+        }else{
+            res.json({ valid: true, data: result.rows });
+        }
+
+    } catch (err) {
+        console.error('Error processing request:', err);
+        res.status(500).json({ message: 'Error processing request.', error: err.message });
+    }
+};
+
+
+const put_visitorData = async (req,resp) => {
+        const {
+            domain,
+            sector,
+            purpose,
+            message,
+            access_token
+        } = req.body;
+
+        try{
+            const result = await ambarsariyaPool.query(
+                `UPDATE Sell.support
+                SET domain_id = $1,
+                    sector_id = $2,
+                    purpose = $3,
+                    message = $4
+                WHERE access_token = $5
+                RETURNING access_token`,
+                [
+                    domain,
+                    sector,
+                    purpose,
+                    message,
+                    access_token
+                ]
+            );
+    
+            if (result.rows.length === 0) {
+                return resp.status(404).json({ message: 'No visitor found with the provided access token.' });
+            }
+    
+            const visitor_access_token = result.rows[0].access_token;
+    
+            resp.status(200).json({
+                message: 'Visitor data updated successfully.',
+                visitor_access_token
+            });
+        }catch(err){
+            console.error('Error updating data:', err);
+            resp.status(500).json({ message: 'Error updating data', error: err.message });
+        }
+}
+
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops, post_support_name_password, get_visitorData, put_visitorData };

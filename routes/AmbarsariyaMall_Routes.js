@@ -19,4 +19,9 @@ router.post('/sell/login', eshopController.post_authLogin);
 router.post('/sell/member', eshopController.post_member_data);
 router.get('/sell/member', eshopController.get_memberData);
 router.get('/sell/user', eshopController.get_userData);
+router.get('/sell/support/:token', eshopController.get_visitorData);
+
+router.post('/sell/support', eshopController.post_support_name_password);
+router.put('/sell/support', eshopController.put_visitorData);
+
 module.exports = router;
