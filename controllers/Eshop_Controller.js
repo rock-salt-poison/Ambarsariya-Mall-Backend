@@ -731,4 +731,54 @@ const put_visitorData = async (req,resp) => {
         }
 }
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops, post_support_name_password, get_visitorData, put_visitorData };
+const put_forgetPassword = async (req, resp) => {
+    const { username, password, context } = req.body;
+
+    try {
+        // Determine allowed user types based on the context
+        let allowedUserTypes = [];
+        if (context === "sell") {
+            allowedUserTypes = ["shop", "merchant"];
+        } else if (context === "buy") {
+            allowedUserTypes = ["member", "visitor"];
+        } else {
+            return resp.status(400).json({ message: "Invalid context provided." });
+        }
+
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Update password for the specific user
+        const result = await ambarsariyaPool.query(
+            `
+            UPDATE sell.user_credentials
+            SET password = $2
+            WHERE username = $1
+            AND user_id IN (
+                SELECT user_id
+                FROM sell.users
+                WHERE user_type = ANY($3::text[])
+            )
+            RETURNING access_token
+            `,
+            [username, hashedPassword, allowedUserTypes]
+        );
+
+        if (result.rows.length === 0) {
+            return resp.status(404).json({ message: "No user found." });
+        }
+
+        const user_access_token = result.rows[0].access_token;
+
+        resp.status(200).json({
+            message: "Password updated successfully.",
+            user_access_token,
+        });
+    } catch (err) {
+        console.error("Error updating data:", err);
+        resp.status(500).json({ message: "Error updating data", error: err.message });
+    }
+};
+
+
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops, post_support_name_password, get_visitorData, put_visitorData, put_forgetPassword };
