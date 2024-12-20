@@ -23,6 +23,8 @@ router.get('/sell/user', eshopController.get_userData);
 router.get('/sell/support/:token', eshopController.get_visitorData);
 
 router.post('/sell/support', eshopController.post_support_name_password);
+router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
+
 router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
 
