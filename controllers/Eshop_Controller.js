@@ -416,6 +416,7 @@ const get_userData = async (req, res) => {
         const { userAccessToken } = req.query;
         const result = await ambarsariyaPool.query(`SELECT 
             u.user_type, 
+            ef.shop_no AS "shop_no",
             ef.shop_access_token AS "shop_access_token",
             uc.access_token AS "user_access_token"
         FROM sell.users u
@@ -781,111 +782,245 @@ const put_forgetPassword = async (req, resp) => {
 };
 
 
-const post_discount_coupons = async (req, res) => {
-    const shop_no = req.params.shop_no;
-    const { validity_start, validity_end, data } = req.body;  // Extract validity_start and validity_end
+// const post_discount_coupons = async (req, res) => {
+//     const shop_no = req.params.shop_no;
+//     const { validity_start, validity_end, data } = req.body;  // Extract validity_start and validity_end
     
-    try {
-      // Start the transaction
-      await ambarsariyaPool.query('BEGIN');
+//     try {
+//       // Start the transaction
+//       await ambarsariyaPool.query('BEGIN');
       
-      // Loop through the categories in the request body
-      for (const [category, categoryData] of Object.entries(data)) {
-        const { id, discounts } = categoryData;
+//       // Loop through the categories in the request body
+//       for (const [category, categoryData] of Object.entries(data)) {
+//         const { id, discounts } = categoryData;
   
-        // Loop through the discounts in the category
-        for (const [discountType, discountDetails] of Object.entries(discounts)) {
-          if (discountDetails.checked) {
-            // Step 1: Check if the coupon already exists for the shop_no and coupon_type
-            const checkCouponQuery = `
-              SELECT id 
-              FROM sell.discount_coupons 
-              WHERE coupon_type = $1 AND shop_no = $2;
-            `;
-            const { rows: existingCoupon } = await ambarsariyaPool.query(checkCouponQuery, [
-              discountType,
-              shop_no,
+//         // Loop through the discounts in the category
+//         for (const [discountType, discountDetails] of Object.entries(discounts)) {
+//           if (discountDetails.checked) {
+//             // Step 1: Check if the coupon already exists for the shop_no and coupon_type
+//             const checkCouponQuery = `
+//               SELECT id 
+//               FROM sell.discount_coupons 
+//               WHERE coupon_type = $1 AND shop_no = $2;
+//             `;
+//             const { rows: existingCoupon } = await ambarsariyaPool.query(checkCouponQuery, [
+//               discountType,
+//               shop_no,
+//             ]);
+  
+//             let couponId;
+  
+//             if (existingCoupon.length > 0) {
+//               // If coupon exists, update the coupon with new validity dates
+//               couponId = existingCoupon[0].id;
+//               const updateCouponQuery = `
+//                 UPDATE sell.discount_coupons
+//                 SET validity_start = $1, validity_end = $2
+//                 WHERE id = $3;
+//               `;
+//               await ambarsariyaPool.query(updateCouponQuery, [
+//                 validity_start,  // Use validity_start from the request
+//                 validity_end,    // Use validity_end from the request
+//                 couponId,
+//               ]);
+//             } else {
+//               // If coupon does not exist, insert a new coupon
+//               const insertCouponQuery = `
+//                 INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end)
+//                 VALUES ($1, $2, $3, $4, $5)
+//                 RETURNING id;
+//               `;
+//               const { rows } = await ambarsariyaPool.query(insertCouponQuery, [
+//                 discountType,
+//                 category,
+//                 shop_no,
+//                 validity_start,  // Use validity_start from the request
+//                 validity_end,    // Use validity_end from the request
+//               ]);
+//               couponId = rows[0].id;
+//             }
+  
+//             // Step 2: Insert conditions into discount_conditions table
+//             const conditions = [];
+  
+//             // Collect conditions from discountDetails
+//             if (discountDetails.value_1) {
+//               conditions.push({
+//                 condition_type: 'value_1',
+//                 condition_value: discountDetails.value_1,
+//               });
+//             }
+//             if (discountDetails.value_2) {
+//               conditions.push({
+//                 condition_type: 'value_2',
+//                 condition_value: discountDetails.value_2,
+//               });
+//             }
+  
+//             // Insert each condition
+//             for (const condition of conditions) {
+//               const insertConditionQuery = `
+//                 INSERT INTO sell.discount_conditions (coupon_id, condition_type, condition_value)
+//                 VALUES ($1, $2, $3);
+//               `;
+//               await ambarsariyaPool.query(insertConditionQuery, [
+//                 couponId,
+//                 condition.condition_type,
+//                 condition.condition_value,
+//               ]);
+//             }
+//           }
+//         }
+//       }
+  
+//       // Commit the transaction
+//       await ambarsariyaPool.query('COMMIT');
+//       res.status(201).json({ message: 'Discount coupons and conditions added/updated successfully' });
+//     } catch (error) {
+//       // Rollback the transaction in case of error
+//       await ambarsariyaPool.query('ROLLBACK');
+//       console.error('Error inserting discount data:', error);
+//       res.status(500).json({ error: 'Failed to add/update discount data' });
+//     } finally {
+//       // Release the pool connection
+//       ambarsariyaPool.end();
+//     }
+//   };
+
+
+
+const post_discount_coupons = async (req, res) => {
+    const inputData = req.body;
+    const shopNo = req.params.shop_no;
+  
+    // Validate the input data structure
+    if (!inputData || typeof inputData !== 'object') {
+      return res.status(400).json({ error: "Invalid input data" });
+    }
+  
+    if (!inputData.data || typeof inputData.data !== 'object') {
+      return res.status(400).json({ error: "Invalid category data" });
+    }
+  
+  
+    if (!shopNo) {
+      return res.status(400).json({ error: "Shop number (shop_no) is required" });
+    }
+  
+    try {
+      await ambarsariyaPool.query("BEGIN");
+  
+      for (const [category, data] of Object.entries(inputData.data)) {
+        if (!data || !data.id || !data.discounts || typeof data.discounts !== 'object') {
+          continue; // Skip categories with missing or invalid data
+        }
+  
+        const { discounts } = data;
+  
+        for (const [couponType, discountData] of Object.entries(discounts)) {
+          if (!discountData.checked) continue;
+  
+          // Ensure the date_range is valid, if not set default values
+          const validityStart = discountData.date_range?.[0] || '2024-01-01'; // Default to a specific start date if missing
+          const validityEnd = discountData.date_range?.[1] || '2024-12-31'; // Default to a specific end date if missing
+  
+          // Check if date_range values are still missing and return an error if so
+          if (!validityStart || !validityEnd) {
+            return res.status(400).json({ error: "Validity start and end dates are required" });
+          }
+  
+          const couponQuery = `
+            INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (coupon_type, shop_no)
+            DO UPDATE SET 
+                validity_start = EXCLUDED.validity_start,
+                validity_end = EXCLUDED.validity_end
+            RETURNING id;
+          `;
+  
+          // Use shopNo instead of the undefined shop_no variable
+          const couponResult = await ambarsariyaPool.query(couponQuery, [
+            couponType,
+            category,
+            shopNo, // Use shopNo here
+            validityStart,
+            validityEnd,
+          ]);
+  
+          const couponId = couponResult.rows[0].id;
+  
+          const conditionInsertQuery = `
+            INSERT INTO sell.discount_conditions (coupon_id, condition_type, condition_value)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (coupon_id, condition_type)
+            DO UPDATE SET 
+                condition_value = EXCLUDED.condition_value;
+          `;
+  
+          const conditions = [];
+  
+          for (const [key, value] of Object.entries(discountData)) {
+            if (key !== "checked" && key !== "date_range" && value) {
+              conditions.push({ type: key, value });
+            }
+          }
+  
+          for (const condition of conditions) {
+            await ambarsariyaPool.query(conditionInsertQuery, [
+              couponId,
+              condition.type,
+              condition.value,
             ]);
-  
-            let couponId;
-  
-            if (existingCoupon.length > 0) {
-              // If coupon exists, update the coupon with new validity dates
-              couponId = existingCoupon[0].id;
-              const updateCouponQuery = `
-                UPDATE sell.discount_coupons
-                SET validity_start = $1, validity_end = $2
-                WHERE id = $3;
-              `;
-              await ambarsariyaPool.query(updateCouponQuery, [
-                validity_start,  // Use validity_start from the request
-                validity_end,    // Use validity_end from the request
-                couponId,
-              ]);
-            } else {
-              // If coupon does not exist, insert a new coupon
-              const insertCouponQuery = `
-                INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id;
-              `;
-              const { rows } = await ambarsariyaPool.query(insertCouponQuery, [
-                discountType,
-                category,
-                shop_no,
-                validity_start,  // Use validity_start from the request
-                validity_end,    // Use validity_end from the request
-              ]);
-              couponId = rows[0].id;
-            }
-  
-            // Step 2: Insert conditions into discount_conditions table
-            const conditions = [];
-  
-            // Collect conditions from discountDetails
-            if (discountDetails.value_1) {
-              conditions.push({
-                condition_type: 'value_1',
-                condition_value: discountDetails.value_1,
-              });
-            }
-            if (discountDetails.value_2) {
-              conditions.push({
-                condition_type: 'value_2',
-                condition_value: discountDetails.value_2,
-              });
-            }
-  
-            // Insert each condition
-            for (const condition of conditions) {
-              const insertConditionQuery = `
-                INSERT INTO sell.discount_conditions (coupon_id, condition_type, condition_value)
-                VALUES ($1, $2, $3);
-              `;
-              await ambarsariyaPool.query(insertConditionQuery, [
-                couponId,
-                condition.condition_type,
-                condition.condition_value,
-              ]);
-            }
           }
         }
       }
   
-      // Commit the transaction
-      await ambarsariyaPool.query('COMMIT');
-      res.status(201).json({ message: 'Discount coupons and conditions added/updated successfully' });
+      await ambarsariyaPool.query("COMMIT");
+      res.status(200).json({ message: "Discounts upserted successfully" });
     } catch (error) {
-      // Rollback the transaction in case of error
-      await ambarsariyaPool.query('ROLLBACK');
-      console.error('Error inserting discount data:', error);
-      res.status(500).json({ error: 'Failed to add/update discount data' });
-    } finally {
-      // Release the pool connection
-      ambarsariyaPool.end();
+      await ambarsariyaPool.query("ROLLBACK");
+      console.error(error);
+      res.status(500).json({ error: "Failed to upsert discounts" });
     }
   };
   
+  
+const get_discountCoupons = async (req, res) => {
+    const shopNo = req.params.shop_no;
+
+    try{
+        const query = `
+        SELECT 
+            c.id AS coupon_id,
+            c.coupon_type,
+            c.discount_category,
+            c.shop_no,
+            d.condition_type,
+            d.condition_value
+        FROM 
+            sell.discount_coupons c
+        JOIN 
+            sell.discount_conditions d ON c.id = d.coupon_id
+        WHERE c.shop_no=$1
+        ORDER BY 
+            c.id, d.condition_type;
+        `;
+    const result = await ambarsariyaPool.query(query, [shopNo]);
+
+    if (result.rowCount === 0) {
+        // If no rows are found, assume the token is invalid
+        res.status(404).json({ valid: false, message: 'Invalid shop' });
+    }else{
+        res.json({ valid: true, data: result.rows });
+    }
+    }catch(e){
+        console.error(e);
+        res.status(500).json({ e: "Failed to fetch discounts" });
+    }
+}
+  
+  
 
 
-module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops, post_support_name_password, get_visitorData, put_visitorData, put_forgetPassword, post_discount_coupons };
+module.exports = { post_book_eshop, update_eshop, get_shopUserData, get_otherShops, post_authLogin, post_member_data, get_memberData, get_userData, get_allShops, post_support_name_password, get_visitorData, put_visitorData, put_forgetPassword, post_discount_coupons, get_discountCoupons };

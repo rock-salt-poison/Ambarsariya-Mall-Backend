@@ -21,6 +21,7 @@ router.post('/sell/member', eshopController.post_member_data);
 router.get('/sell/member', eshopController.get_memberData);
 router.get('/sell/user', eshopController.get_userData);
 router.get('/sell/support/:token', eshopController.get_visitorData);
+router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupons);
 
 router.post('/sell/support', eshopController.post_support_name_password);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
