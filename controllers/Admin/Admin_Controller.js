@@ -329,6 +329,85 @@ const post_countries = async (req, res) => {
   }
 };
 
+const post_notice = async (req, res) => {
+  const { title, to, from_date, to_date, time, location, entry_fee, img, message } = req.body;
+
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    // Use UPSERT (INSERT ON CONFLICT) for efficiency
+    await ambarsariyaPool.query(
+      `
+        INSERT INTO admin.notice (
+          title,
+          notice_to, 
+          location, 
+          from_date, 
+          to_date, 
+          time, 
+          entry_fee, 
+          image_src, 
+          message)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [ 
+        title,
+        to,
+        location,
+        from_date,
+        to_date,
+        time,
+        entry_fee,
+        img,
+        message,
+      ]
+    );
+
+    await ambarsariyaPool.query("COMMIT");
+    res.status(200).json({ message: "Details stored successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error processing records:", error);
+    res
+      .status(500)
+      .json({ messgae: "An error occurred while processing records", error:error });
+  }
+};
+
+const get_notice = async (req, res) => {
+  const { title } = req.params;
+
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    let query, result;
+
+    // Check if 'title' exists and set the query accordingly
+    if (title) {
+      query = `SELECT * FROM admin.notice WHERE title = $1`;
+      result = await ambarsariyaPool.query(query, [title]);
+    } else {
+      query = `SELECT * FROM admin.notice`;
+      result = await ambarsariyaPool.query(query);
+    }
+
+    // Handle no results found
+    if (result.rowCount === 0) {
+      res.status(404).json({ message: "No records found" });
+    } else {
+      // Return the result rows
+      res.json({ data: result.rows, message: "Valid" });
+    }
+
+    // Commit the transaction
+    await ambarsariyaPool.query("COMMIT");
+  } catch (error) {
+    // Rollback transaction in case of error
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error processing records:", error);
+    res.status(500).json({ message: "An error occurred while processing records", error });
+  }
+};
+
 
 const get_travel_time = async (req, res) => {
   const { mode, travel_type } = req.params;
@@ -375,4 +454,11 @@ const get_countries = async (req, res) => {
 };
 
 // Export the functions for use in routes
-module.exports = { post_travel_time, get_travel_time, post_countries, get_countries };
+module.exports = {
+  post_travel_time,
+  get_travel_time,
+  post_countries,
+  get_countries,
+  post_notice,
+  get_notice,
+};
