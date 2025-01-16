@@ -374,7 +374,7 @@ const post_notice = async (req, res) => {
 };
 
 const get_notice = async (req, res) => {
-  const { title } = req.params;
+  const { title, id } = req.params;
 
   try {
     await ambarsariyaPool.query("BEGIN"); // Start transaction
@@ -383,8 +383,8 @@ const get_notice = async (req, res) => {
 
     // Check if 'title' exists and set the query accordingly
     if (title) {
-      query = `SELECT * FROM admin.notice WHERE title = $1`;
-      result = await ambarsariyaPool.query(query, [title]);
+      query = `SELECT * FROM admin.notice WHERE title = $1 AND id = $2`;
+      result = await ambarsariyaPool.query(query, [title, id]);
     } else {
       query = `SELECT * FROM admin.notice`;
       result = await ambarsariyaPool.query(query);

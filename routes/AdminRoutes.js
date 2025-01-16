@@ -6,7 +6,7 @@ const adminController = require('../controllers/Admin/Admin_Controller');
 router.get('/travel-time/:mode/:travel_type', adminController.get_travel_time);
 router.get('/countries', adminController.get_countries);
 router.get('/notices', adminController.get_notice);
-router.get('/notice/:title', adminController.get_notice);
+router.get('/notice/:title/:id', adminController.get_notice);
 
 router.post('/travel-time', adminController.post_travel_time);
 router.post('/countries', adminController.post_countries);
