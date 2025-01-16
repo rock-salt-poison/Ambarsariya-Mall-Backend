@@ -329,49 +329,117 @@ const post_countries = async (req, res) => {
   }
 };
 
+// const post_notice = async (req, res) => {
+//   const { title, to, from_date, to_date, time, location, entry_fee, img, message } = req.body;
+
+//   try {
+//     await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+//     // Use UPSERT (INSERT ON CONFLICT) for efficiency
+//     await ambarsariyaPool.query(
+//       `
+//         INSERT INTO admin.notice (
+//           title,
+//           notice_to,
+//           location,
+//           from_date,
+//           to_date,
+//           time,
+//           entry_fee,
+//           image_src,
+//           message)
+//         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+//       [
+//         title,
+//         to,
+//         location,
+//         from_date,
+//         to_date,
+//         time,
+//         entry_fee,
+//         img,
+//         message,
+//       ]
+//     );
+
+//     await ambarsariyaPool.query("COMMIT");
+//     res.status(200).json({ message: "Details stored successfully." });
+//   } catch (error) {
+//     await ambarsariyaPool.query("ROLLBACK");
+//     console.error("Error processing records:", error);
+//     res
+//       .status(500)
+//       .json({ messgae: "An error occurred while processing records", error:error });
+//   }
+// };
+
 const post_notice = async (req, res) => {
-  const { title, to, from_date, to_date, time, location, entry_fee, img, message } = req.body;
+  console.log('Received file:', req.file); // Log the file
+  console.log('Request body:', req.body); 
+  const { title, to, from_date, to_date, time, location, entry_fee, message, shop_no, from, shop_name, member_name, member_id, community_name } = req.body;
+
+  const uploadedImgUrl = req.file ? req.file.filename : null;
+
+  if (!title || !from_date || !to_date || !message) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
 
   try {
-    await ambarsariyaPool.query("BEGIN"); // Start transaction
+    // Start transaction
+    await ambarsariyaPool.query('BEGIN');
 
-    // Use UPSERT (INSERT ON CONFLICT) for efficiency
+    // Insert the notice into the database, including the image URL
     await ambarsariyaPool.query(
       `
         INSERT INTO admin.notice (
           title,
           notice_to, 
+          notice_from,
+          shop_no,
+          shop_name,
+          member_id,
+          member_name,
+          community_name,
           location, 
           from_date, 
           to_date, 
           time, 
           entry_fee, 
           image_src, 
-          message)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [ 
+          message
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [
         title,
         to,
+        from,
+        shop_no,
+        shop_name,
+        member_id,
+        member_name,
+        community_name,
         location,
         from_date,
         to_date,
         time,
         entry_fee,
-        img,
+        uploadedImgUrl, // Use the uploaded file URL
         message,
       ]
     );
 
-    await ambarsariyaPool.query("COMMIT");
-    res.status(200).json({ message: "Details stored successfully." });
+    // Commit transaction
+    await ambarsariyaPool.query('COMMIT');
+    res.status(200).json({ message: 'Notice uploaded successfully', filePath: uploadedImgUrl });
   } catch (error) {
-    await ambarsariyaPool.query("ROLLBACK");
-    console.error("Error processing records:", error);
-    res
-      .status(500)
-      .json({ messgae: "An error occurred while processing records", error:error });
+    await ambarsariyaPool.query('ROLLBACK'); // Rollback if there was an error
+    console.error('Error saving notice:', error);
+    res.status(500).json({ message: 'Failed to upload notice', error });
   }
 };
+
+
+
 
 const get_notice = async (req, res) => {
   const { title, id } = req.params;
@@ -404,10 +472,11 @@ const get_notice = async (req, res) => {
     // Rollback transaction in case of error
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error processing records:", error);
-    res.status(500).json({ message: "An error occurred while processing records", error });
+    res
+      .status(500)
+      .json({ message: "An error occurred while processing records", error });
   }
 };
-
 
 const get_travel_time = async (req, res) => {
   const { mode, travel_type } = req.params;
