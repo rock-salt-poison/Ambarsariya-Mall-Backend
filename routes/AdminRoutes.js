@@ -3,14 +3,27 @@ const router = express.Router();
 const adminController = require('../controllers/Admin/Admin_Controller');
 const UploadFiles = require('../Middleware/UploadFiles')
 
-// routes for AmbarsariyaMall
+// get routes for AmbarsariyaMall
 router.get('/travel-time/:mode/:travel_type', adminController.get_travel_time);
 router.get('/countries', adminController.get_countries);
 router.get('/notices', adminController.get_notice);
 router.get('/notice/:title/:id', adminController.get_notice);
+router.get('/led-board-messages', adminController.get_led_board_message);
 
+
+// post routes for AmbarsariyaMall
 router.post('/travel-time', adminController.post_travel_time);
 router.post('/countries', adminController.post_countries);
 router.post('/notice', UploadFiles.single('img'), adminController.post_notice);
+router.post('/led-board-messages', adminController.post_led_board_message);
+
+
+// put routes for AmbarsariyaMall
+router.put('/led-board-messages', adminController.put_led_board_message);
+
+
+// delete routes for AmbarsariyaMall
+router.delete('/led-board-message/:id', adminController.delete_led_board_message);
+
 
 module.exports = router;

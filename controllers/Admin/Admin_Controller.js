@@ -329,50 +329,6 @@ const post_countries = async (req, res) => {
   }
 };
 
-// const post_notice = async (req, res) => {
-//   const { title, to, from_date, to_date, time, location, entry_fee, img, message } = req.body;
-
-//   try {
-//     await ambarsariyaPool.query("BEGIN"); // Start transaction
-
-//     // Use UPSERT (INSERT ON CONFLICT) for efficiency
-//     await ambarsariyaPool.query(
-//       `
-//         INSERT INTO admin.notice (
-//           title,
-//           notice_to,
-//           location,
-//           from_date,
-//           to_date,
-//           time,
-//           entry_fee,
-//           image_src,
-//           message)
-//         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-//       [
-//         title,
-//         to,
-//         location,
-//         from_date,
-//         to_date,
-//         time,
-//         entry_fee,
-//         img,
-//         message,
-//       ]
-//     );
-
-//     await ambarsariyaPool.query("COMMIT");
-//     res.status(200).json({ message: "Details stored successfully." });
-//   } catch (error) {
-//     await ambarsariyaPool.query("ROLLBACK");
-//     console.error("Error processing records:", error);
-//     res
-//       .status(500)
-//       .json({ messgae: "An error occurred while processing records", error:error });
-//   }
-// };
-
 const post_notice = async (req, res) => {
   console.log('Received file:', req.file); // Log the file
   console.log('Request body:', req.body); 
@@ -437,6 +393,30 @@ const post_notice = async (req, res) => {
     res.status(500).json({ message: 'Failed to upload notice', error });
   }
 };
+
+const post_led_board_message =async (req, res)=>{
+  const { messages }  = req.body;
+  console.log('Request body:', req.body); 
+
+  try{
+    const messageQueries = messages.map((message)=> ambarsariyaPool.query(
+      `INSERT INTO admin.led_board (
+          message
+        )
+        VALUES ($1)`,
+      [
+        message.text,
+      ]
+    ));
+    await Promise.all(messageQueries);
+    res.status(201).json({ message: "Messages saved successfully" });
+  }catch(e){
+    console.error("Error saving messages:", e);
+    res.status(500).json({ error: "Failed to save messages" });
+  }
+}
+
+
 
 
 
@@ -522,6 +502,54 @@ const get_countries = async (req, res) => {
   }
 };
 
+const get_led_board_message = async (req, res) => {
+  try {
+    const result = await ambarsariyaPool.query("SELECT * FROM admin.led_board ORDER BY id");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching messages:", err);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+};
+
+
+
+const put_led_board_message = async (req, res)=>{
+  const { messages }  = req.body;
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    // Update each record
+    const updateQueries = messages.map((message) =>
+      ambarsariyaPool.query(
+        "UPDATE admin.led_board SET message = $1 WHERE id = $2",
+        [message.text, message.id]
+      )
+    );
+
+    await Promise.all(updateQueries); // Execute all updates concurrently
+
+    await ambarsariyaPool.query("COMMIT"); // Commit transaction
+    res.json({ message: "Messages updated successfully" });
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction on error
+    console.error("Error updating messages:", err);
+    res.status(500).json({ error: "Failed to update messages" });
+  }
+}
+
+const delete_led_board_message = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM admin.led_board WHERE id = $1", [id]);
+    res.json({ message: "Message deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting message:", err);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+}
+
 // Export the functions for use in routes
 module.exports = {
   post_travel_time,
@@ -530,4 +558,8 @@ module.exports = {
   get_countries,
   post_notice,
   get_notice,
+  post_led_board_message,
+  get_led_board_message,
+  put_led_board_message,
+  delete_led_board_message,
 };
