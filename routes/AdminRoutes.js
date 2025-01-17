@@ -18,10 +18,6 @@ router.post('/notice', UploadFiles.single('img'), adminController.post_notice);
 router.post('/led-board-messages', adminController.post_led_board_message);
 
 
-// put routes for AmbarsariyaMall
-router.put('/led-board-messages', adminController.put_led_board_message);
-
-
 // delete routes for AmbarsariyaMall
 router.delete('/led-board-message/:id', adminController.delete_led_board_message);
 

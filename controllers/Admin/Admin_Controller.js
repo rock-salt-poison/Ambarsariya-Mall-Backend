@@ -394,27 +394,43 @@ const post_notice = async (req, res) => {
   }
 };
 
-const post_led_board_message =async (req, res)=>{
-  const { messages }  = req.body;
-  console.log('Request body:', req.body); 
+const post_led_board_message = async (req, res) => {
+  const { messages } = req.body;
+  console.log('Request body:', req.body);
 
-  try{
-    const messageQueries = messages.map((message)=> ambarsariyaPool.query(
-      `INSERT INTO admin.led_board (
-          message
-        )
-        VALUES ($1)`,
-      [
-        message.text,
-      ]
-    ));
+  try {
+    // Prepare queries for each message
+    const messageQueries = messages.map((message) => {
+      // Ensure each message has an id
+      if (!message.id) {
+        // If no id is provided, insert as a new record
+        return ambarsariyaPool.query(
+          `INSERT INTO admin.led_board (message)
+           VALUES ($1)
+           RETURNING id`,
+          [message.text]
+        );
+      } else {
+        // If id exists, update the existing record
+        return ambarsariyaPool.query(
+          `INSERT INTO admin.led_board (id, message)
+           VALUES ($1, $2)
+           ON CONFLICT (id) DO UPDATE
+           SET message = $2, updated_at = NOW()`,
+          [message.id, message.text]
+        );
+      }
+    });
+
+    // Wait for all queries to complete
     await Promise.all(messageQueries);
     res.status(201).json({ message: "Messages saved successfully" });
-  }catch(e){
+  } catch (e) {
     console.error("Error saving messages:", e);
     res.status(500).json({ error: "Failed to save messages" });
   }
-}
+};
+
 
 
 
@@ -513,31 +529,6 @@ const get_led_board_message = async (req, res) => {
 };
 
 
-
-const put_led_board_message = async (req, res)=>{
-  const { messages }  = req.body;
-  try {
-    await ambarsariyaPool.query("BEGIN"); // Start transaction
-
-    // Update each record
-    const updateQueries = messages.map((message) =>
-      ambarsariyaPool.query(
-        "UPDATE admin.led_board SET message = $1 WHERE id = $2",
-        [message.text, message.id]
-      )
-    );
-
-    await Promise.all(updateQueries); // Execute all updates concurrently
-
-    await ambarsariyaPool.query("COMMIT"); // Commit transaction
-    res.json({ message: "Messages updated successfully" });
-  } catch (err) {
-    await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction on error
-    console.error("Error updating messages:", err);
-    res.status(500).json({ error: "Failed to update messages" });
-  }
-}
-
 const delete_led_board_message = async (req, res) => {
   const { id } = req.params;
 
@@ -560,6 +551,5 @@ module.exports = {
   get_notice,
   post_led_board_message,
   get_led_board_message,
-  put_led_board_message,
   delete_led_board_message,
 };
