@@ -3,6 +3,7 @@ const router = express.Router();
 const ambarsariyaController = require('../controllers/AmbarsariyaMall_Controller');
 const eshopController = require('../controllers/Eshop_Controller');
 const otpController = require('../controllers/Otp_Controller');
+const productController = require('../controllers/Product_Controller');
 
 // routes for AmbarsariyaMall
 router.get('/domains', ambarsariyaController.get_domains);
@@ -22,9 +23,12 @@ router.get('/sell/member', eshopController.get_memberData);
 router.get('/sell/user', eshopController.get_userData);
 router.get('/sell/support/:token', eshopController.get_visitorData);
 router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupons);
+router.get('/sell/products/:shop_no', productController.get_products);
+router.get('/sell/products/:shop_no/:product_no', productController.get_products);
 
 router.post('/sell/support', eshopController.post_support_name_password);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
+router.post('/sell/products', productController.post_products);
 
 router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
