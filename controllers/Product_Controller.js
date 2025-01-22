@@ -104,18 +104,27 @@ const post_products = async (req, res) => {
 
 
 const get_products = async (req, res) => {
-    const { shop_no } = req.params;
+    const { shop_no, product_id } = req.params;
     try{
-        if(shop_no){
-            const query = `SELECT * FROM sell.products WHERE shop_no = $1`;
-            const result = await ambarsariyaPool.query(query, [shop_no]);
-            if (result.rowCount === 0) {
-                // If no rows are found, assume the shop_no is invalid
-                res.status(404).json({ valid: false, message: 'No products are there.' });
-            }else {
-                res.json({ valid: true, data: result.rows });
-            }
+
+        let query, result;
+
+        // Check if 'title' exists and set the query accordingly
+        if (shop_no && product_id) {
+            query = `SELECT * FROM sell.products WHERE shop_no = $1 AND product_id = $2`;
+            result = await ambarsariyaPool.query(query, [shop_no, product_id]);
+        } else if(shop_no){
+            query = `SELECT * FROM sell.products WHERE shop_no = $1`;
+            result = await ambarsariyaPool.query(query,[shop_no]);
         }
+
+        if (result.rowCount === 0) {
+            // If no rows are found, assume the shop_no is invalid
+            res.status(404).json({ valid: false, message: 'No products are there.' });
+        }else {
+            res.json({ valid: true, data: result.rows });
+        }
+        
     }catch(e){
         console.error(e);
         res.status(500).json({ e: "Failed to fetch products" });

@@ -10,7 +10,7 @@ router.get('/domains', ambarsariyaController.get_domains);
 router.get('/sectors', ambarsariyaController.get_sectors);
 router.get('/domain-sectors/:id', ambarsariyaController.get_domainSectors);
 router.get('/type-of-services', ambarsariyaController.get_typeOfServices);
-router.get('/allCategories', ambarsariyaController.get_categories);
+router.get('/category/:category_id', ambarsariyaController.get_category_name);
 router.get('/categories', ambarsariyaController.get_categoriesList);
 router.post('/sell/eshop', eshopController.post_book_eshop);
 router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
@@ -24,7 +24,7 @@ router.get('/sell/user', eshopController.get_userData);
 router.get('/sell/support/:token', eshopController.get_visitorData);
 router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupons);
 router.get('/sell/products/:shop_no', productController.get_products);
-router.get('/sell/products/:shop_no/:product_no', productController.get_products);
+router.get('/sell/products/:shop_no/:product_id', productController.get_products);
 
 router.post('/sell/support', eshopController.post_support_name_password);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);

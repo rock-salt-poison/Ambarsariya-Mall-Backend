@@ -25,9 +25,10 @@ const get_sectors = async(req, res) => {
     }
 }
 
-const get_categories = async(req, res) => {
+const get_category_name = async(req, res) => {
+  const {category_id} = req.params;
   try{
-      const result = await ambarsariyaPool.query('SELECT * FROM categories ORDER BY category_id');
+      const result = await ambarsariyaPool.query('SELECT * FROM categories WHERE category_id = $1', [category_id]);
       res.json(result.rows);
   }
   catch(err){
@@ -109,4 +110,4 @@ const get_typeOfServices = async(req, res) => {
 }
 
 // Export the functions for use in routes
-module.exports = { get_domains, get_sectors,get_categories, get_domainSectors, createDomain, get_typeOfServices, get_categoriesList };
+module.exports = { get_domains, get_sectors,get_category_name, get_domainSectors, createDomain, get_typeOfServices, get_categoriesList };
