@@ -986,10 +986,10 @@ const post_discount_coupons = async (req, res) => {
   };
   
   
-const get_discountCoupons = async (req, res) => {
+  const get_discountCoupons = async (req, res) => {
     const shopNo = req.params.shop_no;
 
-    try{
+    try {
         const query = `
         SELECT 
             c.id AS coupon_id,
@@ -1006,19 +1006,52 @@ const get_discountCoupons = async (req, res) => {
         ORDER BY 
             c.id, d.condition_type;
         `;
-    const result = await ambarsariyaPool.query(query, [shopNo]);
+        const result = await ambarsariyaPool.query(query, [shopNo]);
 
-    if (result.rowCount === 0) {
-        // If no rows are found, assume the token is invalid
-        res.status(404).json({ valid: false, message: 'Invalid shop' });
-    }else{
-        res.json({ valid: true, data: result.rows });
-    }
-    }catch(e){
+        if (result.rowCount === 0) {
+            // If no rows are found, return an invalid response
+            res.status(404).json({ valid: false, message: 'Invalid shop' });
+            return;
+        }
+
+        // Grouping Logic
+        const groupedData = result.rows.reduce((acc, row) => {
+            let category = acc.find(c => c.discount_category === row.discount_category);
+            if (!category) {
+                category = {
+                    discount_category: row.discount_category,
+                    shop_no: row.shop_no,
+                    coupons: []
+                };
+                acc.push(category);
+            }
+
+            let coupon = category.coupons.find(c => c.coupon_id === row.coupon_id);
+            if (!coupon) {
+                coupon = {
+                    coupon_id: row.coupon_id,
+                    coupon_type: row.coupon_type,
+                    conditions: []
+                };
+                category.coupons.push(coupon);
+            }
+
+            coupon.conditions.push({
+                type: row.condition_type,
+                value: row.condition_value
+            });
+
+            return acc;
+        }, []);
+
+        // Send grouped data
+        res.json({ valid: true, data: groupedData });
+    } catch (e) {
         console.error(e);
-        res.status(500).json({ e: "Failed to fetch discounts" });
+        res.status(500).json({ error: "Failed to fetch discounts" });
     }
-}
+};
+
   
   
 

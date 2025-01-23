@@ -3,6 +3,7 @@ const router = express.Router();
 const ambarsariyaController = require('../controllers/AmbarsariyaMall_Controller');
 const eshopController = require('../controllers/Eshop_Controller');
 const otpController = require('../controllers/Otp_Controller');
+const usernameOtpController = require('../controllers/UserNameOtp_controller');
 const productController = require('../controllers/Product_Controller');
 
 // routes for AmbarsariyaMall
@@ -34,5 +35,6 @@ router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
 
 router.put('/sell/send-otp', otpController.sendOTP);
+router.post('/sell/username-otp', usernameOtpController.sendOTP);
 
 module.exports = router;
