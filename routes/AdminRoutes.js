@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/Admin/Admin_Controller');
+const eshopController = require('../controllers/Eshop_Controller');
 const UploadFiles = require('../Middleware/UploadFiles')
 
 // get routes for AmbarsariyaMall
@@ -9,6 +10,7 @@ router.get('/countries', adminController.get_countries);
 router.get('/notices', adminController.get_notice);
 router.get('/notice/:title/:id', adminController.get_notice);
 router.get('/led-board-messages', adminController.get_led_board_message);
+router.get('/users/:user_type', eshopController.get_allUsers);
 
 
 // post routes for AmbarsariyaMall
