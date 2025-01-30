@@ -541,6 +541,18 @@ const delete_led_board_message = async (req, res) => {
   }
 }
 
+const delete_notice = async (req, res) => {
+  const { id, title } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM admin.notice WHERE id = $1 AND title = $2", [id, title]);
+    res.json({ message: "Notice deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting Notice:", err);
+    res.status(500).json({ error: "Failed to delete notice" });
+  }
+}
+
 // Export the functions for use in routes
 module.exports = {
   post_travel_time,
@@ -549,6 +561,7 @@ module.exports = {
   get_countries,
   post_notice,
   get_notice,
+  delete_notice,
   post_led_board_message,
   get_led_board_message,
   delete_led_board_message,

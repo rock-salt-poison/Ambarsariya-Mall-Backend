@@ -22,6 +22,7 @@ router.post('/led-board-messages', adminController.post_led_board_message);
 
 // delete routes for AmbarsariyaMall
 router.delete('/led-board-message/:id', adminController.delete_led_board_message);
+router.delete('/notice/:title/:id', adminController.delete_notice);
 
 
 module.exports = router;

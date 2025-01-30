@@ -294,7 +294,7 @@ const get_shopUserData = async (req, res) => {
     ef.created_sector AS "created_sector",
     ef.ontime AS "ontime", 
     ef.offtime AS "offtime", 
-    array_agg(st.service) AS "type_of_service", 
+    array_agg(DISTINCT st.service) AS "type_of_service", 
     ef.paid_version AS "paid_version", 
     ef.gst AS "gst",
     ef.msme AS "msme",
