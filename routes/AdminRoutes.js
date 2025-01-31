@@ -11,6 +11,8 @@ router.get('/notices', adminController.get_notice);
 router.get('/notice/:title/:id', adminController.get_notice);
 router.get('/led-board-messages', adminController.get_led_board_message);
 router.get('/users/:user_type', eshopController.get_allUsers);
+router.get('/advt', adminController.get_advt);
+router.get('/advt/:advt_page', adminController.get_advt);
 
 
 // post routes for AmbarsariyaMall
@@ -18,11 +20,13 @@ router.post('/travel-time', adminController.post_travel_time);
 router.post('/countries', adminController.post_countries);
 router.post('/notice', UploadFiles.single('img'), adminController.post_notice);
 router.post('/led-board-messages', adminController.post_led_board_message);
+router.post('/advt', adminController.post_advt);
 
 
 // delete routes for AmbarsariyaMall
 router.delete('/led-board-message/:id', adminController.delete_led_board_message);
 router.delete('/notice/:title/:id', adminController.delete_notice);
+router.delete('/advt/:id', adminController.delete_advt);
 
 
 module.exports = router;

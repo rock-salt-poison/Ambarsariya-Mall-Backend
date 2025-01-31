@@ -431,7 +431,65 @@ const post_led_board_message = async (req, res) => {
   }
 };
 
+const post_advt = async (req, res) => {
+  const { advt, advt_page } = req.body;
 
+  try {
+    // Validate shop_no existence before proceeding
+    const invalidShopNos = [];
+
+    // Check if each shop_no is valid by querying the sell.eshop_form table
+    for (const ad of advt) {
+      const { shop } = ad;
+      const shopExists = await ambarsariyaPool.query(
+        `SELECT 1 FROM sell.eshop_form WHERE shop_no = $1`,
+        [shop]
+      );
+
+      // If the shop_no does not exist, add it to the invalidShopNos array
+      if (shopExists.rowCount === 0) {
+        invalidShopNos.push(shop);
+      }
+    }
+
+    // If there are invalid shop_nos, return an error
+    if (invalidShopNos.length > 0) {
+      return res.status(400).json({
+        error: `Invalid shop_no(s): ${invalidShopNos.join(", ")}`,
+      });
+    }
+
+    // Prepare queries for each advt
+    const advtQueries = advt.map((ad) => {
+      // Ensure each advt has an id
+      if (!ad.shop) {
+        // If no id is provided, insert as a new record
+        return ambarsariyaPool.query(
+          `INSERT INTO admin.advt (shop_no, background, advt_page)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [ad.shop, ad.bg, advt_page]
+        );
+      } else {
+        // If id exists, update the existing record
+        return ambarsariyaPool.query(
+          `INSERT INTO admin.advt (shop_no, background, advt_page)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (shop_no, background, advt_page) DO UPDATE
+           SET shop_no=$1, background=$2, advt_page = $3, updated_at = NOW()`,
+          [ad.shop, ad.bg, advt_page]
+        );
+      }
+    });
+
+    // Wait for all queries to complete
+    await Promise.all(advtQueries);
+    res.status(201).json({ message: "ADVT saved successfully" });
+  } catch (e) {
+    console.error("Error saving messages:", e);
+    res.status(500).json({ error: "Failed to save advt" });
+  }
+};
 
 
 
@@ -528,6 +586,42 @@ const get_led_board_message = async (req, res) => {
   }
 };
 
+const get_advt = async (req, res) => {
+  const {advt_page} = req.params;
+
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    let query, result;
+
+    // Check if 'advt_page' exists and set the query accordingly
+    if (advt_page) {
+      query = `SELECT * FROM admin.advt WHERE advt_page = $1 ORDER BY id`;
+      result = await ambarsariyaPool.query(query, [advt_page]);
+    } else {
+      query = `SELECT * FROM admin.advt ORDER BY id`;
+      result = await ambarsariyaPool.query(query);
+    }
+
+    // Handle no results found
+    if (result.rowCount === 0) {
+      res.status(404).json({ message: "No records found" });
+    } else {
+      // Return the result rows
+      res.json({ data: result.rows, message: "Valid" });
+    }
+
+    // Commit the transaction
+    await ambarsariyaPool.query("COMMIT");
+  } catch (error) {
+    // Rollback transaction in case of error
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error processing records:", error);
+    res
+      .status(500)
+      .json({ message: "An error occurred while processing records", error });
+  }
+};
 
 const delete_led_board_message = async (req, res) => {
   const { id } = req.params;
@@ -553,6 +647,18 @@ const delete_notice = async (req, res) => {
   }
 }
 
+const delete_advt = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM admin.advt WHERE id = $1", [id]);
+    res.json({ message: "ADVT deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting advt:", err);
+    res.status(500).json({ error: "Failed to delete advt" });
+  }
+}
+
 // Export the functions for use in routes
 module.exports = {
   post_travel_time,
@@ -565,4 +671,7 @@ module.exports = {
   post_led_board_message,
   get_led_board_message,
   delete_led_board_message,
+  get_advt,
+  post_advt,
+  delete_advt
 };
