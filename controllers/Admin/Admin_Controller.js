@@ -442,13 +442,16 @@ const post_advt = async (req, res) => {
     for (const ad of advt) {
       const { shop } = ad;
       const shopExists = await ambarsariyaPool.query(
-        `SELECT 1 FROM sell.eshop_form WHERE shop_no = $1`,
+        `SELECT shop_access_token FROM sell.eshop_form WHERE shop_no = $1`,
         [shop]
       );
 
       // If the shop_no does not exist, add it to the invalidShopNos array
       if (shopExists.rowCount === 0) {
         invalidShopNos.push(shop);
+      } else {
+        // Assign the shop_access_token to the ad object if shop exists
+        ad.shop_access_token = shopExists.rows[0].shop_access_token;
       }
     }
 
@@ -459,25 +462,25 @@ const post_advt = async (req, res) => {
       });
     }
 
-    // Prepare queries for each advt
+    // Prepare queries for each advt, including shop_access_token
     const advtQueries = advt.map((ad) => {
-      // Ensure each advt has an id
+      // Ensure each advt has an id and shop_access_token
       if (!ad.shop) {
-        // If no id is provided, insert as a new record
+        // If no id is provided, insert as a new record with shop_access_token
         return ambarsariyaPool.query(
-          `INSERT INTO admin.advt (shop_no, background, advt_page)
-           VALUES ($1, $2, $3)
+          `INSERT INTO admin.advt (shop_no, background, advt_page, shop_access_token)
+           VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [ad.shop, ad.bg, advt_page]
+          [ad.shop, ad.bg, advt_page, ad.shop_access_token]
         );
       } else {
-        // If id exists, update the existing record
+        // If id exists, update the existing record along with shop_access_token
         return ambarsariyaPool.query(
-          `INSERT INTO admin.advt (shop_no, background, advt_page)
-           VALUES ($1, $2, $3)
+          `INSERT INTO admin.advt (shop_no, background, advt_page, shop_access_token)
+           VALUES ($1, $2, $3, $4)
            ON CONFLICT (shop_no, background, advt_page) DO UPDATE
-           SET shop_no=$1, background=$2, advt_page = $3, updated_at = NOW()`,
-          [ad.shop, ad.bg, advt_page]
+           SET shop_no=$1, background=$2, advt_page = $3, shop_access_token = $4, updated_at = NOW()`,
+          [ad.shop, ad.bg, advt_page, ad.shop_access_token]
         );
       }
     });
@@ -490,7 +493,6 @@ const post_advt = async (req, res) => {
     res.status(500).json({ error: "Failed to save advt" });
   }
 };
-
 
 
 

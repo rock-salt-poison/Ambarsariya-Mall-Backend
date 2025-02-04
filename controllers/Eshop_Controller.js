@@ -432,28 +432,49 @@ const get_otherShops = async (req, res) => {
 const get_userData = async (req, res) => {
     try {
         const { userAccessToken } = req.query;
-        const result = await ambarsariyaPool.query(
+
+        // First check in the users table (for member, merchant, shop)
+        const userResult = await ambarsariyaPool.query(
             `SELECT 
-            u.user_type, 
-            ef.shop_no AS "shop_no",
-            ef.shop_access_token AS "shop_access_token",
-            uc.access_token AS "user_access_token"
-        FROM sell.users u
-        JOIN sell.user_credentials uc 
-            ON u.user_id = uc.user_id
-        LEFT JOIN sell.eshop_form ef
-            ON u.user_id = ef.user_id
-        WHERE uc.access_token = $1;`,
+                u.user_type, 
+                ef.shop_no AS "shop_no",
+                ef.shop_access_token AS "shop_access_token",
+                uc.access_token AS "user_access_token"
+            FROM sell.users u
+            JOIN sell.user_credentials uc 
+                ON u.user_id = uc.user_id
+            LEFT JOIN sell.eshop_form ef
+                ON u.user_id = ef.user_id
+            WHERE uc.access_token = $1
+            AND u.user_type IN ('member', 'merchant', 'shop')`,
             [userAccessToken]
         );
-        res.json(result.rows);
+
+        // If no results, check the support table for visitor
+        if (userResult.rows.length === 0) {
+            const supportResult = await ambarsariyaPool.query(
+                `SELECT 
+                    user_type, 
+                    access_token as "user_access_token" 
+                FROM sell.support 
+                WHERE access_token = $1`,
+                [userAccessToken]
+            );
+            
+            if (supportResult.rows.length > 0) {
+                res.json(supportResult.rows);
+            } else {
+                res.status(404).json({ message: "User not found." });
+            }
+        } else {
+            res.json(userResult.rows);
+        }
     } catch (err) {
-        console.log("Error fetching sectors : " + err);
-        res
-            .status(500)
-            .json({ message: "Error fetching sectors.", error: err.message });
+        console.log("Error fetching user data: " + err);
+        res.status(500).json({ message: "Error fetching user data.", error: err.message });
     }
 };
+
 
 const post_authLogin = async (req, res) => {
     const { username, password, type } = req.body;
@@ -678,7 +699,6 @@ const get_allUsers = async (req, res) => {
 const post_support_name_password = async (req, resp) => {
     const { name, phone_no, otp } = req.body;
 
-    // Validate that required fields are provided
     if (!name || !phone_no) {
         return resp
             .status(400)
@@ -689,30 +709,45 @@ const post_support_name_password = async (req, resp) => {
         // Start a transaction
         await ambarsariyaPool.query("BEGIN");
 
-        // Insert into users table
+        // Check if the phone number already exists
+        const existingUser = await ambarsariyaPool.query(
+            `SELECT access_token FROM sell.support WHERE phone_no = $1`,
+            [phone_no]
+        );
+
+        if (existingUser.rows.length > 0) {
+            // If phone number exists, return existing access token
+            await ambarsariyaPool.query("COMMIT");
+            return resp.status(200).json({
+                message: "User already exists.",
+                access_token: existingUser.rows[0].access_token,
+            });
+        }
+
+        // Insert into support table if phone number does not exist
         const userResult = await ambarsariyaPool.query(
             `INSERT INTO sell.support 
             (name, phone_no, otp)
             VALUES ($1, $2, $3)
             RETURNING access_token`,
-            [name, phone_no, otp] // Assuming user_type is 'member' here
+            [name, phone_no, otp]
         );
         const newAccessToken = userResult.rows[0].access_token;
 
         // Commit the transaction
         await ambarsariyaPool.query("COMMIT");
+
         resp.status(201).json({
             message: "Form submitted successfully.",
-            newAccessToken,
+            access_token: newAccessToken,
         });
     } catch (err) {
         await ambarsariyaPool.query("ROLLBACK");
         console.error("Error storing data", err);
-        resp
-            .status(500)
-            .json({ message: "Error storing data", error: err.message });
+        resp.status(500).json({ message: "Error storing data", error: err.message });
     }
 };
+
 
 const get_visitorData = async (req, res) => {
     try {
