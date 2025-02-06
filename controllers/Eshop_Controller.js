@@ -454,7 +454,8 @@ const get_userData = async (req, res) => {
         if (userResult.rows.length === 0) {
             const supportResult = await ambarsariyaPool.query(
                 `SELECT 
-                    user_type, 
+                    user_type,
+                    support_id, visitor_id, 
                     access_token as "user_access_token" 
                 FROM sell.support 
                 WHERE access_token = $1`,
@@ -696,20 +697,14 @@ const get_allUsers = async (req, res) => {
     }
 };
 
-const post_support_name_password = async (req, resp) => {
+const post_visitorData = async (req, resp) => {
     const { name, phone_no, otp } = req.body;
-
-    if (!name || !phone_no) {
-        return resp
-            .status(400)
-            .json({ message: "Name and phone no. are required." });
-    }
 
     try {
         // Start a transaction
         await ambarsariyaPool.query("BEGIN");
 
-        // Check if the phone number already exists
+        // Check if the phone number already exists in the support table
         const existingUser = await ambarsariyaPool.query(
             `SELECT access_token FROM sell.support WHERE phone_no = $1`,
             [phone_no]
@@ -724,29 +719,57 @@ const post_support_name_password = async (req, resp) => {
             });
         }
 
-        // Insert into support table if phone number does not exist
+        // Check if the user exists in the users table
         const userResult = await ambarsariyaPool.query(
-            `INSERT INTO sell.support 
-            (name, phone_no, otp)
-            VALUES ($1, $2, $3)
-            RETURNING access_token`,
-            [name, phone_no, otp]
+            `SELECT ef.domain, ef.sector, u.user_type
+            FROM sell.users u 
+            LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
+            WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
+            [phone_no]
         );
-        const newAccessToken = userResult.rows[0].access_token;
+
+        let newAccessToken = null;
+
+        if (userResult.rows.length > 0) {
+            // If the user exists in the users table, store their details in the support table
+            const data = userResult.rows[0];
+
+
+            // Insert the user into the support table with all details
+        const insertSupport  = await ambarsariyaPool.query(
+            `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING access_token`,
+            [name, phone_no, otp, data.domain, data.sector, data.user_type]
+        );
+        newAccessToken = insertSupport.rows[0].access_token
+        } else {
+            // If user does not exist in users table, create a new access token
+            const insertSupport = await ambarsariyaPool.query(
+                `INSERT INTO sell.support (name, phone_no, otp)
+                VALUES ($1, $2, $3)
+                RETURNING access_token`,
+                [name, phone_no, otp]
+            );
+            newAccessToken = insertSupport.rows[0].access_token;
+        }
+
+        
 
         // Commit the transaction
         await ambarsariyaPool.query("COMMIT");
 
-        resp.status(201).json({
+        return resp.status(201).json({
             message: "Form submitted successfully.",
             access_token: newAccessToken,
         });
     } catch (err) {
         await ambarsariyaPool.query("ROLLBACK");
-        console.error("Error storing data", err);
-        resp.status(500).json({ message: "Error storing data", error: err.message });
+        console.error("Error storing data:", err);
+        return resp.status(500).json({ message: "Error storing data", error: err.message });
     }
 };
+
 
 
 const get_visitorData = async (req, res) => {
@@ -756,20 +779,9 @@ const get_visitorData = async (req, res) => {
         // Query for full visitor data
         const query = `
             SELECT  
-                v.name,
-                v.phone_no,
-                v.otp,
-                v.domain_id,
+                v.*,
                 d.domain_name,
-                v.sector_id,
-                s.sector_name,
-                v.purpose,
-                v.message,
-                v.file_attached,
-                v.response,
-                v.created_at,
-                v.updated_at,
-                v.access_token
+                s.sector_name
             FROM sell.support v
             LEFT JOIN domains d ON d.domain_id = v.domain_id
             LEFT JOIN sectors s ON s.sector_id = v.sector_id
@@ -800,7 +812,8 @@ const put_visitorData = async (req, resp) => {
                 SET domain_id = $1,
                     sector_id = $2,
                     purpose = $3,
-                    message = $4
+                    message = $4,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE access_token = $5
                 RETURNING access_token`,
             [domain, sector, purpose, message, access_token]
@@ -1162,7 +1175,7 @@ module.exports = {
     get_memberData,
     get_userData,
     get_allShops,
-    post_support_name_password,
+    post_visitorData,
     get_visitorData,
     put_visitorData,
     put_forgetPassword,

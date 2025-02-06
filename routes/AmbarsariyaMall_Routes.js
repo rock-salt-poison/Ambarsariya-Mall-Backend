@@ -27,7 +27,7 @@ router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupon
 router.get('/sell/products/:shop_no', productController.get_products);
 router.get('/sell/products/:shop_no/:product_id', productController.get_products);
 
-router.post('/sell/support', eshopController.post_support_name_password);
+router.post('/sell/support', eshopController.post_visitorData);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
 router.post('/sell/products', productController.post_products);
 
