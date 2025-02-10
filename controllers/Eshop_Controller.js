@@ -127,7 +127,7 @@ const post_book_eshop = async (req, resp) => {
 };
 
 const post_member_data = async (req, resp) => {
-    const { name, username, password, address, phone, gender, age } = req.body;
+    const { name, username, password, address, phone, gender, dob } = req.body;
 
     // Validate that required fields are provided
     if (!name || !username || !password) {
@@ -155,10 +155,10 @@ const post_member_data = async (req, resp) => {
         // Insert into users table
         const userResult = await ambarsariyaPool.query(
             `INSERT INTO sell.users 
-            (full_name, title, phone_no_1, user_type, address, gender, age)
+            (full_name, title, phone_no_1, user_type, address, gender, dob)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING user_id`,
-            [name, title, phone, "member", address, gender, age] // Assuming user_type is 'member' here
+            [name, title, phone, "member", address, gender, dob] // Assuming user_type is 'member' here
         );
         const newUserId = userResult.rows[0].user_id;
 
@@ -387,7 +387,7 @@ const get_memberData = async (req, res) => {
                 u.full_name AS "full_name",
                 u.phone_no_1 AS "phone_no_1",
                 u.gender AS "gender",
-                u.age AS "age",
+                u.dob AS "dob",
                 u.address AS "address"
             FROM Sell.users u
             JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
