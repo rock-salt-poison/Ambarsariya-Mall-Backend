@@ -9,6 +9,8 @@ const post_book_eshop = async (req, resp) => {
         username,
         password,
         address,
+        latitude,
+        longitude,
         phone1,
         phone2,
         domain,
@@ -63,13 +65,15 @@ const post_book_eshop = async (req, resp) => {
         // Insert into eshop_form table
         const eshopResult = await ambarsariyaPool.query(
             `INSERT INTO Sell.eshop_form
-            (user_id, poc_name, address, domain, created_domain, sector,created_sector, ontime, offtime, type_of_service, gst,msme, paid_version, is_merchant,member_username_or_phone_no, premium_service)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13, $14, $15, $16)
+            (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector,created_sector, ontime, offtime, type_of_service, gst,msme, paid_version, is_merchant,member_username_or_phone_no, premium_service)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13, $14, $15, $16, $17, $18)
             RETURNING shop_no, shop_access_token`,
             [
                 newUserId,
                 fullName,
                 address,
+                latitude,
+                longitude,
                 domain,
                 domain_create,
                 sector,
@@ -331,6 +335,8 @@ const get_shopUserData = async (req, res) => {
     ef.category AS "category",
     array_agg(DISTINCT c.category_name) AS "category_name",  
     ef.advertisement_video_url,
+    ef.latitude AS "latitude",
+    ef.longitude AS "longitude",
     ef.shop_access_token AS "shop_access_token"
 FROM Sell.users u
 JOIN Sell.eshop_form ef ON ef.user_id = u.user_id
@@ -347,7 +353,7 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
          u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
          ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
          ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
-         ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.shop_access_token;
+         ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.latitude, ef.longitude, ef.shop_access_token;
 `;
 
         const result = await ambarsariyaPool.query(query, [shop_access_token]);
