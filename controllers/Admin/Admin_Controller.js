@@ -494,7 +494,52 @@ const post_advt = async (req, res) => {
   }
 };
 
+const post_support_page_famous_areas = async (req, res) => {
+  const { areas } = req.body;
+  console.log("Request body:", req.body);
 
+  try {
+    for (const area of areas) {
+      const lowerCaseTitle = area.area_name.toLowerCase();
+      const lowerCaseAddress = area.area_address.toLowerCase();
+
+      await ambarsariyaPool.query(
+        `INSERT INTO admin.famous_areas (
+            area_title,
+            area_address,
+            latitude,
+            longitude,
+            shop_no,
+            length_in_km,
+            image_src
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (area_title) 
+        DO UPDATE SET 
+            area_address = $2,
+            latitude = $3,
+            longitude = $4,
+            shop_no = $5,
+            length_in_km = $6,
+            image_src = $7,
+            updated_at = NOW();`,
+        [
+          lowerCaseTitle,
+          lowerCaseAddress,
+          area.latitude,
+          area.longitude,
+          area.shop_no,
+          area.length,
+          area.bg_img,
+        ]
+      );
+    }
+
+    res.status(201).json({ message: "Area(s) saved successfully" });
+  } catch (e) {
+    console.error("Error saving area(s):", e);
+    res.status(500).json({ error: "Failed to save area(s)" });
+  }
+};
 
 
 const get_notice = async (req, res) => {
@@ -625,6 +670,16 @@ const get_advt = async (req, res) => {
   }
 };
 
+const get_support_page_famous_areas = async (req, res) => {
+  try {
+    const result = await ambarsariyaPool.query("SELECT * FROM admin.famous_areas ORDER BY id");
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching areas:", err);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+};
+
 const delete_led_board_message = async (req, res) => {
   const { id } = req.params;
 
@@ -661,6 +716,18 @@ const delete_advt = async (req, res) => {
   }
 }
 
+const delete_support_page_famous_area = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM admin.famous_areas WHERE id = $1", [id]);
+    res.json({ message: "Area deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting area:", err);
+    res.status(500).json({ error: "Failed to delete area" });
+  }
+}
+
 // Export the functions for use in routes
 module.exports = {
   post_travel_time,
@@ -675,5 +742,8 @@ module.exports = {
   delete_led_board_message,
   get_advt,
   post_advt,
-  delete_advt
+  delete_advt,
+  post_support_page_famous_areas,
+  get_support_page_famous_areas,
+  delete_support_page_famous_area
 };
