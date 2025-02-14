@@ -717,16 +717,30 @@ const delete_advt = async (req, res) => {
 }
 
 const delete_support_page_famous_area = async (req, res) => {
-  const { id } = req.params;
+  const { area_name, area_address, latitude, longitude } = req.body;
 
   try {
-    await ambarsariyaPool.query("DELETE FROM admin.famous_areas WHERE id = $1", [id]);
-    res.json({ message: "Area deleted successfully" });
+    const query = `
+      DELETE FROM admin.famous_areas 
+      WHERE LOWER(area_title) = LOWER($1) 
+        AND LOWER(area_address) = LOWER($2) 
+        AND latitude = $3 
+        AND longitude = $4
+    `;
+
+    const result = await ambarsariyaPool.query(query, [area_name, area_address, latitude, longitude]);
+
+    if (result.rowCount > 0) {
+      res.json({ message: "Area deleted successfully" });
+    } else {
+      res.status(404).json({ message: "No matching area found" });
+    }
   } catch (err) {
     console.error("Error deleting area:", err);
     res.status(500).json({ error: "Failed to delete area" });
   }
-}
+};
+
 
 // Export the functions for use in routes
 module.exports = {

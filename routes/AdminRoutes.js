@@ -29,7 +29,7 @@ router.post('/famous-areas', adminController.post_support_page_famous_areas);
 router.delete('/led-board-message/:id', adminController.delete_led_board_message);
 router.delete('/notice/:title/:id', adminController.delete_notice);
 router.delete('/advt/:id', adminController.delete_advt);
-router.delete('/famous-area/:id', adminController.delete_support_page_famous_area);
+router.delete('/famous-area', adminController.delete_support_page_famous_area);
 
 
 module.exports = router;
