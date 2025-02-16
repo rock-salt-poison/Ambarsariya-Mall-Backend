@@ -1,6 +1,8 @@
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
 const bcrypt = require("bcrypt");
+const { uploadFileToGCS } = require("../utils/storageBucket");
+const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -195,7 +197,6 @@ const update_eshop = async (req, resp) => {
   const {
     business_name,
     date_of_establishment,
-    usp_values,
     product_samples,
     similar_options,
     cost_sensitivity,
@@ -205,8 +206,8 @@ const update_eshop = async (req, resp) => {
     advt_video,
     key_players,
   } = req.body;
+  console.log('Received file:', req.file); // Log the file
 
-  // Retrieve shopAccessToken from the query parameters
   const shopAccessToken = req.params.shopAccessToken;
 
   if (!shopAccessToken) {
@@ -214,26 +215,52 @@ const update_eshop = async (req, resp) => {
   }
 
   try {
-    // Use an UPDATE statement with parameterized shopAccessToken
+    // Fetch the existing file URL from the database
+    const existingData = await ambarsariyaPool.query(
+      `SELECT usp_values_url FROM Sell.eshop_form WHERE shop_access_token = $1`,
+      [shopAccessToken]
+    );
+
+    if (existingData.rows.length === 0) {
+      return resp
+        .status(404)
+        .json({ message: "No e-shop found with the provided access token." });
+    }
+
+    let uploadedUSPLink = existingData.rows[0].usp_values_url;
+
+    if (req.file) {
+      const targetFolder = "shop_usp_values_pdf";
+
+      // If an existing file is found, delete it from cloud storage
+      if (uploadedUSPLink) {
+        await deleteFileFromGCS(uploadedUSPLink);
+      }
+
+      // Upload the new file
+      uploadedUSPLink = await uploadFileToGCS(req.file, targetFolder);
+    }
+
+    // Perform the UPDATE operation
     const eshopResult = await ambarsariyaPool.query(
       `UPDATE Sell.eshop_form
-            SET business_name = $1,
-                establishment_date = $2,
-                usp_values_url = $3,
-                product_sample_url = $4,
-                similar_options = $5,
-                key_players = $6,
-                cost_sensitivity = $7,
-                daily_walkin = $8,
-                parking_availability = $9,
-                category = $10,
-                advertisement_video_url = $11
-            WHERE shop_access_token = $12
-            RETURNING shop_access_token`,
+       SET business_name = $1,
+           establishment_date = $2,
+           usp_values_url = $3,
+           product_sample_url = $4,
+           similar_options = $5,
+           key_players = $6,
+           cost_sensitivity = $7,
+           daily_walkin = $8,
+           parking_availability = $9,
+           category = $10,
+           advertisement_video_url = $11
+       WHERE shop_access_token = $12
+       RETURNING shop_access_token`,
       [
         business_name,
         date_of_establishment,
-        usp_values,
+        uploadedUSPLink,
         product_samples,
         similar_options,
         key_players,
@@ -252,17 +279,13 @@ const update_eshop = async (req, resp) => {
         .json({ message: "No e-shop found with the provided access token." });
     }
 
-    const access_token = eshopResult.rows[0].shop_access_token;
-
     resp.status(200).json({
       message: "E-shop data successfully updated.",
-      shop_access_token: access_token,
+      shop_access_token: eshopResult.rows[0].shop_access_token,
     });
   } catch (err) {
     console.error("Error updating data:", err);
-    resp
-      .status(500)
-      .json({ message: "Error updating data", error: err.message });
+    resp.status(500).json({ message: "Error updating data", error: err.message });
   }
 };
 

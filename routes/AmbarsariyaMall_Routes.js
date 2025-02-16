@@ -5,6 +5,9 @@ const eshopController = require('../controllers/Eshop_Controller');
 const otpController = require('../controllers/Otp_Controller');
 const usernameOtpController = require('../controllers/UserNameOtp_controller');
 const productController = require('../controllers/Product_Controller');
+const UploadFiles = require('../Middleware/UploadFiles');
+const multer = require('multer');
+
 
 // routes for AmbarsariyaMall
 router.get('/domains', ambarsariyaController.get_domains);
@@ -14,7 +17,28 @@ router.get('/type-of-services', ambarsariyaController.get_typeOfServices);
 router.get('/category/:category_id', ambarsariyaController.get_category_name);
 router.get('/categories', ambarsariyaController.get_categoriesList);
 router.post('/sell/eshop', eshopController.post_book_eshop);
-router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
+// router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
+router.put("/sell/buyeshop/:shopAccessToken", (req, res, next) => {
+    UploadFiles.single("usp_values")(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          // Handle Multer errors
+          console.log(err);
+          
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ error: "File size exceeds the 1MB limit." });
+          }
+        } else if (err) {
+          // Handle other errors
+          return res.status(400).json({ error: err.message });
+        }
+      }
+      // If no errors, call the controller function
+      eshopController.update_eshop(req, res);
+    });
+  });
+
+
 router.get('/sell/shop-user-data', eshopController.get_shopUserData);
 router.get('/sell/shops', eshopController.get_allShops);
 router.get('/sell/other-shops', eshopController.get_otherShops);
