@@ -130,7 +130,7 @@ const post_travel_time = async (req, res) => {
           `UPDATE admin.travel_time
            SET time_from = $1, time_to = $2, travel_from = $3, travel_to = $4,
                departure_time = $5, departed_at = $6, arrival_time = $7, arrived_at = $8,
-               updated_at = CURRENT_TIMESTAMP
+               updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text)
            WHERE id = $9`,
           [
             time_from,
@@ -305,7 +305,8 @@ const post_countries = async (req, res) => {
           country_capital = EXCLUDED.country_capital,
           capital_time = EXCLUDED.capital_time,
           currency = EXCLUDED.currency,
-          currency_code = EXCLUDED.currency_code
+          currency_code = EXCLUDED.currency_code,
+          updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text)
         `,
         [
           id,
@@ -426,7 +427,7 @@ const post_led_board_message = async (req, res) => {
           `INSERT INTO admin.led_board (id, message)
            VALUES ($1, $2)
            ON CONFLICT (id) DO UPDATE
-           SET message = $2, updated_at = NOW()`,
+           SET message = $2, updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text)`,
           [message.id, message.text]
         );
       }
@@ -489,7 +490,7 @@ const post_advt = async (req, res) => {
           `INSERT INTO admin.advt (shop_no, background, advt_page, shop_access_token)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (shop_no, background, advt_page) DO UPDATE
-           SET shop_no=$1, background=$2, advt_page = $3, shop_access_token = $4, updated_at = NOW()`,
+           SET shop_no=$1, background=$2, advt_page = $3, shop_access_token = $4, updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text)`,
           [ad.shop, ad.bg, advt_page, ad.shop_access_token]
         );
       }
@@ -531,7 +532,7 @@ const post_support_page_famous_areas = async (req, res) => {
             shop_no = $5,
             length_in_km = $6,
             image_src = $7,
-            updated_at = NOW();`,
+            updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text);`,
         [
           lowerCaseTitle,
           lowerCaseAddress,

@@ -724,9 +724,10 @@ const post_visitorData = async (req, resp) => {
 
     // Check if the user exists in the users table
     const userResult = await ambarsariyaPool.query(
-      `SELECT ef.domain, ef.sector, u.user_type
+      `SELECT ef.domain, ef.sector, u.user_type, uc.access_token
             FROM sell.users u 
             LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
+            JOIN sell.user_credentials uc ON uc.user_id = u.user_id
             WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
       [phone_no]
     );
@@ -739,10 +740,10 @@ const post_visitorData = async (req, resp) => {
 
       // Insert the user into the support table with all details
       const insertSupport = await ambarsariyaPool.query(
-        `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type)
-            VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING access_token`,
-        [name, phone_no, otp, data.domain, data.sector, data.user_type]
+        [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
       );
       newAccessToken = insertSupport.rows[0].access_token;
     } else {
