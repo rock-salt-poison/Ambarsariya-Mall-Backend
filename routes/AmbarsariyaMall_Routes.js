@@ -43,7 +43,30 @@ router.get('/sell/shop-user-data', eshopController.get_shopUserData);
 router.get('/sell/shops', eshopController.get_allShops);
 router.get('/sell/other-shops', eshopController.get_otherShops);
 router.post('/sell/login', eshopController.post_authLogin);
-router.post('/sell/member', eshopController.post_member_data);
+// router.post('/sell/member', eshopController.post_member_data);
+
+router.post("/sell/member", (req, res, next) => {
+    UploadFiles.fields([
+      { name: "profile_img", maxCount: 1 },
+      { name: "bg_img", maxCount: 1 }
+    ])(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          console.log(err);
+          
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ error: "File size exceeds the 1MB limit." });
+          }
+        } else {
+          return res.status(400).json({ error: err.message });
+        }
+      }
+      // If no errors, call the controller function
+      eshopController.post_member_data(req, res);
+    });
+  });
+  
+
 router.get('/sell/member', eshopController.get_memberData);
 router.get('/sell/user', eshopController.get_userData);
 router.get('/sell/support/:token', eshopController.get_visitorData);

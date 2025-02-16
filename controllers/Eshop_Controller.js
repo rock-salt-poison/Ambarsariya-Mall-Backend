@@ -130,44 +130,115 @@ const post_book_eshop = async (req, resp) => {
   }
 };
 
-const post_member_data = async (req, resp) => {
-  const { name, username, password, address, phone, gender, dob } = req.body;
+// const post_member_data = async (req, resp) => {
+//   const { name, username, password, address, phone, gender, dob } = req.body;
 
-  // Validate that required fields are provided
+//   // Validate that required fields are provided
+//   if (!name || !username || !password) {
+//     return resp
+//       .status(400)
+//       .json({ message: "Full name, username, and password are required." });
+//   }
+
+//   // Determine title based on gender
+//   let title = "";
+//   if (gender === "Male") {
+//     title = "Mr.";
+//   } else if (gender === "Female") {
+//     title = "Ms.";
+//   } else {
+//     title = "Other"; // or set a default title if needed
+//   }
+
+//   try {
+//     // Start a transaction
+//     await ambarsariyaPool.query("BEGIN");
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     // Insert into users table
+//     const userResult = await ambarsariyaPool.query(
+//       `INSERT INTO sell.users 
+//             (full_name, title, phone_no_1, user_type, address, gender, dob)
+//             VALUES ($1, $2, $3, $4, $5, $6, $7)
+//             RETURNING user_id`,
+//       [name, title, phone, "member", address, gender, dob] // Assuming user_type is 'member' here
+//     );
+//     const newUserId = userResult.rows[0].user_id;
+
+//     // Insert into user_credentials table
+//     const user_credentials = await ambarsariyaPool.query(
+//       `INSERT INTO sell.user_credentials 
+//             (user_id, username, password)
+//             VALUES ($1, $2, $3)
+//             RETURNING access_token`,
+//       [newUserId, username, hashedPassword]
+//     );
+
+//     const user_access_token = user_credentials.rows[0].access_token;
+
+//     // Commit the transaction
+//     await ambarsariyaPool.query("COMMIT");
+//     resp.status(201).json({
+//       message: "Form submitted successfully.",
+//       user_access_token,
+//     });
+//   } catch (err) {
+//     // Rollback the transaction in case of error
+//     await ambarsariyaPool.query("ROLLBACK");
+//     console.error("Error storing data", err);
+//     resp
+//       .status(500)
+//       .json({ message: "Error storing data", error: err.message });
+//   }
+// };
+
+
+const post_member_data = async (req, resp) => {
+
+  console.log('Received files:', req.files["profile_img"]); // Log the file
+
+  const { name, username, password, address,latitude, longitude, phone, gender, dob } = req.body;
+
   if (!name || !username || !password) {
     return resp
       .status(400)
       .json({ message: "Full name, username, and password are required." });
   }
 
-  // Determine title based on gender
-  let title = "";
-  if (gender === "Male") {
-    title = "Mr.";
-  } else if (gender === "Female") {
-    title = "Ms.";
-  } else {
-    title = "Other"; // or set a default title if needed
+  let uploadedProfileUrl = null;
+  let uploadedBgImgUrl = null;
+
+  const profileFile = req.files["profile_img"] ? req.files["profile_img"][0] : null;
+  const bgFile = req.files["bg_img"] ? req.files["bg_img"][0] : null;
+
+  if (profileFile) {
+    uploadedProfileUrl = await uploadFileToGCS(profileFile, "member_display_picture");
+  }
+  if (bgFile) {
+    uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member_background_picture");
   }
 
+  // Determine title based on gender
+  let title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
+
   try {
-    // Start a transaction
-    await ambarsariyaPool.query("BEGIN");
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert into users table
     const userResult = await ambarsariyaPool.query(
       `INSERT INTO sell.users 
-            (full_name, title, phone_no_1, user_type, address, gender, dob)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (full_name, title, phone_no_1, user_type, gender)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING user_id`,
-      [name, title, phone, "member", address, gender, dob] // Assuming user_type is 'member' here
+      [name, title, phone, "member", gender]
     );
     const newUserId = userResult.rows[0].user_id;
 
     // Insert into user_credentials table
-    const user_credentials = await ambarsariyaPool.query(
+    const userCredentials = await ambarsariyaPool.query(
       `INSERT INTO sell.user_credentials 
             (user_id, username, password)
             VALUES ($1, $2, $3)
@@ -175,23 +246,29 @@ const post_member_data = async (req, resp) => {
       [newUserId, username, hashedPassword]
     );
 
-    const user_access_token = user_credentials.rows[0].access_token;
+    const userAccessToken = userCredentials.rows[0].access_token;
 
-    // Commit the transaction
-    await ambarsariyaPool.query("COMMIT");
+    // Insert into member_profiles table
+    await ambarsariyaPool.query(
+      `INSERT INTO sell.member_profiles 
+            (user_id, address, latitude, longitude, dob, profile_img, bg_img)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
+    );
+
+    await ambarsariyaPool.query("COMMIT"); // Commit transaction
+
     resp.status(201).json({
       message: "Form submitted successfully.",
-      user_access_token,
+      user_access_token: userAccessToken,
     });
   } catch (err) {
-    // Rollback the transaction in case of error
-    await ambarsariyaPool.query("ROLLBACK");
+    await ambarsariyaPool.query("ROLLBACK"); // Rollback in case of error
     console.error("Error storing data", err);
-    resp
-      .status(500)
-      .json({ message: "Error storing data", error: err.message });
+    resp.status(500).json({ message: "Error storing data", error: err.message });
   }
 };
+
 
 const update_eshop = async (req, resp) => {
   const {
@@ -414,10 +491,13 @@ const get_memberData = async (req, res) => {
                 u.full_name AS "full_name",
                 u.phone_no_1 AS "phone_no_1",
                 u.gender AS "gender",
-                u.dob AS "dob",
-                u.address AS "address"
+                mp.dob AS "dob",
+                mp.address AS "address",
+                mp.profile_img ,
+                mp.bg_img
             FROM Sell.users u
             JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
+            JOIN Sell.member_profiles mp ON mp.user_id = u.user_id
             WHERE uc.access_token = $1`;
 
     const result = await ambarsariyaPool.query(query, [memberAccessToken]);
