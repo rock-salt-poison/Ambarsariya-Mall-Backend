@@ -1,5 +1,6 @@
 const { createDbPool } = require("../../db_config/db");
 const { uploadFileToGCS } = require("../../utils/storageBucket");
+const { deleteFileFromGCS } = require("../../utils/deleteFileFromGCS");
 
 const ambarsariyaPool = createDbPool();
 
@@ -707,13 +708,32 @@ const delete_notice = async (req, res) => {
   const { id, title } = req.params;
 
   try {
+    // 1️⃣ Fetch the image URL before deleting the notice
+    const { rows } = await ambarsariyaPool.query(
+      "SELECT image_src FROM admin.notice WHERE id = $1 AND title = $2",
+      [id, title]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Notice not found" });
+    }
+
+    const imageUrl = rows[0].image_src;
+
+    // 2️⃣ Delete the file from GCS
+    if (imageUrl) {
+      await deleteFileFromGCS(imageUrl);
+    }
+
+    // 3️⃣ Delete the notice from the database
     await ambarsariyaPool.query("DELETE FROM admin.notice WHERE id = $1 AND title = $2", [id, title]);
-    res.json({ message: "Notice deleted successfully" });
+
+    res.json({ message: "Notice and associated image deleted successfully" });
   } catch (err) {
-    console.error("Error deleting Notice:", err);
+    console.error("❌ Error deleting Notice:", err);
     res.status(500).json({ error: "Failed to delete notice" });
   }
-}
+};
 
 const delete_advt = async (req, res) => {
   const { id } = req.params;
