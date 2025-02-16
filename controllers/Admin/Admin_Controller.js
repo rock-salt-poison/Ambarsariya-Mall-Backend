@@ -1,4 +1,5 @@
 const { createDbPool } = require("../../db_config/db");
+const { uploadFileToGCS } = require("../../utils/storageBucket");
 
 const ambarsariyaPool = createDbPool();
 
@@ -334,7 +335,16 @@ const post_notice = async (req, res) => {
   console.log('Request body:', req.body); 
   const { title, to, from_date, to_date, time, location, entry_fee, message, shop_no, from, shop_name, member_name, member_id, community_name } = req.body;
 
-  const uploadedImgUrl = req.file ? req.file.filename : null;
+  // const uploadedImgUrl = req.file ? req.file.filename : null;
+
+  let uploadedImgUrl = null;
+
+    if (req.file) {
+      // Default to "notice" folder if folderName is not provided
+      const targetFolder = "notice";
+      uploadedImgUrl = await uploadFileToGCS(req.file, targetFolder);
+    }
+
 
   if (!title || !from_date || !to_date || !message) {
     return res.status(400).json({ message: 'Missing required fields' });
