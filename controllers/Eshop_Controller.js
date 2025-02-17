@@ -321,14 +321,23 @@ const post_member_data = async (req, resp) => {
         existingProfileImg = userCheck.rows[0].profile_img;
         existingBgImg = userCheck.rows[0].bg_img;
         console.log(existingProfileImg, existingBgImg);
-        
-        if (existingProfileImg) {
-          await deleteFileFromGCS(existingProfileImg);
-        }
 
-        if (existingBgImg) {
-          await deleteFileFromGCS(existingBgImg);
+        if (uploadedProfileUrl && existingProfileImg) {
+          try {
+            await deleteFileFromGCS(existingProfileImg);
+          } catch (error) {
+            console.error("Error deleting old profile image:", error);
+          }
         }
+        
+        if (uploadedBgImgUrl && existingBgImg) {
+          try {
+            await deleteFileFromGCS(existingBgImg);
+          } catch (error) {
+            console.error("Error deleting old background image:", error);
+          }
+        }
+        
 
         // **Update existing user details**
         await ambarsariyaPool.query(
@@ -349,7 +358,7 @@ const post_member_data = async (req, resp) => {
           `UPDATE sell.member_profiles 
            SET address = $1, latitude = $2, longitude = $3, dob = $4, profile_img = $5, bg_img = $6
            WHERE user_id = $7`,
-          [address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl, newUserId]
+          [address, latitude, longitude, dob, uploadedProfileUrl || existingProfileImg, uploadedBgImgUrl || existingBgImg, newUserId]
         );
       } else {
         return resp.status(400).json({ message: "Invalid access token." });
@@ -620,6 +629,8 @@ const get_memberData = async (req, res) => {
                 u.gender AS "gender",
                 mp.dob AS "dob",
                 mp.address AS "address",
+                mp.latitude ,
+                mp.longitude ,
                 mp.profile_img ,
                 mp.bg_img
             FROM Sell.users u
