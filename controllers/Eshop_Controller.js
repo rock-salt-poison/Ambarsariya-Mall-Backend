@@ -194,11 +194,86 @@ const post_book_eshop = async (req, resp) => {
 // };
 
 
+// const post_member_data = async (req, resp) => {
+
+//   console.log('Received files:', req.files["profile_img"]); // Log the file
+
+//   const { name, username, password, address,latitude, longitude, phone, gender, dob } = req.body;
+
+//   if (!name || !username || !password) {
+//     return resp
+//       .status(400)
+//       .json({ message: "Full name, username, and password are required." });
+//   }
+
+//   let uploadedProfileUrl = null;
+//   let uploadedBgImgUrl = null;
+
+//   const profileFile = req.files["profile_img"] ? req.files["profile_img"][0] : null;
+//   const bgFile = req.files["bg_img"] ? req.files["bg_img"][0] : null;
+
+//   if (profileFile) {
+//     uploadedProfileUrl = await uploadFileToGCS(profileFile, "member_display_picture");
+//   }
+//   if (bgFile) {
+//     uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member_background_picture");
+//   }
+
+//   // Determine title based on gender
+//   let title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
+
+//   try {
+//     await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     // Insert into users table
+//     const userResult = await ambarsariyaPool.query(
+//       `INSERT INTO sell.users 
+//             (full_name, title, phone_no_1, user_type, gender)
+//             VALUES ($1, $2, $3, $4, $5)
+//             RETURNING user_id`,
+//       [name, title, phone, "member", gender]
+//     );
+//     const newUserId = userResult.rows[0].user_id;
+
+//     // Insert into user_credentials table
+//     const userCredentials = await ambarsariyaPool.query(
+//       `INSERT INTO sell.user_credentials 
+//             (user_id, username, password)
+//             VALUES ($1, $2, $3)
+//             RETURNING access_token`,
+//       [newUserId, username, hashedPassword]
+//     );
+
+//     const userAccessToken = userCredentials.rows[0].access_token;
+
+//     // Insert into member_profiles table
+//     await ambarsariyaPool.query(
+//       `INSERT INTO sell.member_profiles 
+//             (user_id, address, latitude, longitude, dob, profile_img, bg_img)
+//             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+//       [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
+//     );
+
+//     await ambarsariyaPool.query("COMMIT"); // Commit transaction
+
+//     resp.status(201).json({
+//       message: "Form submitted successfully.",
+//       user_access_token: userAccessToken,
+//     });
+//   } catch (err) {
+//     await ambarsariyaPool.query("ROLLBACK"); // Rollback in case of error
+//     console.error("Error storing data", err);
+//     resp.status(500).json({ message: "Error storing data", error: err.message });
+//   }
+// };
+
+
 const post_member_data = async (req, resp) => {
+  console.log("Received files:", req.files["profile_img"]); // Log the file
 
-  console.log('Received files:', req.files["profile_img"]); // Log the file
-
-  const { name, username, password, address,latitude, longitude, phone, gender, dob } = req.body;
+  const { name, username, password, address, latitude, longitude, phone, gender, dob, access_token } = req.body;
 
   if (!name || !username || !password) {
     return resp
@@ -226,35 +301,87 @@ const post_member_data = async (req, resp) => {
     await ambarsariyaPool.query("BEGIN"); // Start transaction
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    let newUserId;
+    let existingProfileImg;
+    let existingBgImg;
+    let userAccessToken = access_token; // Use the provided access_token if available
 
-    // Insert into users table
-    const userResult = await ambarsariyaPool.query(
-      `INSERT INTO sell.users 
-            (full_name, title, phone_no_1, user_type, gender)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING user_id`,
-      [name, title, phone, "member", gender]
-    );
-    const newUserId = userResult.rows[0].user_id;
+    if (access_token) {
+      // **Check if the access token exists in user_credentials**
+      const userCheck = await ambarsariyaPool.query(
+        `SELECT uc.user_id, mp.profile_img, mp.bg_img 
+          FROM sell.user_credentials uc 
+          JOIN sell.member_profiles mp ON mp.user_id = uc.user_id 
+          WHERE uc.access_token = $1 AND uc.username = $2`,
+        [access_token, username]
+      );
 
-    // Insert into user_credentials table
-    const userCredentials = await ambarsariyaPool.query(
-      `INSERT INTO sell.user_credentials 
-            (user_id, username, password)
-            VALUES ($1, $2, $3)
-            RETURNING access_token`,
-      [newUserId, username, hashedPassword]
-    );
+      if (userCheck.rows.length > 0) {
+        newUserId = userCheck.rows[0].user_id;
+        existingProfileImg = userCheck.rows[0].profile_img;
+        existingBgImg = userCheck.rows[0].bg_img;
+        console.log(existingProfileImg, existingBgImg);
+        
+        if (existingProfileImg) {
+          await deleteFileFromGCS(existingProfileImg);
+        }
 
-    const userAccessToken = userCredentials.rows[0].access_token;
+        if (existingBgImg) {
+          await deleteFileFromGCS(existingBgImg);
+        }
 
-    // Insert into member_profiles table
-    await ambarsariyaPool.query(
-      `INSERT INTO sell.member_profiles 
-            (user_id, address, latitude, longitude, dob, profile_img, bg_img)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
-    );
+        // **Update existing user details**
+        await ambarsariyaPool.query(
+          `UPDATE sell.users 
+           SET full_name = $1, title = $2, phone_no_1 = $3, gender = $4
+           WHERE user_id = $5`,
+          [name, title, phone, gender, newUserId]
+        );
+
+        await ambarsariyaPool.query(
+          `UPDATE sell.user_credentials 
+           SET password = $1 
+           WHERE user_id = $2`,
+          [hashedPassword, newUserId]
+        );
+
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles 
+           SET address = $1, latitude = $2, longitude = $3, dob = $4, profile_img = $5, bg_img = $6
+           WHERE user_id = $7`,
+          [address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl, newUserId]
+        );
+      } else {
+        return resp.status(400).json({ message: "Invalid access token." });
+      }
+    } else {
+      // **Insert new user record**
+      const userResult = await ambarsariyaPool.query(
+        `INSERT INTO sell.users 
+              (full_name, title, phone_no_1, user_type, gender)
+              VALUES ($1, $2, $3, $4, $5)
+              RETURNING user_id`,
+        [name, title, phone, "member", gender]
+      );
+      newUserId = userResult.rows[0].user_id;
+
+      const userCredentials = await ambarsariyaPool.query(
+        `INSERT INTO sell.user_credentials 
+              (user_id, username, password)
+              VALUES ($1, $2, $3)
+              RETURNING access_token`,
+        [newUserId, username, hashedPassword]
+      );
+
+      userAccessToken = userCredentials.rows[0].access_token;
+
+      await ambarsariyaPool.query(
+        `INSERT INTO sell.member_profiles 
+              (user_id, address, latitude, longitude, dob, profile_img, bg_img)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
+      );
+    }
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction
 
