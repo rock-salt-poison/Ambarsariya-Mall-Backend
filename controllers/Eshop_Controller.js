@@ -934,6 +934,79 @@ const get_allUsers = async (req, res) => {
   }
 };
 
+// const post_visitorData = async (req, resp) => {
+//   const { name, phone_no, otp } = req.body;
+
+//   try {
+//     // Start a transaction
+//     await ambarsariyaPool.query("BEGIN");
+
+//     // Check if the phone number already exists in the support table
+//     const existingUser = await ambarsariyaPool.query(
+//       `SELECT access_token FROM sell.support WHERE phone_no = $1`,
+//       [phone_no]
+//     );
+
+//     if (existingUser.rows.length > 0) {
+//       // If phone number exists, return existing access token
+//       await ambarsariyaPool.query("COMMIT");
+//       return resp.status(200).json({
+//         message: "User already exists.",
+//         access_token: existingUser.rows[0].access_token,
+//       });
+//     }
+
+//     // Check if the user exists in the users table
+//     const userResult = await ambarsariyaPool.query(
+//       `SELECT ef.domain, ef.sector, u.user_type, uc.access_token
+//             FROM sell.users u 
+//             LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
+//             JOIN sell.user_credentials uc ON uc.user_id = u.user_id
+//             WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
+//       [phone_no]
+//     );
+
+//     let newAccessToken = null;
+
+//     if (userResult.rows.length > 0) {
+//       // If the user exists in the users table, store their details in the support table
+//       const data = userResult.rows[0];
+
+//       // Insert the user into the support table with all details
+//       const insertSupport = await ambarsariyaPool.query(
+//         `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
+//             VALUES ($1, $2, $3, $4, $5, $6, $7)
+//             RETURNING access_token`,
+//         [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
+//       );
+//       newAccessToken = insertSupport.rows[0].access_token;
+//     } else {
+//       // If user does not exist in users table, create a new access token
+//       const insertSupport = await ambarsariyaPool.query(
+//         `INSERT INTO sell.support (name, phone_no, otp)
+//                 VALUES ($1, $2, $3)
+//                 RETURNING access_token`,
+//         [name, phone_no, otp]
+//       );
+//       newAccessToken = insertSupport.rows[0].access_token;
+//     }
+
+//     // Commit the transaction
+//     await ambarsariyaPool.query("COMMIT");
+
+//     return resp.status(201).json({
+//       message: "Form submitted successfully.",
+//       access_token: newAccessToken,
+//     });
+//   } catch (err) {
+//     await ambarsariyaPool.query("ROLLBACK");
+//     console.error("Error storing data:", err);
+//     return resp
+//       .status(500)
+//       .json({ message: "Error storing data", error: err.message });
+//   }
+// };
+
 const post_visitorData = async (req, resp) => {
   const { name, phone_no, otp } = req.body;
 
@@ -941,46 +1014,9 @@ const post_visitorData = async (req, resp) => {
     // Start a transaction
     await ambarsariyaPool.query("BEGIN");
 
-    // Check if the phone number already exists in the support table
-    const existingUser = await ambarsariyaPool.query(
-      `SELECT access_token FROM sell.support WHERE phone_no = $1`,
-      [phone_no]
-    );
-
-    if (existingUser.rows.length > 0) {
-      // If phone number exists, return existing access token
-      await ambarsariyaPool.query("COMMIT");
-      return resp.status(200).json({
-        message: "User already exists.",
-        access_token: existingUser.rows[0].access_token,
-      });
-    }
-
-    // Check if the user exists in the users table
-    const userResult = await ambarsariyaPool.query(
-      `SELECT ef.domain, ef.sector, u.user_type, uc.access_token
-            FROM sell.users u 
-            LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
-            JOIN sell.user_credentials uc ON uc.user_id = u.user_id
-            WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
-      [phone_no]
-    );
 
     let newAccessToken = null;
 
-    if (userResult.rows.length > 0) {
-      // If the user exists in the users table, store their details in the support table
-      const data = userResult.rows[0];
-
-      // Insert the user into the support table with all details
-      const insertSupport = await ambarsariyaPool.query(
-        `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING access_token`,
-        [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
-      );
-      newAccessToken = insertSupport.rows[0].access_token;
-    } else {
       // If user does not exist in users table, create a new access token
       const insertSupport = await ambarsariyaPool.query(
         `INSERT INTO sell.support (name, phone_no, otp)
@@ -989,7 +1025,6 @@ const post_visitorData = async (req, resp) => {
         [name, phone_no, otp]
       );
       newAccessToken = insertSupport.rows[0].access_token;
-    }
 
     // Commit the transaction
     await ambarsariyaPool.query("COMMIT");
@@ -1006,6 +1041,7 @@ const post_visitorData = async (req, resp) => {
       .json({ message: "Error storing data", error: err.message });
   }
 };
+
 
 const get_visitorData = async (req, res) => {
   try {
