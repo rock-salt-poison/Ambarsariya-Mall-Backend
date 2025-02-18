@@ -275,10 +275,10 @@ const post_member_data = async (req, resp) => {
 
   const { name, username, password, address, latitude, longitude, phone, gender, dob, access_token } = req.body;
 
-  if (!name || !username || !password) {
+  if (!name || !username ) {
     return resp
       .status(400)
-      .json({ message: "Full name, username, and password are required." });
+      .json({ message: "Full name and username are required." });
   }
 
   let uploadedProfileUrl = null;
@@ -288,10 +288,10 @@ const post_member_data = async (req, resp) => {
   const bgFile = req.files["bg_img"] ? req.files["bg_img"][0] : null;
 
   if (profileFile) {
-    uploadedProfileUrl = await uploadFileToGCS(profileFile, "member_display_picture");
+    uploadedProfileUrl = await uploadFileToGCS(profileFile, "member/display_picture");
   }
   if (bgFile) {
-    uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member_background_picture");
+    uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member/background_picture");
   }
 
   // Determine title based on gender
@@ -345,13 +345,6 @@ const post_member_data = async (req, resp) => {
            SET full_name = $1, title = $2, phone_no_1 = $3, gender = $4
            WHERE user_id = $5`,
           [name, title, phone, gender, newUserId]
-        );
-
-        await ambarsariyaPool.query(
-          `UPDATE sell.user_credentials 
-           SET password = $1 
-           WHERE user_id = $2`,
-          [hashedPassword, newUserId]
         );
 
         await ambarsariyaPool.query(
@@ -1082,17 +1075,18 @@ const put_visitorData = async (req, resp) => {
 };
 
 const put_forgetPassword = async (req, resp) => {
-  const { username, password, context } = req.body;
+  const { username, password, user_type } = req.body;
+console.log(user_type);
 
   try {
-    // Determine allowed user types based on the context
+    // Determine allowed user types based on the user_type
     let allowedUserTypes = [];
-    if (context === "sell") {
+    if (user_type === "sell") {
       allowedUserTypes = ["shop", "merchant"];
-    } else if (context === "buy") {
+    } else if (user_type === "buy") {
       allowedUserTypes = ["member", "visitor"];
     } else {
-      return resp.status(400).json({ message: "Invalid context provided." });
+      return resp.status(400).json({ message: "Invalid user_type provided." });
     }
 
     // Hash the new password
@@ -1131,6 +1125,68 @@ const put_forgetPassword = async (req, resp) => {
       .json({ message: "Error updating data", error: err.message });
   }
 };
+
+const post_verify_otp = async (req, res) => {
+  const { username, otp, user_type } = req.body;  // Ensure that 'user_type' is passed in the request body
+
+  try {
+    // Corrected SQL query to SELECT from the database
+    const query = `SELECT uc.* 
+                   FROM sell.user_credentials uc 
+                   JOIN sell.users u ON u.user_id = uc.user_id 
+                   WHERE uc.username = $1 
+                   AND u.user_type = $2
+                   ORDER BY uc.otp_created_at DESC LIMIT 1`;
+
+    // Fetch OTP record from the database
+    const result = await ambarsariyaPool.query(query, [username, user_type]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).send({ message: 'OTP not found.' });
+    }
+
+    const otpRecord = result.rows[0];
+
+     // Get current UTC time
+    let nowUtc = new Date();
+
+    // Convert UTC to IST (Add 5 hours 30 minutes)
+    let nowIST = new Date(nowUtc.getTime() + (5.5 * 60 * 60 * 1000));
+
+    // Convert stored UTC time (created_otp_at & expiry_otp_at) to IST
+    let otpCreatedIST = new Date(new Date(otpRecord.otp_created_at).getTime() + (5.5 * 60 * 60 * 1000));
+    let otpExpiryIST = new Date(new Date(otpRecord.otp_expiry_at).getTime() + (5.5 * 60 * 60 * 1000));
+
+    console.log("Current IST Time:", nowIST.toISOString());
+    console.log("OTP Created Time (IST):", otpCreatedIST.toISOString());
+    console.log("OTP Expiry Time (IST):", otpExpiryIST.toISOString());
+
+    // Check if OTP is expired
+    if (nowIST > otpExpiryIST) {
+      return res.status(400).send({ message: 'OTP has expired. Request a new one.' });
+    }
+
+    // Check if OTP is valid
+    if (otpRecord.otp !== otp) {
+      return res.status(400).send({ message: 'Invalid OTP.' });
+    }
+
+    // Additional check: OTP creation time should not be in the future
+    if (nowIST < otpCreatedIST) {
+      return res.status(400).send({ message: 'OTP creation time is invalid.' });
+    }
+
+    res.status(200).send({ message: 'OTP verified successfully.' });
+
+    // Optionally, delete OTP record after successful verification
+    // await pool.query('DELETE FROM otp_validations WHERE id = $1', [otpRecord.id]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: 'Error verifying OTP.' });
+  }
+};
+
+
 
 // const post_discount_coupons = async (req, res) => {
 //     const shop_no = req.params.shop_no;
@@ -1421,6 +1477,7 @@ module.exports = {
   get_visitorData,
   put_visitorData,
   put_forgetPassword,
+  post_verify_otp,
   post_discount_coupons,
   get_discountCoupons,
   get_allUsers,

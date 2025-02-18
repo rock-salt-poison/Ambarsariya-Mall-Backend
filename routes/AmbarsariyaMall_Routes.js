@@ -77,6 +77,7 @@ router.get('/sell/products/:shop_no/:product_id', productController.get_products
 router.post('/sell/support', eshopController.post_visitorData);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
 router.post('/sell/products', productController.post_products);
+router.post('/sell/verify_otp', eshopController.post_verify_otp);
 
 router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
