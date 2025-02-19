@@ -934,79 +934,6 @@ const get_allUsers = async (req, res) => {
   }
 };
 
-// const post_visitorData = async (req, resp) => {
-//   const { name, phone_no, otp } = req.body;
-
-//   try {
-//     // Start a transaction
-//     await ambarsariyaPool.query("BEGIN");
-
-//     // Check if the phone number already exists in the support table
-//     const existingUser = await ambarsariyaPool.query(
-//       `SELECT access_token FROM sell.support WHERE phone_no = $1`,
-//       [phone_no]
-//     );
-
-//     if (existingUser.rows.length > 0) {
-//       // If phone number exists, return existing access token
-//       await ambarsariyaPool.query("COMMIT");
-//       return resp.status(200).json({
-//         message: "User already exists.",
-//         access_token: existingUser.rows[0].access_token,
-//       });
-//     }
-
-//     // Check if the user exists in the users table
-//     const userResult = await ambarsariyaPool.query(
-//       `SELECT ef.domain, ef.sector, u.user_type, uc.access_token
-//             FROM sell.users u 
-//             LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
-//             JOIN sell.user_credentials uc ON uc.user_id = u.user_id
-//             WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
-//       [phone_no]
-//     );
-
-//     let newAccessToken = null;
-
-//     if (userResult.rows.length > 0) {
-//       // If the user exists in the users table, store their details in the support table
-//       const data = userResult.rows[0];
-
-//       // Insert the user into the support table with all details
-//       const insertSupport = await ambarsariyaPool.query(
-//         `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
-//             VALUES ($1, $2, $3, $4, $5, $6, $7)
-//             RETURNING access_token`,
-//         [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
-//       );
-//       newAccessToken = insertSupport.rows[0].access_token;
-//     } else {
-//       // If user does not exist in users table, create a new access token
-//       const insertSupport = await ambarsariyaPool.query(
-//         `INSERT INTO sell.support (name, phone_no, otp)
-//                 VALUES ($1, $2, $3)
-//                 RETURNING access_token`,
-//         [name, phone_no, otp]
-//       );
-//       newAccessToken = insertSupport.rows[0].access_token;
-//     }
-
-//     // Commit the transaction
-//     await ambarsariyaPool.query("COMMIT");
-
-//     return resp.status(201).json({
-//       message: "Form submitted successfully.",
-//       access_token: newAccessToken,
-//     });
-//   } catch (err) {
-//     await ambarsariyaPool.query("ROLLBACK");
-//     console.error("Error storing data:", err);
-//     return resp
-//       .status(500)
-//       .json({ message: "Error storing data", error: err.message });
-//   }
-// };
-
 const post_visitorData = async (req, resp) => {
   const { name, phone_no, otp } = req.body;
 
@@ -1014,9 +941,46 @@ const post_visitorData = async (req, resp) => {
     // Start a transaction
     await ambarsariyaPool.query("BEGIN");
 
+    // Check if the phone number already exists in the support table
+    const existingUser = await ambarsariyaPool.query(
+      `SELECT access_token FROM sell.support WHERE phone_no = $1`,
+      [phone_no]
+    );
+
+    if (existingUser.rows.length > 0) {
+      // If phone number exists, return existing access token
+      await ambarsariyaPool.query("COMMIT");
+      return resp.status(200).json({
+        message: "User already exists.",
+        access_token: existingUser.rows[0].access_token,
+      });
+    }
+
+    // Check if the user exists in the users table
+    const userResult = await ambarsariyaPool.query(
+      `SELECT ef.domain, ef.sector, u.user_type, uc.access_token
+            FROM sell.users u 
+            LEFT JOIN sell.eshop_form ef ON ef.user_id = u.user_id
+            JOIN sell.user_credentials uc ON uc.user_id = u.user_id
+            WHERE u.phone_no_1 = $1 OR u.phone_no_2 = $1`,
+      [phone_no]
+    );
 
     let newAccessToken = null;
 
+    if (userResult.rows.length > 0) {
+      // If the user exists in the users table, store their details in the support table
+      const data = userResult.rows[0];
+
+      // Insert the user into the support table with all details
+      const insertSupport = await ambarsariyaPool.query(
+        `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING access_token`,
+        [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
+      );
+      newAccessToken = insertSupport.rows[0].access_token;
+    } else {
       // If user does not exist in users table, create a new access token
       const insertSupport = await ambarsariyaPool.query(
         `INSERT INTO sell.support (name, phone_no, otp)
@@ -1025,6 +989,7 @@ const post_visitorData = async (req, resp) => {
         [name, phone_no, otp]
       );
       newAccessToken = insertSupport.rows[0].access_token;
+    }
 
     // Commit the transaction
     await ambarsariyaPool.query("COMMIT");
@@ -1041,6 +1006,41 @@ const post_visitorData = async (req, resp) => {
       .json({ message: "Error storing data", error: err.message });
   }
 };
+
+// const post_visitorData = async (req, resp) => {
+//   const { name, phone_no, otp } = req.body;
+
+//   try {
+//     // Start a transaction
+//     await ambarsariyaPool.query("BEGIN");
+
+
+//     let newAccessToken = null;
+
+//       // If user does not exist in users table, create a new access token
+//       const insertSupport = await ambarsariyaPool.query(
+//         `INSERT INTO sell.support (name, phone_no, otp)
+//                 VALUES ($1, $2, $3)
+//                 RETURNING access_token`,
+//         [name, phone_no, otp]
+//       );
+//       newAccessToken = insertSupport.rows[0].access_token;
+
+//     // Commit the transaction
+//     await ambarsariyaPool.query("COMMIT");
+
+//     return resp.status(201).json({
+//       message: "Form submitted successfully.",
+//       access_token: newAccessToken,
+//     });
+//   } catch (err) {
+//     await ambarsariyaPool.query("ROLLBACK");
+//     console.error("Error storing data:", err);
+//     return resp
+//       .status(500)
+//       .json({ message: "Error storing data", error: err.message });
+//   }
+// };
 
 
 const get_visitorData = async (req, res) => {
@@ -1074,41 +1074,115 @@ const get_visitorData = async (req, res) => {
   }
 };
 
+// const put_visitorData = async (req, resp) => {
+//   const { domain, sector, purpose, message, access_token } = req.body;
+
+//   try {
+//     const result = await ambarsariyaPool.query(
+//       `UPDATE Sell.support
+//                 SET domain_id = $1,
+//                     sector_id = $2,
+//                     purpose = $3,
+//                     message = $4,
+//                     updated_at = CURRENT_TIMESTAMP
+//                 WHERE access_token = $5
+//                 RETURNING access_token`,
+//       [domain, sector, purpose, message, access_token]
+//     );
+
+//     if (result.rows.length === 0) {
+//       return resp
+//         .status(404)
+//         .json({ message: "No visitor found with the provided access token." });
+//     }
+
+//     const visitor_access_token = result.rows[0].access_token;
+
+//     resp.status(200).json({
+//       message: "Visitor data updated successfully.",
+//       visitor_access_token,
+//     });
+//   } catch (err) {
+//     console.error("Error updating data:", err);
+//     resp
+//       .status(500)
+//       .json({ message: "Error updating data", error: err.message });
+//   }
+// };
+
+
 const put_visitorData = async (req, resp) => {
-  const { domain, sector, purpose, message, access_token } = req.body;
+  const { name, phone_no, domain, sector, purpose, message, access_token } = req.body;
+  console.log(req.file);
 
   try {
-    const result = await ambarsariyaPool.query(
-      `UPDATE Sell.support
-                SET domain_id = $1,
-                    sector_id = $2,
-                    purpose = $3,
-                    message = $4,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE access_token = $5
-                RETURNING access_token`,
-      [domain, sector, purpose, message, access_token]
+    let uploadedFile = null;
+    const currentfile = req.file ? req.file : null;
+
+    if (currentfile) {
+      uploadedFile = await uploadFileToGCS(currentfile, "support_page/file_attached");
+    }
+
+    // Check if access_token already exists
+    const existingRecord = await ambarsariyaPool.query(
+      `SELECT file_attached FROM Sell.support WHERE access_token = $1`,
+      [access_token]
     );
 
-    if (result.rows.length === 0) {
-      return resp
-        .status(404)
-        .json({ message: "No visitor found with the provided access token." });
+    let result;
+
+    if (existingRecord.rows.length > 0) {
+      const existingFile = existingRecord.rows[0].file_attached;
+
+      // Delete old file if new file is uploaded
+      if (existingFile && uploadedFile) {
+        await deleteFileFromGCS(existingFile);
+      }
+
+      // Update the existing record
+      result = await ambarsariyaPool.query(
+        `UPDATE Sell.support
+         SET domain_id = $1,
+             sector_id = $2,
+             purpose = $3,
+             message = $4,
+             file_attached = $5,
+             updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
+         WHERE access_token = $6
+         RETURNING access_token`,
+        [domain, sector, purpose, message, uploadedFile || existingFile, access_token]
+      );
+    } else {
+      // Insert a new record
+      result = await ambarsariyaPool.query(
+        `INSERT INTO Sell.support 
+         (name, phone_no, domain_id, sector_id, purpose, message, file_attached, access_token, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 
+                 CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 
+                 CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
+         RETURNING access_token`,
+        [name, phone_no, domain, sector, purpose, message, uploadedFile, access_token]
+      );
     }
 
     const visitor_access_token = result.rows[0].access_token;
 
     resp.status(200).json({
-      message: "Visitor data updated successfully.",
+      message: existingRecord.rows.length > 0
+        ? "Visitor data updated successfully."
+        : "New visitor record created successfully.",
       visitor_access_token,
     });
   } catch (err) {
-    console.error("Error updating data:", err);
-    resp
-      .status(500)
-      .json({ message: "Error updating data", error: err.message });
+    console.error("Error processing visitor data:", err);
+    resp.status(500).json({
+      message: "Error processing visitor data",
+      error: err.message,
+    });
   }
 };
+
+
 
 const put_forgetPassword = async (req, resp) => {
   const { username, password, user_type } = req.body;

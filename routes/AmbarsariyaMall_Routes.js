@@ -79,8 +79,29 @@ router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
 router.post('/sell/products', productController.post_products);
 router.post('/sell/verify_otp', eshopController.post_verify_otp);
 
-router.put('/sell/support', eshopController.put_visitorData);
+// router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
+
+router.put("/sell/support", (req, res, next) => {
+  UploadFiles.single("file")(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        // Handle Multer errors
+        console.log(err);
+        
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File size exceeds the 1MB limit." });
+        }
+      } else if (err) {
+        // Handle other errors
+        return res.status(400).json({ error: err.message });
+      }
+    }
+    // If no errors, call the controller function
+    eshopController.put_visitorData(req, res);
+  });
+});
+
 
 router.put('/sell/send-otp', otpController.sendOTP);
 router.post('/sell/username-otp', usernameOtpController.sendOTP);
