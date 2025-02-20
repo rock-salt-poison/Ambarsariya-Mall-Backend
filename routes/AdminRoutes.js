@@ -42,7 +42,23 @@ router.post("/notice", (req, res, next) => {
   });
 router.post('/led-board-messages', adminController.post_led_board_message);
 router.post('/advt', adminController.post_advt);
-router.post('/famous-areas', adminController.post_support_page_famous_areas);
+// router.post('/famous-areas', adminController.post_support_page_famous_areas);
+router.post("/famous-areas", (req, res, next) => {
+  console.log("🚀 Raw Request Body (before multer):", req.body);
+
+  UploadFiles.any()(req, res, (err) => {
+    console.log("📂 Processed Files:", req.files); // Debugging file uploads
+
+    if (err) {
+      console.log("❌ Multer Error:", err);
+      return res.status(400).json({ error: err.message });
+    }
+
+    // Call the controller function
+    adminController.post_support_page_famous_areas(req, res);
+  });
+});
+
 
 
 // delete routes for AmbarsariyaMall

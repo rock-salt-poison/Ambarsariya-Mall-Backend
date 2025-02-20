@@ -672,17 +672,21 @@ const get_userData = async (req, res) => {
     // First check in the users table (for member, merchant, shop)
     const userResult = await ambarsariyaPool.query(
       `SELECT 
-                u.user_type, 
-                ef.shop_no AS "shop_no",
-                ef.shop_access_token AS "shop_access_token",
-                uc.access_token AS "user_access_token"
-            FROM sell.users u
-            JOIN sell.user_credentials uc 
-                ON u.user_id = uc.user_id
-            LEFT JOIN sell.eshop_form ef
-                ON u.user_id = ef.user_id
-            WHERE uc.access_token = $1
-            AND u.user_type IN ('member', 'merchant', 'shop')`,
+        u.user_type, 
+        ef.shop_no AS "shop_no",
+        ef.shop_access_token AS "shop_access_token",
+        uc.access_token AS "user_access_token",
+        s.support_id,
+        s.visitor_id
+      FROM sell.users u
+      JOIN sell.user_credentials uc 
+        ON u.user_id = uc.user_id
+      LEFT JOIN sell.eshop_form ef
+        ON u.user_id = ef.user_id
+      LEFT JOIN sell.support s
+        ON s.access_token = uc.access_token
+      WHERE uc.access_token = $1
+      AND u.user_type IN ('member', 'merchant', 'shop')`,
       [userAccessToken]
     );
 
@@ -1112,7 +1116,7 @@ const get_visitorData = async (req, res) => {
 
 
 const put_visitorData = async (req, resp) => {
-  const { name, phone_no, domain, sector, purpose, message, access_token } = req.body;
+  const { name, phone_no, domain, sector, purpose, message, user_type, access_token } = req.body;
   console.log(req.file);
 
   try {
@@ -1156,12 +1160,12 @@ const put_visitorData = async (req, resp) => {
       // Insert a new record
       result = await ambarsariyaPool.query(
         `INSERT INTO Sell.support 
-         (name, phone_no, domain_id, sector_id, purpose, message, file_attached, access_token, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 
+         (name, phone_no, domain_id, sector_id, purpose, message, file_attached, user_type, access_token, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
          RETURNING access_token`,
-        [name, phone_no, domain, sector, purpose, message, uploadedFile, access_token]
+        [name, phone_no, domain, sector, purpose, message, uploadedFile,user_type, access_token]
       );
     }
 
