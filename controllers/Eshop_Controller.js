@@ -1577,6 +1577,45 @@ const get_discountCoupons = async (req, res) => {
   }
 };
 
+const get_nearby_shops = async (req, res) => {
+  const { token } = req.params;
+  
+  try {
+      // Fetch the area details using the token
+      const areaResult = await ambarsariyaPool.query(
+          `SELECT * FROM admin.famous_areas WHERE access_token = $1`, 
+          [token]
+      );
+
+      if (areaResult.rows.length === 0) {
+          return res.status(404).json({ error: "Area not found" });
+      }
+
+      const { latitude, longitude, length_in_km } = areaResult.rows[0];
+
+      // Fetch nearby shops
+      const shopResult = await ambarsariyaPool.query(
+          `SELECT 
+              shop_access_token
+          FROM sell.eshop_form
+          WHERE 
+              (6371 * acos(
+                  cos(radians($1)) * cos(radians(latitude)) * 
+                  cos(radians(longitude) - radians($2)) + 
+                  sin(radians($1)) * sin(radians(latitude))
+              )) <= $3
+          ORDER BY shop_no`,
+          [latitude, longitude, length_in_km]
+      );
+
+      res.json({...areaResult.rows[0], shops:  shopResult.rows});
+  } catch (err) {
+      console.error("Error fetching nearby shops:", err);
+      res.status(500).json({ error: "Server error" });
+  }
+};
+
+
 module.exports = {
   post_book_eshop,
   update_eshop,
@@ -1595,4 +1634,5 @@ module.exports = {
   post_discount_coupons,
   get_discountCoupons,
   get_allUsers,
+  get_nearby_shops,
 };

@@ -15,6 +15,7 @@ router.get('/users/:user_type', eshopController.get_allUsers);
 router.get('/advt', adminController.get_advt);
 router.get('/advt/:advt_page', adminController.get_advt);
 router.get('/famous-areas', adminController.get_support_page_famous_areas);
+router.get('/sell/famous-areas/:token', eshopController.get_nearby_shops);
 
 
 // post routes for AmbarsariyaMall
@@ -43,6 +44,7 @@ router.post("/notice", (req, res, next) => {
 router.post('/led-board-messages', adminController.post_led_board_message);
 router.post('/advt', adminController.post_advt);
 // router.post('/famous-areas', adminController.post_support_page_famous_areas);
+
 router.post("/famous-areas", (req, res, next) => {
   console.log("🚀 Raw Request Body (before multer):", req.body);
 

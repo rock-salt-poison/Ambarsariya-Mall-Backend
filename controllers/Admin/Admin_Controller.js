@@ -716,7 +716,7 @@ const get_support_page_famous_areas = async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching areas:", err);
-    res.status(500).json({ error: "Failed to fetch messages" });
+    res.status(500).json({ error: "Failed to fetch areas" });
   }
 };
 
