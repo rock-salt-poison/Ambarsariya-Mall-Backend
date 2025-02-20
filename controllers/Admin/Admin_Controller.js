@@ -779,7 +779,30 @@ const delete_support_page_famous_area = async (req, res) => {
   const { area_name, area_address, latitude, longitude } = req.body;
 
   try {
-    const query = `
+    // 1️⃣ Fetch the image URL before deleting the record
+    const selectQuery = `
+      SELECT image_src FROM admin.famous_areas 
+      WHERE LOWER(area_title) = LOWER($1) 
+        AND LOWER(area_address) = LOWER($2) 
+        AND latitude = $3 
+        AND longitude = $4
+    `;
+
+    const selectResult = await ambarsariyaPool.query(selectQuery, [area_name, area_address, latitude, longitude]);
+
+    if (selectResult.rowCount === 0) {
+      return res.status(404).json({ message: "No matching area found" });
+    }
+
+    const imageUrl = selectResult.rows[0].image_src;
+
+    // 2️⃣ Delete the file from GCS
+    if (imageUrl) {
+      await deleteFileFromGCS(imageUrl);
+    }
+
+    // 3️⃣ Now delete the database record
+    const deleteQuery = `
       DELETE FROM admin.famous_areas 
       WHERE LOWER(area_title) = LOWER($1) 
         AND LOWER(area_address) = LOWER($2) 
@@ -787,13 +810,9 @@ const delete_support_page_famous_area = async (req, res) => {
         AND longitude = $4
     `;
 
-    const result = await ambarsariyaPool.query(query, [area_name, area_address, latitude, longitude]);
+    const deleteResult = await ambarsariyaPool.query(deleteQuery, [area_name, area_address, latitude, longitude]);
 
-    if (result.rowCount > 0) {
-      res.json({ message: "Area deleted successfully" });
-    } else {
-      res.status(404).json({ message: "No matching area found" });
-    }
+    res.json({ message: "Area deleted successfully" });
   } catch (err) {
     console.error("Error deleting area:", err);
     res.status(500).json({ error: "Failed to delete area" });
