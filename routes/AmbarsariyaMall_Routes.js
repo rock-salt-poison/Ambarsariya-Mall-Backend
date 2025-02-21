@@ -106,4 +106,5 @@ router.put("/sell/support", (req, res, next) => {
 router.put('/sell/send-otp', otpController.sendOTP);
 router.post('/sell/username-otp', usernameOtpController.sendOTP);
 
+
 module.exports = router;
