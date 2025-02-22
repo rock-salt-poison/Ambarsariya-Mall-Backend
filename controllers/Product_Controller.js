@@ -3,9 +3,16 @@ const ambarsariyaPool = createDbPool();
 
 const post_products = async (req, res) => {
     const products = req.body.products;
+    const shopNo = products[0].shop_no; // Assuming all products belong to the same shop_no
 
     ambarsariyaPool.query("BEGIN"); // Start a transaction
     try {
+        await ambarsariyaPool.query("BEGIN"); // Start a transaction
+
+        // 🔴 Step 1: Delete existing products for the given shop_no
+        const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1;`;
+        await ambarsariyaPool.query(deleteQuery, [shopNo]);
+
         // Insert products and product variants
         for (let product of products) {
             // Insert the variant group if it doesn't exist
