@@ -100,21 +100,21 @@ const get_checkDriveAccess = async (req, res) => {
 };
 
 /**
- * 3️⃣ Request Google Drive Access
+ * 3️ Request Google Drive Access
  */
 const get_requestDriveAccess = (req, res) => {
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/userinfo.email","https://www.googleapis.com/auth/photoslibrary.readonly",],
+    scope: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/userinfo.email",],
     prompt: "consent",
-    redirect_uri: "http://localhost:4000/api/drive/auth/google/callback",
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
   });
 
   res.redirect(url);
 };
 
 /**
- * 4️⃣ Handle OAuth Callback and Store Tokens in Database
+ * 4️ Handle OAuth Callback and Store Tokens in Database
  */
 const get_handleAuthCallback = async (req, res) => {
   try {
@@ -122,14 +122,14 @@ const get_handleAuthCallback = async (req, res) => {
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
 
-    console.log("✅ OAuth Tokens Received:", tokens);
+    console.log("OAuth Tokens Received:", tokens);
 
     // Get user info from Google
     const oauth2 = google.oauth2({ auth: oAuth2Client, version: "v2" });
     const userInfo = await oauth2.userinfo.get();
     const email = userInfo.data.email;
 
-    // 🔍 Fetch shop_access_token using email
+    // Fetch shop_access_token using email
     const shopResult = await ambarsariyaPool.query(
       `SELECT ef.shop_access_token 
       FROM sell.eshop_form ef
@@ -145,7 +145,7 @@ const get_handleAuthCallback = async (req, res) => {
 
     const shop_access_token = shopResult.rows[0].shop_access_token;
 
-    // ✅ Store Access & Refresh Tokens in DB using shop_access_token
+    // Store Access & Refresh Tokens in DB using shop_access_token
     await ambarsariyaPool.query(
       `UPDATE sell.eshop_form 
       SET oauth_access_token = $1, oauth_refresh_token = $2 
@@ -153,11 +153,11 @@ const get_handleAuthCallback = async (req, res) => {
       [tokens.access_token, tokens.refresh_token, shop_access_token]
     );
 
-    // 🔗 **Dynamically Construct Frontend Redirect URL**
+    // **Dynamically Construct Frontend Redirect URL**
     const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
     const redirectUrl = `${FRONTEND_BASE_URL}/AmbarsariyaMall/sell/support/shop/${shop_access_token}/dashboard/edit?email=${email}`;
 
-    console.log("🔗 Redirecting to:", redirectUrl);
+    console.log("Redirecting to:", redirectUrl);
     return res.redirect(redirectUrl);
   } catch (error) {
     console.error("OAuth Error:", error.message);

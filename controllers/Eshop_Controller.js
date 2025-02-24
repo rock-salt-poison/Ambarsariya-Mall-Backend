@@ -564,7 +564,9 @@ const get_shopUserData = async (req, res) => {
     ef.advertisement_video_url,
     ef.latitude AS "latitude",
     ef.longitude AS "longitude",
-    ef.shop_access_token AS "shop_access_token"
+    ef.shop_access_token AS "shop_access_token",
+    ef.oauth_access_token AS "oauth_access_token",
+    ef.oauth_refresh_token AS "oauth_refresh_token"
 FROM Sell.users u
 JOIN Sell.eshop_form ef ON ef.user_id = u.user_id
 JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
@@ -580,7 +582,7 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
          u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
          ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
          ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
-         ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.latitude, ef.longitude, ef.shop_access_token;
+         ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.latitude, ef.longitude, ef.shop_access_token, ef.oauth_access_token, ef.oauth_refresh_token;
 `;
 
     const result = await ambarsariyaPool.query(query, [shop_access_token]);

@@ -4,14 +4,15 @@ const ambarsariyaPool = createDbPool();
 const post_products = async (req, res) => {
     const products = req.body.products;
     const shopNo = products[0].shop_no; // Assuming all products belong to the same shop_no
+    const category = products[0].category; // Assuming all products belong to the same shop_no
 
     ambarsariyaPool.query("BEGIN"); // Start a transaction
     try {
         await ambarsariyaPool.query("BEGIN"); // Start a transaction
 
         // 🔴 Step 1: Delete existing products for the given shop_no
-        const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1;`;
-        await ambarsariyaPool.query(deleteQuery, [shopNo]);
+        const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1 AND category= $2;`;
+        await ambarsariyaPool.query(deleteQuery, [shopNo, category]);
 
         // Insert products and product variants
         for (let product of products) {
@@ -56,10 +57,11 @@ const post_products = async (req, res) => {
         variation_3, 
         variation_4, 
         selling_price,
-        product_catalog
+        product_catalog,
+        brand_catalog
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
       ) ON CONFLICT (product_id) DO NOTHING;`;
 
             await ambarsariyaPool.query(productQuery, [
@@ -97,6 +99,7 @@ const post_products = async (req, res) => {
                 product.variation_4,
                 product.selling_price,
                 product.product_catalog,
+                product.brand_catalog,
             ]);
         }
 
