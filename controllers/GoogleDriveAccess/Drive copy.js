@@ -23,9 +23,9 @@ async function getBaseFolder(drive, email) {
         const ownerEmail = folder.owners[0].emailAddress;
         
         if (ownerEmail !== email) {
-          console.log(`Found folder '${folderName}', but it belongs to ${ownerEmail}, not ${email}. Creating a new one.`);
+          console.log(`🚫 Found folder '${folderName}', but it belongs to ${ownerEmail}, not ${email}. Creating a new one.`);
         } else {
-          console.log("Folder found for user:", email, folder.id);
+          console.log("✅ Folder found for user:", email, folder.id);
           return folder.id;
         }
       }
@@ -40,70 +40,14 @@ async function getBaseFolder(drive, email) {
       fields: "id",
     });
 
-    console.log("New folder created for user:", email, folder.data.id);
+    console.log("✅ New folder created for user:", email, folder.data.id);
     return folder.data.id;
   } catch (error) {
-    console.error("Error getting/creating user-specific folder:", error.message);
+    console.error("❌ Error getting/creating user-specific folder:", error.message);
     throw new Error("Failed to get or create user-specific base folder.");
   }
 }
 
-async function createSubFolders(drive, parentFolderId, serviceAccountEmail) {
-  try {
-    const subFolders = ["product_images", "product_catalog", "brand_catalog"];
-    const folderIds = {};
-
-    for (const folderName of subFolders) {
-      const query = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${parentFolderId}' in parents and trashed=false`;
-
-      const folderRes = await drive.files.list({ q: query, fields: "files(id, name)" });
-
-      if (folderRes.data.files.length === 0) {
-        const folder = await drive.files.create({
-          requestBody: {
-            name: folderName,
-            parents: [parentFolderId],
-            mimeType: "application/vnd.google-apps.folder",
-          },
-          fields: "id",
-        });
-
-        console.log(`✅ Sub-folder '${folderName}' created inside base folder.`);
-        folderIds[folderName] = folder.data.id;
-
-        // Grant permission to service account
-        await grantPermissionToFolder(drive, folder.data.id, serviceAccountEmail);
-      } else {
-        console.log(`⚠️ Sub-folder '${folderName}' already exists.`);
-        folderIds[folderName] = folderRes.data.files[0].id;
-      }
-    }
-
-    return folderIds;
-  } catch (error) {
-    console.error("❌ Error creating sub-folders:", error.message);
-    throw new Error("Failed to create sub-folders.");
-  }
-}
-
-async function grantPermissionToFolder(drive, folderId, serviceAccountEmail) {
-  try {
-    await drive.permissions.create({
-      fileId: folderId,
-      requestBody: {
-        role: "writer", // Give edit access
-        type: "user",
-        emailAddress: serviceAccountEmail,
-      },
-      fields: "id",
-    });
-
-    console.log(`✅ Permission granted to service account for folder ID: ${folderId}`);
-  } catch (error) {
-    console.error(`❌ Error granting permission to folder ${folderId}:`, error.message);
-    throw new Error("Failed to grant permission.");
-  }
-}
 
 
 
@@ -139,8 +83,6 @@ async function uploadFile(drive, folderId, email) {
     
     console.log("✅ File Created:", file.data.webViewLink, "Owned by:", file.data.owners);
     
-    await grantPermission(drive, email, file.data.id);
-
     return file.data;
     
   } catch (error) {
@@ -150,29 +92,14 @@ async function uploadFile(drive, folderId, email) {
 
 async function grantPermission(drive, email, fileId) {
   try {
-    // 🔹 Define service account email (Replace with actual service account email)
-    const SERVICE_ACCOUNT_EMAIL = process.env.GCP_CLIENT_EMAIL;
-
-    const permissions = [
-      { type: "user", role: "writer", emailAddress: email }, // Grant user access
-      { type: "user", role: "writer", emailAddress: SERVICE_ACCOUNT_EMAIL } // Grant service account access
-    ];
-
-    for (const perm of permissions) {
-      await drive.permissions.create({
-        fileId,
-        requestBody: perm,
-      });
-    }
-
-    console.log(`✅ Permissions granted to ${email} and ${SERVICE_ACCOUNT_EMAIL}`);
+    await drive.permissions.create({
+      fileId,
+      requestBody: { type: "user", role: "writer", emailAddress: email },
+    });
   } catch (error) {
     throw new Error("Failed to grant permission.");
   }
 }
-
-
-
 async function removeFirstSheet(sheets, spreadsheetId) {
   try {
     // Fetch spreadsheet details
@@ -307,15 +234,11 @@ async function processDrive(email) {
     // Step 1: Get or create base folder
     const folderId = await getBaseFolder(drive, email);
 
-    // Step 2: Create sub-folders & store their IDs
-    const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
-    const subFolderIds = await createSubFolders(drive, folderId, serviceAccountEmail);
-
-    // Step 3: Check if file exists, else create it
+    // Step 2: Check if file exists, else create it
     let file = await getUserFile(drive, folderId, email);
     if (!file) file = await uploadFile(drive, folderId, email);
 
-    // Step 4: Add new category sheets
+    // Step 3: Add new category sheets
     for (const category of category_names) {
       await addSheetToFile(sheets, file.id, category);
     }
@@ -330,6 +253,5 @@ async function processDrive(email) {
     return { success: false, message: error.message };
   }
 }
-
 
 module.exports = { processDrive };

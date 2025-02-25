@@ -1,6 +1,6 @@
 const { google } = require("googleapis");
 const { processDrive } = require("./GoogleDriveAccess/Drive");
-const { oAuth2Client } = require("./GoogleDriveAccess/GoogleAuth");
+const { oAuth2Client, driveService, sheetsService } = require("./GoogleDriveAccess/GoogleAuth");
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
 
@@ -11,7 +11,10 @@ const post_openFile = async (req, res) => {
   const { email } = req.params;
 
   try {
-    if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
 
     // 🔍 Fetch OAuth tokens using JOIN on user_id
     const result = await ambarsariyaPool.query(
@@ -23,18 +26,25 @@ const post_openFile = async (req, res) => {
       [email]
     );
 
-    if (!result.rows.length) return res.status(401).json({ success: false, message: "User not authenticated" });
+    if (!result.rows.length)
+      return res
+        .status(401)
+        .json({ success: false, message: "User not authenticated" });
 
     let { oauth_access_token, oauth_refresh_token, user_id } = result.rows[0];
 
     // 🔄 Refresh Token if Access Token is Expired
     if (!oauth_access_token) {
       if (!oauth_refresh_token) {
-        return res.status(403).json({ success: false, message: "Re-authentication required" });
+        return res
+          .status(403)
+          .json({ success: false, message: "Re-authentication required" });
       }
 
       try {
-        const { credentials } = await oAuth2Client.refreshToken(oauth_refresh_token);
+        const { credentials } = await oAuth2Client.refreshToken(
+          oauth_refresh_token
+        );
         oauth_access_token = credentials.access_token;
 
         // ✅ Check if a new refresh token is provided, update both tokens if needed
@@ -57,7 +67,9 @@ const post_openFile = async (req, res) => {
         }
       } catch (refreshError) {
         console.error("Failed to refresh token:", refreshError.message);
-        return res.status(403).json({ success: false, message: "Re-authentication required" });
+        return res
+          .status(403)
+          .json({ success: false, message: "Re-authentication required" });
       }
     }
 
@@ -65,10 +77,11 @@ const post_openFile = async (req, res) => {
     return res.json(response);
   } catch (e) {
     console.error("Error opening file:", e);
-    return res.status(500).json({ success: false, message: "Error opening file" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Error opening file" });
   }
 };
-
 
 /**
  * 2️⃣ Check if User Has Granted Drive Access
@@ -77,7 +90,10 @@ const get_checkDriveAccess = async (req, res) => {
   const { email } = req.params;
 
   try {
-    if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
 
     const result = await ambarsariyaPool.query(
       `SELECT ef.oauth_access_token
@@ -95,7 +111,9 @@ const get_checkDriveAccess = async (req, res) => {
     }
   } catch (e) {
     console.error("Error checking access:", e.message);
-    return res.status(500).json({ success: false, message: "Error checking access" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Error checking access" });
   }
 };
 
@@ -105,7 +123,10 @@ const get_checkDriveAccess = async (req, res) => {
 const get_requestDriveAccess = (req, res) => {
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/userinfo.email",],
+    scope: [
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/userinfo.email",
+    ],
     prompt: "consent",
     redirect_uri: process.env.GOOGLE_REDIRECT_URI,
   });
@@ -140,7 +161,9 @@ const get_handleAuthCallback = async (req, res) => {
     );
 
     if (!shopResult.rows.length) {
-      return res.status(404).json({ success: false, message: "Shop not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Shop not found" });
     }
 
     const shop_access_token = shopResult.rows[0].shop_access_token;
@@ -154,7 +177,8 @@ const get_handleAuthCallback = async (req, res) => {
     );
 
     // **Dynamically Construct Frontend Redirect URL**
-    const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+    const FRONTEND_BASE_URL =
+      process.env.FRONTEND_BASE_URL || "http://localhost:3000";
     const redirectUrl = `${FRONTEND_BASE_URL}/AmbarsariyaMall/sell/support/shop/${shop_access_token}/dashboard/edit?email=${email}`;
 
     console.log("Redirecting to:", redirectUrl);
@@ -165,10 +189,74 @@ const get_handleAuthCallback = async (req, res) => {
   }
 };
 
+const get_imageLink = async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+
+    // Get file metadata to determine MIME type
+    const fileMeta = await driveService.files.get({
+      fileId,
+      fields: "name, mimeType",
+    });
+
+    // Fetch actual file content
+    const response = await driveService.files.get(
+      { fileId, alt: "media" },
+      { responseType: "stream" }
+    );
+
+    // Set the correct Content-Type
+    res.setHeader("Content-Type", fileMeta.data.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${fileMeta.data.name}"`
+    );
+
+    // Stream the file response
+    response.data.pipe(res);
+  } catch (error) {
+    console.error("Error fetching file:", error.message);
+    res.status(500).send("Failed to fetch file");
+  }
+};
+
+const get_sheetsData = async (req, res) => {
+  try {
+    const spreadsheetId = req.params.sheetId;
+
+    // Fetch metadata of all sheet tabs
+    const metadataResponse = await sheetsService.spreadsheets.get({ spreadsheetId });
+
+    // Extract all sheet names (tabs)
+    const sheetTabs = metadataResponse.data.sheets.map(sheet => sheet.properties.title);
+
+    // Fetch data dynamically for each sheet without a fixed range
+    const sheetDataPromises = sheetTabs.map(async (sheetName) => {
+      const dataResponse = await sheetsService.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${sheetName}`, // No fixed range (fetches all data)
+      });
+
+      return { sheetName, data: dataResponse.data.values || [] };
+    });
+
+    // Wait for all sheet data to be fetched
+    const allSheetData = await Promise.all(sheetDataPromises);
+
+    res.json({ success: true, sheets: allSheetData });
+  } catch (error) {
+    console.error("❌ Error fetching sheet data:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch sheet data" });
+  }
+};
+
+
 
 module.exports = {
   post_openFile,
   get_checkDriveAccess,
   get_requestDriveAccess,
   get_handleAuthCallback,
+  get_imageLink,
+  get_sheetsData
 };

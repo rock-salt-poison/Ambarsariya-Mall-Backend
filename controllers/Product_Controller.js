@@ -2,17 +2,18 @@ const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
 
 const post_products = async (req, res) => {
-    const products = req.body.products;
+    const {products, categories} = req.body;
     const shopNo = products[0].shop_no; // Assuming all products belong to the same shop_no
-    const category = products[0].category; // Assuming all products belong to the same shop_no
 
     ambarsariyaPool.query("BEGIN"); // Start a transaction
     try {
         await ambarsariyaPool.query("BEGIN"); // Start a transaction
 
-        // 🔴 Step 1: Delete existing products for the given shop_no
-        const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1 AND category= $2;`;
-        await ambarsariyaPool.query(deleteQuery, [shopNo, category]);
+        for(let category of categories){
+            // 🔴 Step 1: Delete existing products for the given shop_no
+            const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1 AND category= $2;`;
+            await ambarsariyaPool.query(deleteQuery, [shopNo, category]);
+        }
 
         // Insert products and product variants
         for (let product of products) {
@@ -123,9 +124,9 @@ const get_products = async (req, res) => {
         if (shop_no && product_id) {
             query = `SELECT * FROM sell.products WHERE shop_no = $1 AND product_id = $2`;
             result = await ambarsariyaPool.query(query, [shop_no, product_id]);
-        } else if(shop_no){
+        } else if(shop_no) {
             query = `SELECT * FROM sell.products WHERE shop_no = $1`;
-            result = await ambarsariyaPool.query(query,[shop_no]);
+            result = await ambarsariyaPool.query(query, [shop_no]);
         }
 
         if (result.rowCount === 0) {
