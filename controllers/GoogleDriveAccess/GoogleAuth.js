@@ -27,6 +27,7 @@ const serviceAuth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
   scopes: [
     "https://www.googleapis.com/auth/drive.readonly", // For Google Drive
+     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/spreadsheets.readonly", // For Google Sheets
   ],
 });
