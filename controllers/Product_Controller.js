@@ -32,6 +32,7 @@ const post_products = async (req, res) => {
         category, 
         price, 
         brand, 
+        iku_id,
         product_images, 
         product_dimensions_width_in_cm, 
         product_dimensions_height_in_cm, 
@@ -39,6 +40,7 @@ const post_products = async (req, res) => {
         product_weight_in_kg, 
         packing, 
         product_style, 
+        area_size_lateral,
         inventory_or_stock_quantity, 
         shipping_information, 
         variant_group, 
@@ -62,7 +64,7 @@ const post_products = async (req, res) => {
         brand_catalog
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
       ) ON CONFLICT (product_id) DO NOTHING;`;
 
             await ambarsariyaPool.query(productQuery, [
@@ -73,6 +75,7 @@ const post_products = async (req, res) => {
                 product.category,
                 product.price,
                 product.brand,
+                product.iku,
                 product.product_images,
                 product.product_dimensions_width_in_cm,
                 product.product_dimensions_height_in_cm,
@@ -80,6 +83,7 @@ const post_products = async (req, res) => {
                 product.product_weight_in_kg,
                 product.packing,
                 product.product_style,
+                product.area_size_lateral,
                 product.inventory_or_stock_quantity,
                 product.shipping_information,
                 product.variant_group,
