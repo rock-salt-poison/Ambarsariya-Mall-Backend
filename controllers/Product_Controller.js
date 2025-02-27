@@ -113,7 +113,7 @@ const post_products = async (req, res) => {
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
     console.error("Error inserting products or variants:", err);
-    res.status(500).json({ error: "Error inserting products" });
+    res.status(500).json({ error: "Error inserting products", message:err });
   }
 };
 
