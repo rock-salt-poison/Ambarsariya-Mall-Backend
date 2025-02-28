@@ -5,6 +5,7 @@ const eshopController = require('../controllers/Eshop_Controller');
 const otpController = require('../controllers/Otp_Controller');
 const usernameOtpController = require('../controllers/UserNameOtp_controller');
 const productController = require('../controllers/Product_Controller');
+const purchaseController = require('../controllers/PurchaseOrder_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
 
@@ -79,6 +80,7 @@ router.post('/sell/support', eshopController.post_visitorData);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
 router.post('/sell/products', productController.post_products);
 router.post('/sell/verify_otp', eshopController.post_verify_otp);
+router.post('/purchase_order', purchaseController.post_purchaseOrder);
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
