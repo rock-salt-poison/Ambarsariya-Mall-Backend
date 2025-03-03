@@ -109,5 +109,19 @@ const get_typeOfServices = async(req, res) => {
   }
 }
 
+const get_typeOfService = async(req, res) => {
+  const {id} = req.params;
+  try{
+    if(id){
+      const result = await ambarsariyaPool.query('SELECT service FROM type_of_services where id = $1', [id]);
+      res.json(result.rows);
+    }
+  }
+  catch(err){
+      console.log('Error fetching sectors : ' + err);
+      res.status(500).json({message : 'Error fetching sectors.', error: err.message});
+  }
+}
+
 // Export the functions for use in routes
-module.exports = { get_domains, get_sectors,get_category_name, get_domainSectors, createDomain, get_typeOfServices, get_categoriesList };
+module.exports = { get_domains, get_sectors,get_category_name, get_domainSectors, createDomain, get_typeOfServices, get_typeOfService, get_categoriesList };

@@ -3,6 +3,7 @@ const ambarsariyaPool = createDbPool();
 const bcrypt = require("bcrypt");
 const { uploadFileToGCS } = require("../utils/storageBucket");
 const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
+const { encryptData, decryptData } = require("../utils/cryptoUtils");
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -404,7 +405,7 @@ const update_eshop = async (req, resp) => {
     business_name,
     date_of_establishment,
     product_samples,
-    similar_options,
+    upi_id, // This will be encrypted
     cost_sensitivity,
     daily_walkin,
     parking_availability,
@@ -412,7 +413,8 @@ const update_eshop = async (req, resp) => {
     advt_video,
     key_players,
   } = req.body;
-  console.log('Received file:', req.file); // Log the file
+
+  console.log("Received file:", req.file); // Log the file
 
   const shopAccessToken = req.params.shopAccessToken;
 
@@ -421,6 +423,9 @@ const update_eshop = async (req, resp) => {
   }
 
   try {
+    // Encrypt the UPI ID before storing
+    const encryptedUPI = upi_id ? encryptData(upi_id) : null;
+
     // Fetch the existing file URL from the database
     const existingData = await ambarsariyaPool.query(
       `SELECT usp_values_url FROM Sell.eshop_form WHERE shop_access_token = $1`,
@@ -454,7 +459,7 @@ const update_eshop = async (req, resp) => {
            establishment_date = $2,
            usp_values_url = $3,
            product_sample_url = $4,
-           similar_options = $5,
+           upi_id = $5,
            key_players = $6,
            cost_sensitivity = $7,
            daily_walkin = $8,
@@ -468,7 +473,7 @@ const update_eshop = async (req, resp) => {
         date_of_establishment,
         uploadedUSPLink,
         product_samples,
-        similar_options,
+        encryptedUPI, // Store encrypted UPI ID
         key_players,
         cost_sensitivity,
         daily_walkin,
@@ -491,7 +496,9 @@ const update_eshop = async (req, resp) => {
     });
   } catch (err) {
     console.error("Error updating data:", err);
-    resp.status(500).json({ message: "Error updating data", error: err.message });
+    resp
+      .status(500)
+      .json({ message: "Error updating data", error: err.message });
   }
 };
 
@@ -538,6 +545,7 @@ const get_shopUserData = async (req, res) => {
     ef.establishment_date AS "establishment_date", 
     ef.usp_values_url AS "usp_values_url",
     ef.product_sample_url AS "product_sample_url",
+    ef.upi_id AS "upi_id",
     ef.similar_options AS "similar_options",
     -- Fetch similar options names
     (SELECT array_agg(ef2.business_name) 
@@ -581,7 +589,7 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
          s.sector_name, ef.created_sector, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
          u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
          ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
-         ef.product_sample_url, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
+         ef.product_sample_url, ef.upi_id, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
          ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.latitude, ef.longitude, ef.shop_access_token, ef.oauth_access_token, ef.oauth_refresh_token;
 `;
 
@@ -593,7 +601,13 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
         .json({ message: "No data found for the provided shop access token." });
     }
 
-    res.json(result.rows);
+    const shopData = result.rows;
+    
+
+    // Decrypt UPI ID
+    shopData[0].upi_id = shopData[0].upi_id !==null ? decryptData(shopData[0].upi_id) : null;
+
+    res.json(shopData);
   } catch (err) {
     console.error("Error fetching shop user data:", err);
     res
