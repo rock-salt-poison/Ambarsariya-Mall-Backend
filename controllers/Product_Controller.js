@@ -167,4 +167,28 @@ const get_product_names = async (req, res) => {
   }
 };
 
-module.exports = { post_products, get_products, get_product_names };
+const get_product_variants = async (req, res) => {
+  const { shop_no, variant_group } = req.params;
+
+  try {
+    if (shop_no) {
+      let query = `SELECT * FROM sell.products WHERE shop_no = $1 AND variant_group = $2`;
+      let result = await ambarsariyaPool.query(query, [shop_no, variant_group]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .status(404)
+          .json({ valid: false, message: "No variants are there." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch variants" });
+  }
+};
+
+
+
+module.exports = { post_products, get_products, get_product_names, get_product_variants };

@@ -77,6 +77,7 @@ router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupon
 router.get('/sell/products/:shop_no', productController.get_products);
 router.get('/sell/product-names/:shop_no', productController.get_product_names);
 router.get('/sell/products/:shop_no/:product_id', productController.get_products);
+router.get('/sell/product-variants/:shop_no/:variant_group', productController.get_product_variants);
 router.get('/purchase_order/:po_access_token', purchaseController.get_purchase_order_details);
 
 router.post('/sell/support', eshopController.post_visitorData);
