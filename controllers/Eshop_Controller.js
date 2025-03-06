@@ -1453,14 +1453,16 @@ const post_discount_coupons = async (req, res) => {
         continue; // Skip categories with missing or invalid data
       }
 
-      const { discounts } = data;
+      const { discounts, no_of_coupons } = data;
 
       for (const [couponType, discountData] of Object.entries(discounts)) {
         if (!discountData.checked) continue;
+        console.log('discountData : ', discountData);
+        
 
         // Ensure the date_range is valid, if not set default values
-        const validityStart = discountData.date_range?.[0] || "2024-01-01"; // Default to a specific start date if missing
-        const validityEnd = discountData.date_range?.[1] || "2024-12-31"; // Default to a specific end date if missing
+        const validityStart = inputData.validity_start || "2024-01-01"; // Default to a specific start date if missing
+        const validityEnd = inputData.validity_end || "2024-12-31"; // Default to a specific end date if missing
 
         // Check if date_range values are still missing and return an error if so
         if (!validityStart || !validityEnd) {
@@ -1470,8 +1472,8 @@ const post_discount_coupons = async (req, res) => {
         }
 
         const couponQuery = `
-            INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end, no_of_coupons)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (coupon_type, shop_no)
             DO UPDATE SET 
                 validity_start = EXCLUDED.validity_start,
@@ -1486,6 +1488,7 @@ const post_discount_coupons = async (req, res) => {
           shopNo, // Use shopNo here
           validityStart,
           validityEnd,
+          no_of_coupons
         ]);
 
         const couponId = couponResult.rows[0].id;
