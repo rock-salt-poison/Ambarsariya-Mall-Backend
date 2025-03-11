@@ -1,7 +1,7 @@
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
 
-const post_purchaseOrder = async (req, res) => {
+const post_saleOrder = async (req, res) => {
   const { data } = req.body;
   console.log(data);
 
@@ -10,85 +10,86 @@ const post_purchaseOrder = async (req, res) => {
 
     // Insert the product data
     const productQuery = `
-      INSERT INTO Sell.purchase_order (
+      INSERT INTO Sell.sale_order (
+        po_no,
         buyer_id,
         buyer_type,
-        seller_id,
-        buyer_gst_number,
-        seller_gst_number,
-        products,
+        order_date,
+        product_id,
+        quantity,
+        unit_price,
+        line_total_no_of_items,
         subtotal,
-        shipping_address,
-        shipping_method,
-        payment_method,
-        special_offers,
-        discount_applied,
         taxes,
+        discounts,
+        shipping_method,
+        shipping_charges,
+        expected_delivery_date,
         co_helper,
-        discount_amount,
-        pre_post_paid,
-        extra_charges,
-        total_amount,
-        date_of_issue,
-        delivery_terms,
-        additional_instructions
+        subscription_type,
+        payment_terms,
+        total_payment_with_all_services,
+        payment_method,
+        payment_due_date,
+        prepaid,
+        postpaid,
+        balance_credit,
+        balance_credit_due_date,
+        after_due_date_surcharges_per_day,
+        accept_or_deny,
+        send_qr_upi_bank_details
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21
+        $19, $20, $21, $22, $23, $24, $25, $26, $27
       ) 
-      RETURNING po_access_token
+      RETURNING so_access_token
     `;
 
     const purchase_order = await ambarsariyaPool.query(productQuery, [
+      data.po_no,
       data.buyer_id,
       data.buyer_type,
-      data.seller_id,
-      data.buyer_gst_number,
-      data.seller_gst_number,
-      JSON.stringify(data.products),
+      data.order_date,
+      data.product_id,
+      data.quantity,
+      data.unit_price,
+      data.line_total_no_of_items,
       data.subtotal,
-      data.shipping_address,
-      data.shipping_method,
-      data.payment_method,
-      JSON.stringify(data.special_offers),
-      JSON.stringify(data.discount_applied),
       data.taxes,
+      data.discounts,
+      data.shipping_method,
+      data.shipping_charges,
+      data.expected_delivery_date,
       data.co_helper,
-      data.discount_amount,
-      data.pre_post_paid,
-      data.extra_charges,
-      data.total_amount,
-      data.date_of_issue,
-      data.delivery_terms,
-      data.additional_instructions,
+      JSON.stringify(data.subscription_type),
+      data.payment_terms,
+      data.total_payment_with_all_services,
+      data.payment_method,
+      data.payment_due_date,
+      data.prepaid,
+      data.postpaid,
+      data.balance_credit,
+      data.balance_credit_due_date,
+      data.after_due_date_surcharges_per_day,
+      data.accept_or_deny,
+      data.send_qr_upi_bank_details
     ]);
 
-    const po_access_token = purchase_order.rows[0].po_access_token;
-
-    // Update product quantity in Sell.products
-    for (const product of data.products) {
-      const updateQuery = `
-        UPDATE Sell.products
-        SET purchased_quantity = purchased_quantity + $1
-        WHERE product_id = $2
-      `;
-
-      await ambarsariyaPool.query(updateQuery, [product.quantity, product.no]);
-    }
+    const so_access_token = purchase_order.rows[0].so_access_token;
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
     res
       .status(201)
       .json({
-        message: "Purchase order created successfully",
-        po_access_token,
+        message: "Sale order created successfully",
+        so_access_token,
       });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
-    console.error("Error inserting purchase order:", err);
+    console.error("Error inserting sale order:", err);
     res
       .status(500)
-      .json({ error: "Error creating purchase order", message: err.message });
+      .json({ error: "Error creating sale order", message: err.message });
   }
 };
 
@@ -179,7 +180,7 @@ const get_purchase_order_details = async (req, res) => {
 };
 
 module.exports = {
-  post_purchaseOrder,
+  post_saleOrder,
   get_purchase_orders,
   get_purchase_order_details,
 };
