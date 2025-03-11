@@ -8,7 +8,7 @@ const post_saleOrder = async (req, res) => {
   try {
     await ambarsariyaPool.query("BEGIN"); // Start a transaction
 
-    // Insert the product data
+    // Insert or update the product data
     const productQuery = `
       INSERT INTO Sell.sale_order (
         po_no,
@@ -41,7 +41,31 @@ const post_saleOrder = async (req, res) => {
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
         $19, $20, $21, $22, $23, $24, $25, $26, $27
-      ) 
+      )
+      ON CONFLICT (po_no, product_id) 
+      DO UPDATE SET 
+        quantity = EXCLUDED.quantity,
+        unit_price = EXCLUDED.unit_price,
+        line_total_no_of_items = EXCLUDED.line_total_no_of_items,
+        subtotal = EXCLUDED.subtotal,
+        taxes = EXCLUDED.taxes,
+        discounts = EXCLUDED.discounts,
+        shipping_method = EXCLUDED.shipping_method,
+        shipping_charges = EXCLUDED.shipping_charges,
+        expected_delivery_date = EXCLUDED.expected_delivery_date,
+        co_helper = EXCLUDED.co_helper,
+        subscription_type = EXCLUDED.subscription_type,
+        payment_terms = EXCLUDED.payment_terms,
+        total_payment_with_all_services = EXCLUDED.total_payment_with_all_services,
+        payment_method = EXCLUDED.payment_method,
+        payment_due_date = EXCLUDED.payment_due_date,
+        prepaid = EXCLUDED.prepaid,
+        postpaid = EXCLUDED.postpaid,
+        balance_credit = EXCLUDED.balance_credit,
+        balance_credit_due_date = EXCLUDED.balance_credit_due_date,
+        after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
+        accept_or_deny = EXCLUDED.accept_or_deny,
+        send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details
       RETURNING so_access_token
     `;
 
@@ -78,20 +102,17 @@ const post_saleOrder = async (req, res) => {
     const so_access_token = purchase_order.rows[0].so_access_token;
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
-    res
-      .status(201)
-      .json({
-        message: "Sale order created successfully",
-        so_access_token,
-      });
+    res.status(201).json({
+      message: "Sale order processed successfully",
+      so_access_token,
+    });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
-    console.error("Error inserting sale order:", err);
-    res
-      .status(500)
-      .json({ error: "Error creating sale order", message: err.message });
+    console.error("Error processing sale order:", err);
+    res.status(500).json({ error: "Error processing sale order", message: err.message });
   }
 };
+
 
 const get_purchase_orders = async (req, res) => {
   const { seller_id } = req.params;
