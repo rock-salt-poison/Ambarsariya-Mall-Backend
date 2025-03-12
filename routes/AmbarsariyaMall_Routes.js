@@ -80,7 +80,8 @@ router.get('/sell/product-names/:shop_no', productController.get_product_names);
 router.get('/sell/products/:shop_no/:product_id', productController.get_products);
 router.get('/sell/product-variants/:shop_no/:variant_group', productController.get_product_variants);
 router.get('/purchase_order/:po_access_token', purchaseController.get_purchase_order_details);
-router.get('/purchase_orders/:seller_id', purchaseController.get_purchase_orders);
+router.get('/purchase_orders/:po_no', purchaseController.get_purchase_orders);
+router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchase_order_numbers);
 
 router.post('/sell/support', eshopController.post_visitorData);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
