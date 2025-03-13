@@ -15,10 +15,7 @@ const post_saleOrder = async (req, res) => {
         buyer_id,
         buyer_type,
         order_date,
-        product_id,
-        quantity,
-        unit_price,
-        line_total_no_of_items,
+        products,
         subtotal,
         taxes,
         discounts,
@@ -36,17 +33,15 @@ const post_saleOrder = async (req, res) => {
         balance_credit,
         balance_credit_due_date,
         after_due_date_surcharges_per_day,
-        accept_or_deny,
-        send_qr_upi_bank_details
+        send_qr_upi_bank_details,
+        seller_id
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24, $25, $26, $27
+        $19, $20, $21, $22, $23, $24
       )
-      ON CONFLICT (po_no, product_id) 
+      ON CONFLICT (po_no) 
       DO UPDATE SET 
-        quantity = EXCLUDED.quantity,
-        unit_price = EXCLUDED.unit_price,
-        line_total_no_of_items = EXCLUDED.line_total_no_of_items,
+        products = EXCLUDED.products,
         subtotal = EXCLUDED.subtotal,
         taxes = EXCLUDED.taxes,
         discounts = EXCLUDED.discounts,
@@ -64,8 +59,8 @@ const post_saleOrder = async (req, res) => {
         balance_credit = EXCLUDED.balance_credit,
         balance_credit_due_date = EXCLUDED.balance_credit_due_date,
         after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
-        accept_or_deny = EXCLUDED.accept_or_deny,
-        send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details
+        send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
+        updated_at = CURRENT_TIMESTAMP 
       RETURNING so_access_token
     `;
 
@@ -74,10 +69,7 @@ const post_saleOrder = async (req, res) => {
       data.buyer_id,
       data.buyer_type,
       data.order_date,
-      data.product_id,
-      data.quantity,
-      data.unit_price,
-      data.line_total_no_of_items,
+      JSON.stringify(data.products),
       data.subtotal,
       data.taxes,
       data.discounts,
@@ -95,8 +87,8 @@ const post_saleOrder = async (req, res) => {
       data.balance_credit,
       data.balance_credit_due_date,
       data.after_due_date_surcharges_per_day,
-      data.accept_or_deny,
-      data.send_qr_upi_bank_details
+      data.send_qr_upi_bank_details,
+      data.seller_id
     ]);
 
     const so_access_token = purchase_order.rows[0].so_access_token;
@@ -114,60 +106,18 @@ const post_saleOrder = async (req, res) => {
 };
 
 
-const get_purchase_orders = async (req, res) => {
+const get_sale_order_numbers = async (req, res) => {
   const { seller_id } = req.params;
 
   try {
-    if (seller_id) {
-      let query = `SELECT 
-    po.po_no, 
-    po.buyer_id, 
-    po.buyer_type, 
-    po.seller_id, 
-    po.buyer_gst_number, 
-    po.seller_gst_number, 
-    product->>'no' AS product_no, 
-    (product->>'quantity')::int AS quantity_ordered, 
-    (product->>'unit_price')::numeric AS unit_price, 
-    product->>'description' AS description, 
-    (product->>'total_price')::numeric AS total_price,
-    pr.inventory_or_stock_quantity AS quantity,  -- Available product quantity
-    pr.product_name,  
-    pr.variant_group,
-    po.subtotal, 
-    po.shipping_address, 
-    po.shipping_method, 
-    po.payment_method, 
-    po.special_offers, 
-    po.discount_applied, 
-    po.taxes, 
-    po.co_helper, 
-    -- Distribute discount_amount equally across products and round to 2 decimal places
-    ROUND((po.discount_amount / NULLIF(
-        (SELECT COUNT(*) 
-         FROM jsonb_array_elements(po.products::jsonb) AS p), 0
-    )), 2) AS discount_amount,
-    po.pre_post_paid, 
-    po.extra_charges, 
-    po.total_amount, 
-    po.date_of_issue, 
-    po.delivery_terms, 
-    po.additional_instructions, 
-    po.po_access_token,
-    ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations
-
-FROM sell.purchase_order po
-CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
-LEFT JOIN sell.products pr 
-    ON po.seller_id = pr.shop_no  
-    AND product->>'no' = pr.product_id  
-WHERE po.seller_id = $1`;
+    if (seller_id ) {
+      let query = `SELECT so_no FROM sell.sale_order WHERE seller_id = $1 `;
       let result = await ambarsariyaPool.query(query, [seller_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
           .status(404)
-          .json({ valid: false, message: "No purchase order exists." });
+          .json({ valid: false, message: "No sale order exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
@@ -178,18 +128,22 @@ WHERE po.seller_id = $1`;
   }
 };
 
-const get_purchase_order_details = async (req, res) => {
-  const { po_access_token } = req.params;
+
+const get_sale_orders = async (req, res) => {
+  const { seller_id } = req.params;
 
   try {
-    if (po_access_token) {
-      let query = `SELECT * FROM sell.purchase_order WHERE po_access_token = $1`;
-      let result = await ambarsariyaPool.query(query, [po_access_token]);
+    if (seller_id ) {
+      let query = `SELECT so.*, s.service 
+FROM sell.sale_order so  
+LEFT JOIN type_of_services s ON s.id = so.shipping_method  
+WHERE so.seller_id = $1 `;
+      let result = await ambarsariyaPool.query(query, [seller_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
           .status(404)
-          .json({ valid: false, message: "No purchase order exists." });
+          .json({ valid: false, message: "No sale order exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
@@ -202,6 +156,6 @@ const get_purchase_order_details = async (req, res) => {
 
 module.exports = {
   post_saleOrder,
-  get_purchase_orders,
-  get_purchase_order_details,
+  get_sale_order_numbers,
+  get_sale_orders,
 };

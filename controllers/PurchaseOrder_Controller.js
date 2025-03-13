@@ -123,19 +123,20 @@ const get_purchase_orders = async (req, res) => {
     po.additional_instructions, 
     po.po_access_token,
     ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
-    CASE 
-        WHEN so.accept_or_deny IS NOT NULL THEN so.accept_or_deny 
-        ELSE 'Hold' 
-    END AS status  -- Default to 'Hold' if no match found
-
+    so_product->>'accept_or_deny' AS status,
+    so.so_no
 FROM sell.purchase_order po
 CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
 LEFT JOIN sell.products pr 
     ON po.seller_id = pr.shop_no  
-    AND product->>'no' = pr.product_id 
+    AND product->>'no' = pr.product_id
 LEFT JOIN sell.sale_order so
     ON po.po_no = so.po_no
-    AND product->>'no' = so.product_id
+LEFT JOIN LATERAL (
+    SELECT so_product
+    FROM jsonb_array_elements(so.products::jsonb) AS so_product
+    WHERE so_product->>'no' = product->>'no'
+) so_product ON TRUE
 WHERE po.po_no = $1`;
       let result = await ambarsariyaPool.query(query, [po_no]);
       if (result.rowCount === 0) {
