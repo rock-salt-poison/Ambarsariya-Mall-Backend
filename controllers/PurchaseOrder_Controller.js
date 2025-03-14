@@ -199,9 +199,36 @@ const get_purchase_order_numbers = async (req, res) => {
   }
 };
 
+
+const get_all_purchased_orders = async (req, res) => {
+  const { buyer_id } = req.params;
+
+  try {
+    if (buyer_id) {
+      let query = `SELECT 
+          po_no, total_amount, shipping_method, payment_method  
+      FROM sell.purchase_order po
+      WHERE po.buyer_id = $1 `;
+      let result = await ambarsariyaPool.query(query, [buyer_id]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .status(404)
+          .json({ valid: false, message: "No order exists." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch data" });
+  }
+};
+
 module.exports = {
   post_purchaseOrder,
   get_purchase_orders,
   get_purchase_order_details,
-  get_purchase_order_numbers
+  get_purchase_order_numbers,
+  get_all_purchased_orders
 };

@@ -689,6 +689,7 @@ const get_userData = async (req, res) => {
     const userResult = await ambarsariyaPool.query(
       `SELECT 
         u.user_type, 
+        u.user_id, 
         ef.shop_no AS "shop_no",
         ef.shop_access_token AS "shop_access_token",
         uc.access_token AS "user_access_token",
