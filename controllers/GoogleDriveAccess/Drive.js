@@ -71,20 +71,20 @@ async function createSubFolders(drive, parentFolderId, serviceAccountEmail) {
           fields: "id",
         });
 
-        console.log(`✅ Sub-folder '${folderName}' created inside base folder.`);
+        console.log(`Sub-folder '${folderName}' created inside base folder.`);
         folderIds[folderName] = folder.data.id;
 
         // Grant permission to service account
         await grantPermissionToFolder(drive, folder.data.id, serviceAccountEmail);
       } else {
-        console.log(`⚠️ Sub-folder '${folderName}' already exists.`);
+        console.log(`Sub-folder '${folderName}' already exists.`);
         folderIds[folderName] = folderRes.data.files[0].id;
       }
     }
 
     return folderIds;
   } catch (error) {
-    console.error("❌ Error creating sub-folders:", error.message);
+    console.error("Error creating sub-folders:", error.message);
     throw new Error("Failed to create sub-folders.");
   }
 }
@@ -101,9 +101,9 @@ async function grantPermissionToFolder(drive, folderId, serviceAccountEmail) {
       fields: "id",
     });
 
-    console.log(`✅ Permission granted to service account for folder ID: ${folderId}`);
+    console.log(`Permission granted to service account for folder ID: ${folderId}`);
   } catch (error) {
-    console.error(`❌ Error granting permission to folder ${folderId}:`, error.message);
+    console.error(`Error granting permission to folder ${folderId}:`, error.message);
     throw new Error("Failed to grant permission.");
   }
 }
@@ -140,7 +140,7 @@ async function getUserFile(drive, folderId, email) {
 //       fields: "id, webViewLink, owners",
 //     });
     
-//     console.log("✅ File Created:", file.data.webViewLink, "Owned by:", file.data.owners);
+//     console.log("File Created:", file.data.webViewLink, "Owned by:", file.data.owners);
     
 //     await grantPermission(drive, email, file.data.id);
 
@@ -153,7 +153,7 @@ async function getUserFile(drive, folderId, email) {
 
 async function copyAdminSheet(drive, sheets, folderId, email) {
   try {
-    console.log(`📂 Creating a new Google Sheet inside User's My Drive...`);
+    console.log(`Creating a new Google Sheet inside User's My Drive...`);
 
     // Step 1: Create a new Google Sheet in User's My Drive
     const fileMetadata = {
@@ -173,7 +173,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
     }
 
     const userSheetId = file.data.id;
-    console.log(`✅ Sheet created successfully! ID: ${userSheetId}`);
+    console.log(`Sheet created successfully! ID: ${userSheetId}`);
 
     // Step 2: Get Admin Sheet Details
     console.log("Fetching Admin Sheet data...");
@@ -209,7 +209,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
       });
     });
 
-    console.log(`📊 Admin Sheet: ${lastRow} rows, ${lastColumn} columns`);
+    console.log(`Admin Sheet: ${lastRow} rows, ${lastColumn} columns`);
 
     // Convert column index to letter notation
     const getColumnLetter = (colIndex) => {
@@ -223,7 +223,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
     const lastColumnLetter = getColumnLetter(lastColumn - 1);
     const range = `${adminSheetName}!A1:${lastColumnLetter}${lastRow}`;
-    console.log(`📌 Fetching data from range: ${range}`);
+    console.log(`Fetching data from range: ${range}`);
 
     // Fetch data
     const dataResponse = await sheets.spreadsheets.values.get({
@@ -232,7 +232,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
     });
 
     const values = dataResponse.data.values || [];
-    console.log("✅ Data fetched successfully!");
+    console.log("Data fetched successfully!");
 
     // Grant user permission
     await grantPermission(drive, email, userSheetId);
@@ -277,7 +277,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         spreadsheetId: userSheetId,
         requestBody: { requests: updateRequests },
       });
-      console.log("✅ Sheet expanded successfully!");
+      console.log("Sheet expanded successfully!");
     }
 
     // Step 4: Copy Data from Admin Sheet to User Sheet
@@ -288,9 +288,9 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         valueInputOption: "RAW",
         requestBody: { values },
       });
-      console.log("✅ Data copied successfully!");
+      console.log("Data copied successfully!");
     } else {
-      console.log("⚠️ No data found in Admin Sheet.");
+      console.log("No data found in Admin Sheet.");
     }
 
     // Step 5: Copy Formatting & Data Validation
@@ -392,15 +392,15 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         spreadsheetId: userSheetId,
         requestBody: { requests },
       });
-      console.log("✅ Formatting and data validation copied successfully!");
+      console.log("Formatting and data validation copied successfully!");
     } else {
-      console.log("⚠️ No formatting or validation found to copy.");
+      console.log("No formatting or validation found to copy.");
     }
 
     return file.data;
 
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("Error:", error.message);
   }
 }
 
@@ -425,7 +425,7 @@ async function grantPermission(drive, email, fileId) {
       });
     }
 
-    console.log(`✅ Permissions granted to ${email} and ${SERVICE_ACCOUNT_EMAIL}`);
+    console.log(`Permissions granted to ${email} and ${SERVICE_ACCOUNT_EMAIL}`);
   } catch (error) {
     throw new Error("Failed to grant permission.");
   }
@@ -460,12 +460,12 @@ async function grantPermission(drive, email, fileId) {
 //         },
 //       });
 
-//       console.log(`✅ First sheet '${firstSheetName}' removed successfully.`);
+//       console.log(`First sheet '${firstSheetName}' removed successfully.`);
 //     } else {
-//       console.log(`ℹ️ First sheet '${firstSheetName}' is not 'Products', skipping deletion.`);
+//       console.log(`First sheet '${firstSheetName}' is not 'Products', skipping deletion.`);
 //     }
 //   } catch (error) {
-//     console.error("❌ Error removing first sheet:", error.message);
+//     console.error("Error removing first sheet:", error.message);
 //     throw new Error("Failed to remove the first sheet.");
 //   }
 // }
@@ -482,7 +482,7 @@ async function grantPermission(drive, email, fileId) {
 
 //     // Check if the sheet already exists
 //     if (sheetList.includes(category)) {
-//       console.log(`⚠️ Sheet '${category}' already exists. Skipping creation.`);
+//       console.log(`Sheet '${category}' already exists. Skipping creation.`);
 //     } else {
 //       // Create a new sheet
 //       await sheets.spreadsheets.batchUpdate({
@@ -496,7 +496,7 @@ async function grantPermission(drive, email, fileId) {
 //         },
 //       });
 
-//       console.log(`✅ Sheet '${category}' created successfully.`);
+//       console.log(`Sheet '${category}' created successfully.`);
 //     }
 
 //     // Read the structure of the Products.xlsx file
@@ -530,9 +530,9 @@ async function grantPermission(drive, email, fileId) {
 //       requestBody: { values: updatedData },
 //     });
 
-//     console.log(`✅ Data updated in sheet '${category}'.`);
+//     console.log(`Data updated in sheet '${category}'.`);
 //   } catch (error) {
-//     console.error("❌ Error adding/updating sheet:", error.message);
+//     console.error("Error adding/updating sheet:", error.message);
 //     throw new Error("Failed to add/update sheet.");
 //   }
 // }
@@ -549,7 +549,7 @@ async function removeFirstSheet(sheets, spreadsheetId) {
     );
 
     if (!sheet) {
-      console.log("ℹ️ No sheet named 'Sheet1' found. Skipping deletion.");
+      console.log("No sheet named 'Sheet1' found. Skipping deletion.");
       return;
     }
 
@@ -561,9 +561,9 @@ async function removeFirstSheet(sheets, spreadsheetId) {
       },
     });
 
-    console.log(`✅ 'Sheet1' sheet removed successfully.`);
+    console.log(`'Sheet1' sheet removed successfully.`);
   } catch (error) {
-    console.error("❌ Error removing 'Sheet1' sheet:", error.message);
+    console.error("Error removing 'Sheet1' sheet:", error.message);
     throw new Error("Failed to remove 'Sheet1' sheet.");
   }
 }
@@ -686,7 +686,7 @@ async function processDrive(email) {
 
     return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
   } catch (error) {
-    console.error("❌ Error processing Drive:", error.message);
+    console.error("Error processing Drive:", error.message);
     return { success: false, message: error.message };
   }
 }
