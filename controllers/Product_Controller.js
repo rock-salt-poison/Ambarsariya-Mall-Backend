@@ -23,9 +23,18 @@ const post_products = async (req, res) => {
                             ON CONFLICT (variant_group) DO NOTHING;`;
       await ambarsariyaPool.query(variantQuery, [product.variant_group]);
 
+      const productNameAbbreviation = product.product_name
+        .split(" ")
+        .map(word => word[0])
+        .join("")
+        .toLowerCase();
+
+      const product_id = `prod_${product.product_no}_${product.shop_no}_${product.category}_${productNameAbbreviation}_${product.product_type.toLowerCase()}`;
+
       // Insert the product data
       const productQuery = `INSERT INTO Sell.products (
         shop_no, 
+        product_id,
         product_name, 
         product_type, 
         product_description, 
@@ -66,11 +75,12 @@ const post_products = async (req, res) => {
         brand_catalog
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
       ) ON CONFLICT (product_id) DO NOTHING;`;
 
       await ambarsariyaPool.query(productQuery, [
         product.shop_no,
+        product_id,
         product.product_name,
         product.product_type,
         product.product_description,

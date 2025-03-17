@@ -10,6 +10,7 @@ const ambarsariyaPool = createDbPool();
 
 const adminSheetId = process.env.ADMIN_SHEET_ID; // Ensure this is set in `.env`
 
+const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
 
 async function getBaseFolder(drive, email) {
   try {
@@ -150,6 +151,127 @@ async function getUserFile(drive, folderId, email) {
 //     throw new Error("Failed to upload file.");
 //   }
 // }
+
+
+// async function protectHeaderAndFirstColumn(sheets, fileId, serviceAccountEmail) {
+//   try {
+//     console.log(`Applying protection to file: ${fileId}`);
+
+//     // Fetch spreadsheet details
+//     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: fileId });
+//     const sheetData = spreadsheet.data.sheets;
+
+//     if (!sheetData || sheetData.length === 0) {
+//       throw new Error("No sheets found in the spreadsheet.");
+//     }
+
+//     // Loop through all sheets and apply protection
+//     for (const sheet of sheetData) {
+//       const sheetId = sheet.properties.sheetId;
+//       const sheetName = sheet.properties.title;
+
+//       console.log(`Applying protection to sheet: ${sheetName} (ID: ${sheetId})`);
+
+//       // Protect header row (A1:AN1)
+//       await sheets.spreadsheets.batchUpdate({
+//         spreadsheetId: fileId,
+//         requestBody: {
+//           requests: [
+//             {
+//               addProtectedRange: {
+//                 protectedRange: {
+//                   range: {
+//                     sheetId: sheetId,
+//                     startRowIndex: 0,  // Protect row 1 (header)
+//                     endRowIndex: 1,
+//                     startColumnIndex: 0, // Column A
+//                     endColumnIndex: 40,  // Column AN
+//                   },
+//                   description: "Header protection",
+//                   warningOnly: false, // Fully restrict editing
+//                   editors: { users: [serviceAccountEmail] }, // Only service account can edit
+//                 },
+//               },
+//             },
+//             {
+//               addProtectedRange: {
+//                 protectedRange: {
+//                   range: {
+//                     sheetId: sheetId,
+//                     startRowIndex: 1, // Protect from row 2 onwards (first column)
+//                     startColumnIndex: 0, // Column A
+//                     endColumnIndex: 1,  
+//                   },
+//                   description: "First column protection",
+//                   warningOnly: false, // Fully restrict editing
+//                   editors: { users: [serviceAccountEmail] }, // Only service account can edit
+//                 },
+//               },
+//             },
+//           ],
+//         },
+//       });
+
+//       console.log(`Header row (A1:AN1) and first column (A2:A) protected on sheet: ${sheetName}`);
+//     }
+
+//   } catch (error) {
+//     console.error("Error applying protection:", error.message);
+//     console.error(error);
+//   }
+// }
+
+
+
+async function deployAppsScript(google, fileId, serviceAccountEmail) {
+  try {
+    const scriptContent = `
+    function onEdit(e) {
+      var sheet = e.source.getActiveSheet();
+      var range = e.range;
+      var user = Session.getActiveUser().getEmail();
+      var allowedUser = "${serviceAccountEmail}";
+
+      if (user !== allowedUser) {
+        if (range.getRow() === 1 || range.getColumn() === 1) {
+          e.range.setValue(e.oldValue); // Revert change
+          Browser.msgBox("Editing is restricted for this section.");
+        }
+      }
+    }
+    `;
+
+    const script = google.script('v1');
+
+    const createResponse = await script.projects.create({
+      requestBody: { title: "ProtectHeaderAndColumn" },
+    });
+
+    const scriptId = createResponse.data.scriptId;
+
+    await script.projects.updateContent({
+      scriptId,
+      requestBody: {
+        files: [{ name: "Code", type: "SERVER_JS", source: scriptContent }],
+      },
+    });
+
+    await script.projects.deployments.create({
+      scriptId,
+      requestBody: {
+        versionNumber: 1,
+        manifestFileName: "appsscript",
+        description: "Auto protect header & column",
+      },
+    });
+
+    console.log("Apps Script deployed successfully!");
+
+  } catch (error) {
+    console.error("Error deploying Apps Script:", error.message);
+  }
+}
+
 
 async function copyAdminSheet(drive, sheets, folderId, email) {
   try {
@@ -568,7 +690,65 @@ async function removeFirstSheet(sheets, spreadsheetId) {
   }
 }
 
-async function addSheetToFile(sheets, fileId, categoryName) {
+// async function addSheetToFile(sheets, fileId, categoryName) {
+//   try {
+//     // Step 1: Validate the fileId
+//     if (!fileId) {
+//       throw new Error("Invalid fileId. Cannot proceed with duplicating the sheet.");
+//     }
+
+//     console.log("Destination Spreadsheet ID:", fileId);
+
+//     // Step 2: Fetch spreadsheet details
+//     const fileData = await sheets.spreadsheets.get({
+//       spreadsheetId: fileId,
+//     });
+
+//     // Step 3: Get sheet data and check if the spreadsheet has any sheets
+//     const sheetData = fileData.data.sheets;
+//     if (!sheetData || sheetData.length === 0) {
+//       throw new Error("No sheets found in the spreadsheet.");
+//     }
+
+//     // Step 4: Find the first sheet (Sheet1)
+//     const firstSheet = sheetData.find(sheet => sheet.properties.title === 'Sheet1');
+//     if (!firstSheet) {
+//       throw new Error("Sheet1 not found.");
+//     }
+
+//     // Step 5: Get the sheetId of 'Sheet1'
+//     const firstSheetId = firstSheet.properties.sheetId;
+//     console.log("Found Sheet1 with sheetId:", firstSheetId);
+
+//     // Step 6: Duplicate Sheet1 by creating a new sheet and copying its content
+//     const addSheetResponse = await sheets.spreadsheets.batchUpdate({
+//       spreadsheetId: fileId,
+//       requestBody: {
+//         requests: [
+//           {
+//             duplicateSheet: {
+//               sourceSheetId: firstSheetId,  // Use the sheetId of Sheet1
+//               newSheetName: categoryName,   // New name for the duplicated sheet
+//             },
+//           },
+//         ],
+//       },
+//     });
+
+//     await protectHeaderAndFirstColumn(sheets, fileId, serviceAccountEmail);
+
+
+//     console.log(`Sheet1 duplicated successfully as "${newSheetName}".`);
+
+//   } catch (error) {
+//     console.error(`Error duplicating Sheet1:`, error.message);
+//     console.error(error);  // Log the full error object for debugging
+//   }
+// }
+
+
+
+async function addSheetToFile(sheets, fileId, categoryName, email, drive, oAuth2Client) {
   try {
     // Step 1: Validate the fileId
     if (!fileId) {
@@ -598,31 +778,41 @@ async function addSheetToFile(sheets, fileId, categoryName) {
     const firstSheetId = firstSheet.properties.sheetId;
     console.log("Found Sheet1 with sheetId:", firstSheetId);
 
-    // Step 6: Duplicate Sheet1 by creating a new sheet and copying its content
+    // Step 6: Duplicate Sheet1
     const addSheetResponse = await sheets.spreadsheets.batchUpdate({
       spreadsheetId: fileId,
       requestBody: {
         requests: [
           {
             duplicateSheet: {
-              sourceSheetId: firstSheetId,  // Use the sheetId of Sheet1
-              newSheetName: categoryName,   // New name for the duplicated sheet
+              sourceSheetId: firstSheetId,  
+              newSheetName: categoryName,  
             },
           },
         ],
       },
     });
 
-    console.log(`Sheet1 duplicated successfully as "${newSheetName}".`);
+    // Step 7: Confirm new sheet creation and get its ID
+    const updatedFileData = await sheets.spreadsheets.get({ spreadsheetId: fileId });
+    const newSheet = updatedFileData.data.sheets.find(sheet => sheet.properties.title === categoryName);
+
+    if (!newSheet) {
+      throw new Error(`Failed to confirm creation of sheet: ${categoryName}`);
+    }
+
+    console.log(`Sheet1 duplicated successfully as "${categoryName}".`);
+
+    // Step 8: Now apply protection
+    await deployAppsScript(oAuth2Client,  fileId, serviceAccountEmail);
+    // await deployAppsScript(sheets,  fileId, serviceAccountEmail, email, drive);
+    console.log(`Header and first column protected for "${categoryName}".`);
 
   } catch (error) {
     console.error(`Error duplicating Sheet1:`, error.message);
-    console.error(error);  // Log the full error object for debugging
+    console.error(error);
   }
 }
-
-
-
 
 
 async function processDrive(email) {
@@ -677,7 +867,7 @@ async function processDrive(email) {
 
     // Step 4: Add new category sheets
     for (const category of category_names) {
-      await addSheetToFile(sheets, file.id, category);
+      await addSheetToFile(sheets, file.id, category, email, drive, oAuth2Client);
     }
 
     await removeFirstSheet(sheets, file.id);
