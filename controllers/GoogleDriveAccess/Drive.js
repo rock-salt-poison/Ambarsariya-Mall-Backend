@@ -333,6 +333,8 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
     console.log(`Admin Sheet: ${lastRow} rows, ${lastColumn} columns`);
 
+    console.log(headerRow);
+    
     // Convert column index to letter notation
     const getColumnLetter = (colIndex) => {
       let letter = "";
@@ -407,7 +409,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: userSheetId,
         range: `${userSheetName}!A1`,
-        valueInputOption: "RAW",
+        valueInputOption: "USER_ENTERED",
         requestBody: { values },
       });
       console.log("Data copied successfully!");
@@ -421,11 +423,17 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
     const requests = [];
     const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
 
-    // Step 6: Apply formulas based on column headers
-    const ikColumnIndex = headerRow.indexOf('IKU (ITEM Keeping Unit)');
-    const areaColumnIndex = headerRow.indexOf('AREA (Size lateral)');
-    const variantGroupColumnIndex = headerRow.indexOf('Variant Group');
+    const headers = headerRow.map(header => header.stringValue);  // Extract stringValue
+    console.log("Headers: ", headers);
 
+    // Step 6: Apply formulas based on column headers
+    const ikColumnIndex = headers.indexOf('IKU (ITEM Keeping Unit)');
+    const areaColumnIndex = headers.indexOf('AREA (Size lateral)');
+    const variantGroupColumnIndex = headers.indexOf('Variant Group');
+    const productNoIndex = headers.indexOf('Product No');
+
+    console.log('product index ', productNoIndex);
+    
     // Loop through the rows and columns to apply dynamic formulas
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
       if (rowIndex >= lastRowIndex) return;
@@ -442,50 +450,69 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
           formatRequest.dataValidation = cell.dataValidation;
         }
 
+        
+        
+
         // Apply formulas based on column headers
-        if (colIndex === ikColumnIndex) {
+        if (productNoIndex) {
           requests.push({
             updateCells: {
               range: {
                 sheetId: userSheet.properties.sheetId,
-                startRowIndex: rowIndex,
-                startColumnIndex: ikColumnIndex + 2, // Adjust to the correct column where IKU is
-                endRowIndex: rowIndex + 1,
-                endColumnIndex: ikColumnIndex + 3, // Adjust the column range
+                startRowIndex: rowIndex +1,
+                startColumnIndex: productNoIndex, // Adjust to the correct column where IKU is
+                endRowIndex: rowIndex + 5,
+                endColumnIndex: productNoIndex + 1, // Adjust the column range
               },
-              rows: [{ values: [{ userEnteredValue: { formulaValue: `=CONCATENATE(B${rowIndex + 1}, " ", A${rowIndex + 1})` } }] }],
+              rows: [{ values: [{ userEnteredValue: { formulaValue: `=IF(B${rowIndex + 2} <> "", ROW(A${rowIndex + 2}) - 1, "")` } }] }],
               fields: "userEnteredValue.formulaValue",
             },
           });
         }
 
-        if (colIndex === areaColumnIndex) {
+        if (ikColumnIndex) {
           requests.push({
             updateCells: {
               range: {
                 sheetId: userSheet.properties.sheetId,
-                startRowIndex: rowIndex,
-                startColumnIndex: areaColumnIndex + 3, // Adjust to the correct column where AREA is
-                endRowIndex: rowIndex + 1,
-                endColumnIndex: areaColumnIndex + 4, // Adjust the column range
+                startRowIndex: rowIndex + 1 ,
+                startColumnIndex: ikColumnIndex , // Adjust to the correct column where IKU is
+                endRowIndex: rowIndex + 5,
+                endColumnIndex: ikColumnIndex + 1, // Adjust the column range
               },
-              rows: [{ values: [{ userEnteredValue: { formulaValue: `=2 * (K${rowIndex + 1} * J${rowIndex + 1} + J${rowIndex + 1} * L${rowIndex + 1} + K${rowIndex + 1} * L${rowIndex + 1})` } }] }],
+              rows: [{ values: [{ userEnteredValue: { formulaValue: `=CONCATENATE(C${rowIndex + 2}, " ", B${rowIndex + 2})` } }] }],
               fields: "userEnteredValue.formulaValue",
             },
           });
         }
 
-        if (colIndex === variantGroupColumnIndex) {
+        if (areaColumnIndex) {
           requests.push({
             updateCells: {
               range: {
                 sheetId: userSheet.properties.sheetId,
-                startRowIndex: rowIndex,
-                startColumnIndex: variantGroupColumnIndex + 4, // Adjust to the correct column where Variant Group is
-                endRowIndex: rowIndex + 1,
-                endColumnIndex: variantGroupColumnIndex + 5, // Adjust the column range
+                startRowIndex: rowIndex +1 ,
+                startColumnIndex: areaColumnIndex , // Adjust to the correct column where AREA is
+                endRowIndex: rowIndex + 5,
+                endColumnIndex: areaColumnIndex + 1, // Adjust the column range
               },
-              rows: [{ values: [{ userEnteredValue: { formulaValue: `=A${rowIndex + 1}` } }] }],
+              rows: [{ values: [{ userEnteredValue: { formulaValue: `=2 * (N${rowIndex + 2} * M${rowIndex + 2} + M${rowIndex + 2} * O${rowIndex + 2} + O${rowIndex + 2} * N${rowIndex + 2})` } }] }],
+              fields: "userEnteredValue.formulaValue",
+            },
+          });
+        }
+
+        if (variantGroupColumnIndex) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: userSheet.properties.sheetId,
+                startRowIndex: rowIndex +1,
+                startColumnIndex: variantGroupColumnIndex , // Adjust to the correct column where Variant Group is
+                endRowIndex: rowIndex + 5,
+                endColumnIndex: variantGroupColumnIndex + 1, // Adjust the column range
+              },
+              rows: [{ values: [{ userEnteredValue: { formulaValue: `=B${rowIndex + 2}` } }] }],
               fields: "userEnteredValue.formulaValue",
             },
           });
