@@ -33,11 +33,12 @@ const post_saleOrder = async (req, res) => {
         balance_credit,
         balance_credit_due_date,
         after_due_date_surcharges_per_day,
+        status,
         send_qr_upi_bank_details,
         seller_id
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24
+        $19, $20, $21, $22, $23, $24, $25
       )
       ON CONFLICT (po_no) 
       DO UPDATE SET 
@@ -59,6 +60,7 @@ const post_saleOrder = async (req, res) => {
         balance_credit = EXCLUDED.balance_credit,
         balance_credit_due_date = EXCLUDED.balance_credit_due_date,
         after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
+        status = EXCLUDED.status,
         send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
         updated_at = CURRENT_TIMESTAMP 
       RETURNING so_access_token
@@ -87,6 +89,7 @@ const post_saleOrder = async (req, res) => {
       data.balance_credit,
       data.balance_credit_due_date,
       data.after_due_date_surcharges_per_day,
+      data.status,
       data.send_qr_upi_bank_details,
       data.seller_id
     ]);
