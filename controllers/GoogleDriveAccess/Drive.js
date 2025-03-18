@@ -454,7 +454,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         
 
         // Apply formulas based on column headers
-        if (productNoIndex) {
+        if (productNoIndex !== -1) {
           requests.push({
             updateCells: {
               range: {
@@ -464,7 +464,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
                 endRowIndex: rowIndex + 5,
                 endColumnIndex: productNoIndex + 1, // Adjust the column range
               },
-              rows: [{ values: [{ userEnteredValue: { formulaValue: `=IF(B${rowIndex + 2} <> "", ROW(A${rowIndex + 2}) - 1, "")` } }] }],
+              rows: [{ values: [{ userEnteredValue: { formulaValue: `=IF(B${rowIndex + 2} <> "", ROW(A${rowIndex + 2}) - 1, "")`, } }] }],
               fields: "userEnteredValue.formulaValue",
             },
           });
