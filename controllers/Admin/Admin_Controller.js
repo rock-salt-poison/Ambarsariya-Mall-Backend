@@ -506,39 +506,126 @@ const post_advt = async (req, res) => {
   }
 };
 
+// const post_support_page_famous_areas = async (req, res) => {
+//   const { areas } = req.body;
+//   console.log("Uploaded Files:", req.files);
+//   console.log("Request Body:", areas);
+
+//   try {
+//     for (let i = 0; i < areas.length; i++) {
+//       const area = areas[i];
+//       const lowerCaseTitle = area.area_name.toLowerCase();
+//       const lowerCaseAddress = area.area_address.toLowerCase();
+
+//       // Fetch existing image_src from the database
+//       const existingImageQuery = await ambarsariyaPool.query(
+//         `SELECT image_src FROM admin.famous_areas WHERE area_title = $1`,
+//         [lowerCaseTitle]
+//       );
+//       const existingImageSrc = existingImageQuery.rows[0]?.image_src || null;
+
+//       // Match uploaded files in the order of areas
+//       let uploadedBgImg = null;
+//       if (req.files[i]) {
+//         // ✅ If a new file is uploaded, delete the old one first
+//         if (existingImageSrc) {
+//           try {
+//             await deleteFileFromGCS(existingImageSrc);
+//             console.log(`Deleted old image: ${existingImageSrc}`);
+//           } catch (error) {
+//             console.error("Error deleting old background image:", error);
+//           }
+//         }
+
+//         // ✅ Upload new image
+//         uploadedBgImg = await uploadFileToGCS(req.files[i], "support_page/famous_areas");
+//       }
+
+//       // ✅ Insert or update area data in the database
+//       await ambarsariyaPool.query(
+//         `INSERT INTO admin.famous_areas (
+//             area_title,
+//             area_address,
+//             latitude,
+//             longitude,
+//             shop_no,
+//             length_in_km,
+//             image_src
+//         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+//         ON CONFLICT (area_title) 
+//         DO UPDATE SET 
+//             area_address = $2,
+//             latitude = $3,
+//             longitude = $4,
+//             shop_no = $5,
+//             length_in_km = $6,
+//             image_src = COALESCE($7, admin.famous_areas.image_src), -- Keep old image if new not provided
+//             updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text);`,
+//         [
+//           lowerCaseTitle,
+//           lowerCaseAddress,
+//           area.latitude,
+//           area.longitude,
+//           area.shop_no,
+//           area.length,
+//           uploadedBgImg || existingImageSrc, // Use new image if uploaded, else keep existing one
+//         ]
+//       );
+//     }
+
+//     res.status(201).json({ message: "Area(s) saved successfully" });
+//   } catch (e) {
+//     console.error("Error saving area(s):", e);
+//     res.status(500).json({ error: "Failed to save area(s)" });
+//   }
+// };
+
 const post_support_page_famous_areas = async (req, res) => {
   const { areas } = req.body;
   console.log("Uploaded Files:", req.files);
   console.log("Request Body:", areas);
 
   try {
+    // ✅ Create a map to match uploaded files with areas by index
+    const uploadedFilesMap = {};
+    req.files.forEach((file) => {
+      const match = file.fieldname.match(/areas\[(\d+)\]\[bg_img\]/);
+      if (match) {
+        const index = parseInt(match[1], 10);
+        uploadedFilesMap[index] = file;
+      }
+    });
+
     for (let i = 0; i < areas.length; i++) {
       const area = areas[i];
       const lowerCaseTitle = area.area_name.toLowerCase();
       const lowerCaseAddress = area.area_address.toLowerCase();
 
-      // Fetch existing image_src from the database
+      // ✅ Fetch existing image_src from the database for the respective area
       const existingImageQuery = await ambarsariyaPool.query(
         `SELECT image_src FROM admin.famous_areas WHERE area_title = $1`,
         [lowerCaseTitle]
       );
       const existingImageSrc = existingImageQuery.rows[0]?.image_src || null;
 
-      // Match uploaded files in the order of areas
+      // ✅ Check if a new file is uploaded for the current area based on the index
       let uploadedBgImg = null;
-      if (req.files[i]) {
-        // ✅ If a new file is uploaded, delete the old one first
+      if (uploadedFilesMap[i]) {
+        // ✅ If a new file is uploaded, delete the old image first
         if (existingImageSrc) {
           try {
             await deleteFileFromGCS(existingImageSrc);
-            console.log(`Deleted old image: ${existingImageSrc}`);
+            console.log(`Deleted old image for ${lowerCaseTitle}: ${existingImageSrc}`);
           } catch (error) {
-            console.error("Error deleting old background image:", error);
+            console.error(`Error deleting old image for ${lowerCaseTitle}:`, error);
           }
         }
 
-        // ✅ Upload new image
-        uploadedBgImg = await uploadFileToGCS(req.files[i], "support_page/famous_areas");
+        // ✅ Upload new image for the respective area
+        uploadedBgImg = await uploadFileToGCS(
+          uploadedFilesMap[i],
+          "support_page/famous_areas"
+        );
       }
 
       // ✅ Insert or update area data in the database
@@ -559,7 +646,7 @@ const post_support_page_famous_areas = async (req, res) => {
             longitude = $4,
             shop_no = $5,
             length_in_km = $6,
-            image_src = COALESCE($7, admin.famous_areas.image_src), -- Keep old image if new not provided
+            image_src = COALESCE($7, admin.famous_areas.image_src), -- Keep old image if no new provided
             updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text);`,
         [
           lowerCaseTitle,
@@ -579,7 +666,6 @@ const post_support_page_famous_areas = async (req, res) => {
     res.status(500).json({ error: "Failed to save area(s)" });
   }
 };
-
 
 
 const get_notice = async (req, res) => {
