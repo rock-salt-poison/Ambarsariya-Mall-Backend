@@ -591,7 +591,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
     const noOfItemsIndex = headers.indexOf("No of Items");
     const maxProductQuantityIndex = headers.indexOf("Max Product Quantity");
     const maxItemQuantityIndex = headers.indexOf("Max Item Quantity");
-    const itemAreaIndex = headers.indexOf("ITEM AREA");
+    const itemAreaIndex = headers.indexOf("Item area");
     const sellingPriceIndex = headers.indexOf("Selling Price");
     const costPriceIndex = headers.indexOf("Cost Price");
     const itemPackageDimensionsIndex = headers.indexOf("ITEM package Dimensions");
