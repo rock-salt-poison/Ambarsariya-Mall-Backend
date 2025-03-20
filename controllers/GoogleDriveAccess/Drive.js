@@ -788,7 +788,9 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                     values: [
                       {
                         userEnteredValue: {
-                          numberValue: String(data.selling_price).split('$')?.[1] || 0,                        
+                          numberValue: parseFloat(
+                            (String(data.selling_price).split('$')?.[1] || '0').replace(/,/g, '')
+                          )                    
                         },
                       },
                     ],

@@ -11,8 +11,8 @@ const post_products = async (req, res) => {
 
     for (let category of categories) {
       // 🔴 Step 1: Delete existing products for the given shop_no
-      const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1 AND category= $2;`;
-      await ambarsariyaPool.query(deleteQuery, [shopNo, category]);
+      const deleteQuery = `DELETE FROM Sell.products WHERE shop_no = $1;`;
+      await ambarsariyaPool.query(deleteQuery, [shopNo]);
     }
 
     // Insert products and product variants
