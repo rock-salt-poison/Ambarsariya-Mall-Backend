@@ -586,6 +586,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
     // Step 6: Apply formulas based on column headers
     const itemNoIndex = headers.indexOf("Item No");
     const productNameIndex = headers.indexOf("Product Name");
+    const productIDIndex = headers.indexOf("Product ID");
     const itemIdIndex = headers.indexOf("Item ID");
     const noOfItemsIndex = headers.indexOf("No of Items");
     const maxProductQuantityIndex = headers.indexOf("Max Product Quantity");
@@ -632,6 +633,32 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                       {
                         userEnteredValue: {
                           stringValue: data.product_name || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (productIDIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: productIDIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: productIDIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: data.product_id || "",
                         },
                       },
                     ],
@@ -871,7 +898,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                   values: [
                     {
                       userEnteredValue: {
-                        formulaValue: `=IF(AND(D${rowIndex + 2} <> "", S${rowIndex + 2} <> ""), D${rowIndex + 2} * S${rowIndex + 2}, "")`,
+                        formulaValue: `=IF(AND(E${rowIndex + 2} <> "", T${rowIndex + 2} <> ""), E${rowIndex + 2} * T${rowIndex + 2}, "")`,
                       },
                     },
                   ],
