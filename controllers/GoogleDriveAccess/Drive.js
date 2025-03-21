@@ -595,6 +595,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
     const sellingPriceIndex = headers.indexOf("Selling Price");
     const costPriceIndex = headers.indexOf("Cost Price");
     const itemPackageDimensionsIndex = headers.indexOf("ITEM package Dimensions");
+    const skuIdIndex = headers.indexOf("SKU ID");
 
     console.log("Item index ", itemNoIndex);
 
@@ -852,6 +853,33 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
               },
             });
           }
+
+          if (skuIdIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: rowIndex + 1,
+                  startColumnIndex: skuIdIndex,
+                  endRowIndex: rowIndex + 2,
+                  endColumnIndex: skuIdIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${rowIndex + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${rowIndex + 2})), U${rowIndex + 2}, " "), "_", N${rowIndex + 2}, "_", "${data.product_type}"), " ", "-"))`
+
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
         
           return row;
         });
@@ -910,6 +938,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
             },
           });
         }
+
 
         if (Object.keys(formatRequest).length > 0) {
           requests.push({
@@ -1138,39 +1167,47 @@ async function createItemCsv(email, shop_no) {
   try {
     const result = await ambarsariyaPool.query(
       `SELECT
-    p.product_name,
-    p.product_id,
-    iku_value AS iku_id,
-    split_part(iku_value, '_', 4)::int AS no_of_items,
-    p.inventory_or_stock_quantity AS max_quantity,
-    p.area_size_lateral,
-    p.selling_price,
-    p.price AS cost_price,
-    p.brand,
-    p.category,
-    array_length(
-        array_remove(
-            ARRAY[
-                CASE WHEN p.variation_1 IS NOT NULL AND p.variation_1 != '' THEN 1 ELSE NULL END,
-                CASE WHEN p.variation_2 IS NOT NULL AND p.variation_2 != '' THEN 1 ELSE NULL END,
-                CASE WHEN p.variation_3 IS NOT NULL AND p.variation_3 != '' THEN 1 ELSE NULL END,
-                CASE WHEN p.variation_4 IS NOT NULL AND p.variation_4 != '' THEN 1 ELSE NULL END
-            ], NULL
-        ), 1
-    ) AS variations,
-    e.oauth_access_token,
-    e.oauth_refresh_token
-FROM
-    sell.products p
-JOIN
-    sell.eshop_form e
-ON
-    p.shop_no = e.shop_no,
-    LATERAL unnest(p.iku_id) AS iku_value
-WHERE
-    p.shop_no = $1
-ORDER BY
-    p.product_id, no_of_items;`,
+          p.product_name,
+          p.product_id,
+          p.product_type,
+          iku_value AS iku_id,
+          split_part(iku_value, '_', 4)::int AS no_of_items,
+          p.inventory_or_stock_quantity AS max_quantity,
+          p.area_size_lateral,
+          p.selling_price,
+          p.price AS cost_price,
+          p.brand,
+          c.category_name,
+          array_length(
+              array_remove(
+                  ARRAY[
+                      CASE WHEN p.variation_1 IS NOT NULL AND p.variation_1 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_2 IS NOT NULL AND p.variation_2 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_3 IS NOT NULL AND p.variation_3 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_4 IS NOT NULL AND p.variation_4 != '' THEN 1 ELSE NULL END
+                  ], NULL
+              ), 1
+          ) AS variations,
+          e.oauth_access_token,
+          e.oauth_refresh_token
+      FROM
+          sell.products p
+      JOIN
+          sell.eshop_form e
+      ON
+          p.shop_no = e.shop_no
+      JOIN
+          categories c
+      ON
+          p.category = c.category_id
+      JOIN
+          LATERAL unnest(p.iku_id) AS iku_value
+      ON 
+        true
+      WHERE
+          p.shop_no = $1
+      ORDER BY
+          p.product_id, no_of_items;`,
       [shop_no]
     );
 

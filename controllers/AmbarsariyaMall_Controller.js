@@ -38,6 +38,19 @@ const get_category_name = async(req, res) => {
 }
 
 
+const get_category_id = async(req, res) => {
+  const {category_name} = req.params;
+  try{
+      const result = await ambarsariyaPool.query('SELECT category_id FROM categories WHERE category_name = $1', [category_name]);
+      res.json(result.rows);
+  }
+  catch(err){
+      console.log('Error fetching category id : ' + err);
+      res.status(500).json({message : 'Error fetching category id.', error: err.message});
+  }
+}
+
+
 
 const get_domainSectors = async(req, res) => {
     try{
@@ -124,4 +137,4 @@ const get_typeOfService = async(req, res) => {
 }
 
 // Export the functions for use in routes
-module.exports = { get_domains, get_sectors,get_category_name, get_domainSectors, createDomain, get_typeOfServices, get_typeOfService, get_categoriesList };
+module.exports = { get_domains, get_sectors,get_category_name, get_category_id, get_domainSectors, createDomain, get_typeOfServices, get_typeOfService, get_categoriesList };
