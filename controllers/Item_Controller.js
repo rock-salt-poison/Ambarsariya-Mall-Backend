@@ -4,15 +4,21 @@ const ambarsariyaPool = createDbPool();
 const post_items = async (req, res) => {
   const { items } = req.body;
 
-  ambarsariyaPool.query("BEGIN"); // Start a transaction
   try {
     await ambarsariyaPool.query("BEGIN"); // Start a transaction
 
     // Insert products and product variants
     for (let item of items) {
+      // Extract product number and category number from product_id
+      const prod_no = item.product_id.split("_")[1]; // e.g., prod_1 -> 1
+      const category_no = item.product_id.split("_")[4]; // e.g., 597 from prod_1_shop_3_597_wg_gloves
+
+      // Create item_id dynamically
+      const item_id = `item_${item.item_no}_prod_${prod_no}_${item.shop_no}_category${category_no}`;
 
       // Insert the product data
       const itemQuery = `INSERT INTO Sell.items (
+        item_id,
         product_id,
         shop_no,
         no_of_items,
@@ -37,10 +43,11 @@ const post_items = async (req, res) => {
         specification_4,
         sku_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
       ) ON CONFLICT (item_id) DO NOTHING;`;
 
       await ambarsariyaPool.query(itemQuery, [
+        item_id, // Dynamically generated item_id
         item.product_id,
         item.shop_no,
         item.no_of_items,
@@ -63,7 +70,7 @@ const post_items = async (req, res) => {
         item.specification_2,
         item.specification_3,
         item.specification_4,
-        item.sku_id
+        item.sku_id,
       ]);
     }
 
@@ -72,10 +79,33 @@ const post_items = async (req, res) => {
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
     console.error("Error inserting item: ", err);
-    res.status(500).json({ error: "Error inserting items", message:err });
+    res.status(500).json({ error: "Error inserting items", message: err });
+  }
+};
+
+
+const get_items = async (req, res) => {
+  const { shop_no } = req.params;
+
+  try {
+    if (shop_no) {
+      let query = `SELECT item_id FROM sell.items WHERE shop_no = $1`;
+      let result = await ambarsariyaPool.query(query, [shop_no]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .status(404)
+          .json({ valid: false, message: "No items are there." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch data" });
   }
 };
 
 
 
-module.exports = { post_items };
+module.exports = { post_items, get_items };

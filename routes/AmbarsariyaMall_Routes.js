@@ -84,6 +84,7 @@ router.get('/purchase_order/:po_access_token', purchaseController.get_purchase_o
 router.get('/purchase_orders/:po_no', purchaseController.get_purchase_orders);
 router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchase_order_numbers);
 router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_orders);
+router.get('/sell/items/:shop_no', itemController.get_items);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
 router.get('/sale_order_no/:seller_id', saleController.get_sale_order_numbers);
