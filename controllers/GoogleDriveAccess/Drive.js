@@ -869,7 +869,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${rowIndex + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${rowIndex + 2})), U${rowIndex + 2}, " "), "_", N${rowIndex + 2}, "_", "${data.product_type}"), " ", "-"))`
+                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE("${data.shop_no}", "_", C${rowIndex + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${rowIndex + 2})), U${rowIndex + 2}, " "), "_", N${rowIndex + 2}, "_", "${data.product_type}"), " ", "-"))`
 
                         },
                       },
@@ -1167,6 +1167,7 @@ async function createItemCsv(email, shop_no) {
   try {
     const result = await ambarsariyaPool.query(
       `SELECT
+          p.shop_no,
           p.product_name,
           p.product_id,
           p.product_type,
