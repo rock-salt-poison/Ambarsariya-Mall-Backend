@@ -41,9 +41,14 @@ const post_items = async (req, res) => {
         specification_2,
         specification_3,
         specification_4,
+        no_of_racks,
+        no_of_shelves,
+        shelf_length,
+        shelf_height,
+        shelf_breadth,
         sku_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       ) ON CONFLICT (item_id) DO NOTHING;`;
 
       await ambarsariyaPool.query(itemQuery, [
@@ -70,6 +75,11 @@ const post_items = async (req, res) => {
         item.specification_2,
         item.specification_3,
         item.specification_4,
+        item.no_of_racks,
+        item.no_of_shelves,
+        item.shelf_length,
+        item.shelf_height,
+        item.shelf_breadth,
         item.sku_id,
       ]);
     }

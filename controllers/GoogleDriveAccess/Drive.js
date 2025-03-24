@@ -429,9 +429,11 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 }
 
 
-async function createItemsSheet(drive, sheets, folderId, email, queryData) {
+async function createItemsSheet(drive, sheets, folderId, email, queryData, rackData) {
   try {
     console.log(`Creating a new items Google Sheet inside User's My Drive...`);
+    console.log('rackdata : ', rackData);
+    
 
     // Step 1: Create a new Google Sheet in User's My Drive
     const fileMetadata = {
@@ -590,11 +592,18 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
     const itemIdIndex = headers.indexOf("Item ID");
     const noOfItemsIndex = headers.indexOf("No of Items");
     const maxProductQuantityIndex = headers.indexOf("Max Product Quantity");
+    const storageOccupiedIndex = headers.indexOf("Storage Occupied");
+    const quantityInStockIndex = headers.indexOf("Quantity in stock");
     const maxItemQuantityIndex = headers.indexOf("Max Item Quantity");
     const itemAreaIndex = headers.indexOf("Item area");
     const sellingPriceIndex = headers.indexOf("Selling Price");
     const costPriceIndex = headers.indexOf("Cost Price");
-    const itemPackageDimensionsIndex = headers.indexOf("ITEM package Dimensions");
+    const itemPackageDimensionsIndex = headers.indexOf("ITEM ID Package Dimensions");
+    const numberOfRacksIndex = headers.indexOf("Number of Racks");
+    const numberOfShelvesIndex = headers.indexOf("Number of Shelves");
+    const lengthOfShelfIndex = headers.indexOf("Length of Shelf");
+    const breadthOfShelfIndex = headers.indexOf("Breadth of Shelf");
+    const heightOfShelfIndex = headers.indexOf("Height of Shelf");
     const skuIdIndex = headers.indexOf("SKU ID");
 
     console.log("Item index ", itemNoIndex);
@@ -748,6 +757,62 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
             });
           }
 
+          if (storageOccupiedIndex !== -1) {
+            const itemPackageDimensionsCell = `${String.fromCharCode(65 + itemPackageDimensionsIndex)}${index + 2}`;
+            const noOfItemsCell = `${String.fromCharCode(65 + noOfItemsIndex)}${index + 2}`;
+
+            console.log(itemPackageDimensionsCell, noOfItemsCell);
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: storageOccupiedIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: storageOccupiedIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${itemPackageDimensionsCell} * ${noOfItemsCell}`,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (quantityInStockIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: quantityInStockIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: quantityInStockIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: data.no_of_items || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
           if (maxItemQuantityIndex !== -1) {
             requests.push({
               updateCells: {
@@ -763,7 +828,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                     values: [
                       {
                         userEnteredValue: {
-                          numberValue: data.no_of_items || 0,
+                          numberValue: data.max_quantity || 0,
                         },
                       },
                     ],
@@ -828,7 +893,13 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
             });
           }
         
-          if (itemPackageDimensionsIndex !== -1) {
+          if (itemPackageDimensionsIndex !== -1 && itemAreaIndex !== -1 && maxItemQuantityIndex !== -1) {
+            const itemAreaCell = `${String.fromCharCode(65 + itemAreaIndex)}${index + 2}`;
+            const maxItemQuantityCell = `${String.fromCharCode(65 + maxItemQuantityIndex)}${index + 2}`;
+
+            console.log(itemAreaCell, maxItemQuantityCell);
+            
+          
             requests.push({
               updateCells: {
                 range: {
@@ -843,25 +914,26 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                     values: [
                       {
                         userEnteredValue: {
-                          numberValue: data.area_size_lateral || 0,
+                          formulaValue: `=${itemAreaCell} * ${maxItemQuantityCell}`,
                         },
                       },
                     ],
                   },
                 ],
-                fields: "userEnteredValue.stringValue",
+                fields: "userEnteredValue.formulaValue",
               },
             });
           }
+          
 
           if (skuIdIndex !== -1) {
             requests.push({
               updateCells: {
                 range: {
                   sheetId: userSheet.properties.sheetId,
-                  startRowIndex: rowIndex + 1,
+                  startRowIndex: index + 1,
                   startColumnIndex: skuIdIndex,
-                  endRowIndex: rowIndex + 2,
+                  endRowIndex: index + 2,
                   endColumnIndex: skuIdIndex + 1,
                 },
                 rows: [
@@ -869,14 +941,165 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE("${data.shop_no}", "_", C${rowIndex + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${rowIndex + 2})), U${rowIndex + 2}, " "), "_", N${rowIndex + 2}, "_", "${data.product_type}"), " ", "-"))`
-
-                        },
+                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE("item_", A${index + 2}, "_", C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${index + 2})), U${index + 2}, " "), "_", N${index + 2} * "${data.variations}", "_", "${data.product_type}"), " ", "-"))`},
                       },
                     ],
                   },
                 ],
                 fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+
+          if (numberOfRacksIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfRacksIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfRacksIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackData.no_of_racks) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+          if (numberOfShelvesIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackData.no_of_shelves) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+          if (lengthOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: lengthOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: lengthOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackData.shelf_length) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+          if (breadthOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: breadthOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: breadthOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackData.shelf_breadth) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+          if (heightOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: heightOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: heightOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackData.shelf_height) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (itemAreaIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: itemAreaIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: itemAreaIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: data.area_size_lateral || 0
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
               },
             });
           }
@@ -913,31 +1136,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData) {
         }
 
 
-        if (itemAreaIndex !== -1) {
-          requests.push({
-            updateCells: {
-              range: {
-                sheetId: userSheet.properties.sheetId,
-                startRowIndex: rowIndex + 1,
-                startColumnIndex: itemAreaIndex,
-                endRowIndex: rowIndex + 2,
-                endColumnIndex: itemAreaIndex + 1,
-              },
-              rows: [
-                {
-                  values: [
-                    {
-                      userEnteredValue: {
-                        formulaValue: `=IF(AND(E${rowIndex + 2} <> "", T${rowIndex + 2} <> ""), E${rowIndex + 2} * T${rowIndex + 2}, "")`,
-                      },
-                    },
-                  ],
-                },
-              ],
-              fields: "userEnteredValue.formulaValue",
-            },
-          });
-        }
+        
 
 
         if (Object.keys(formatRequest).length > 0) {
@@ -1163,7 +1362,7 @@ async function processDrive(email) {
   }
 }
 
-async function createItemCsv(email, shop_no) {
+async function createItemCsv(email, shop_no, rackData) {
   try {
     const result = await ambarsariyaPool.query(
       `SELECT
@@ -1241,7 +1440,7 @@ async function createItemCsv(email, shop_no) {
 
     // Step 3: Check if file exists, else create it
     let file = await getItemsFile(drive, folderId, email);
-    if (!file) file = await createItemsSheet(drive, sheets,folderId, email,result.rows);
+    if (!file) file = await createItemsSheet(drive, sheets,folderId, email,result.rows, rackData);
 
     await grantPermission(drive, email, file.id);
 

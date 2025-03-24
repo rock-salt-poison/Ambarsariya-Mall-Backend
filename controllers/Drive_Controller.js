@@ -85,7 +85,7 @@ const post_openFile = async (req, res) => {
 
 const post_openItemsCSVFile = async (req, res) => {
   const { email, shop_no } = req.params;
-
+  const rackData = req.body;
   try {
     if (!email)
       return res
@@ -149,7 +149,7 @@ const post_openItemsCSVFile = async (req, res) => {
       }
     }
 
-    const response = await createItemCsv(email, shop_no);
+    const response = await createItemCsv(email, shop_no, rackData);
     return res.json(response);
   } catch (e) {
     console.error("Error opening items file:", e);
