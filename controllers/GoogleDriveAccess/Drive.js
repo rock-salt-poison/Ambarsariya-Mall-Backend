@@ -10,6 +10,7 @@ const ambarsariyaPool = createDbPool();
 
 const adminSheetId = process.env.ADMIN_SHEET_ID; // Ensure this is set in `.env`
 const adminItemSheetId = process.env.ADMIN_ITEM_SHEET_ID;
+const adminSkuSheetId = process.env.ADMIN_SKU_SHEET_ID;
 
 const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
 
@@ -127,6 +128,18 @@ async function getProductsFile(drive, folderId, email) {
 async function getItemsFile(drive, folderId, email) {
   try {
     const query = `mimeType='application/vnd.google-apps.spreadsheet' and name='Items_${email}' and '${folderId}' in parents and trashed=false`;
+
+    const res = await drive.files.list({ q: query, fields: "files(id, name, webViewLink)" });
+
+    return res.data.files.length ? res.data.files[0] : null;
+  } catch (error) {
+    throw new Error("Failed to check items file.");
+  }
+}
+
+async function getSKUFile(drive, folderId, email) {
+  try {
+    const query = `mimeType='application/vnd.google-apps.spreadsheet' and name='SKU_${email}' and '${folderId}' in parents and trashed=false`;
 
     const res = await drive.files.list({ q: query, fields: "files(id, name, webViewLink)" });
 
@@ -1173,6 +1186,1191 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
   }
 }
 
+async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWallData) {
+  try {
+    console.log(`Creating a new sku Google Sheet inside User's My Drive...`);
+    console.log('rackdata : ', rackWallData);
+    
+
+    // Step 1: Create a new Google Sheet in User's My Drive
+    const fileMetadata = {
+      name: `SKU_${email}`,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [folderId],
+    };
+
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: "id, webViewLink, owners",
+    });
+
+    if (!file || !file.data || !file.data.id) {
+      console.error("File creation failed, no file data received.");
+      return;
+    }
+
+    const userSheetId = file.data.id;
+    console.log(`Sheet created successfully! ID: ${userSheetId}`);
+
+    // Step 2: Get Admin Sheet Details
+    console.log("Fetching Admin Sheet data...");
+    const adminSheets = await sheets.spreadsheets.get({
+      spreadsheetId: adminSkuSheetId,
+      includeGridData: true,
+    });
+
+    const adminSheet = adminSheets.data.sheets[0]; // Assuming first sheet
+    const adminSheetName = adminSheet.properties.title;
+
+    // Find the last non-empty row dynamically
+    let lastRow = 0;
+    let lastColumn = 0;
+    let headerRow = []; // To store header names
+
+    adminSheet.data[0].rowData.forEach((row, rowIndex) => {
+      if (queryData && queryData.length>0) {
+        lastRow = queryData.length + 1; // Last non-empty row
+      }
+      row.values?.forEach((cell, colIndex) => {
+        if (cell.effectiveValue) {
+          lastColumn = Math.max(lastColumn, colIndex + 1);
+        }
+        // Collect headers in the first row
+        if (rowIndex === 0 && cell.effectiveValue) {
+          headerRow.push(cell.effectiveValue);
+        }
+      });
+    });
+
+    console.log(`SKU Sheet: ${lastRow} rows, ${lastColumn} columns`);
+    console.log(headerRow);
+
+    // Convert column index to letter notation
+    const get_Column_Letter = (colIndex) => {
+      let letter = "";
+      while (colIndex >= 0) {
+        letter = String.fromCharCode((colIndex % 26) + 65) + letter;
+        colIndex = Math.floor(colIndex / 26) - 1;
+      }
+      return letter;
+    };
+
+    const lastColumnLetter = get_Column_Letter(lastColumn - 1);
+    const range = `${adminSheetName}!A1:${lastColumnLetter}${lastRow}`;
+    console.log(`Fetching data from range: ${range}`);
+
+    // Fetch data
+    const dataResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: adminSkuSheetId,
+      range: range,
+    });
+
+    const values = dataResponse.data.values || [];
+    console.log("Data fetched successfully!");
+
+    // Grant user permission
+    await grantPermission(drive, email, userSheetId);
+
+    // Get User Sheet details
+    const userSheets = await sheets.spreadsheets.get({
+      spreadsheetId: userSheetId,
+    });
+    const userSheet = userSheets.data.sheets[0]; // Assuming first sheet
+    const userSheetName = userSheet.properties.title;
+
+    // Step 3: Expand User Sheet Rows & Columns If Needed
+    const updateRequests = [];
+
+    if (lastColumn > userSheet.properties.gridProperties.columnCount) {
+      console.log(
+        `Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`
+      );
+      updateRequests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: userSheet.properties.sheetId,
+            gridProperties: { columnCount: lastColumn },
+          },
+          fields: "gridProperties.columnCount",
+        },
+      });
+    }
+
+    if (lastRow > userSheet.properties.gridProperties.rowCount) {
+      console.log(
+        `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
+      );
+      updateRequests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: userSheet.properties.sheetId,
+            title: "SKU",
+            gridProperties: { rowCount: lastRow },
+          },
+          fields: "gridProperties.rowCount",
+        },
+      });
+    }
+
+    if (updateRequests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: userSheetId,
+        requestBody: { requests: updateRequests },
+      });
+      console.log("Sheet expanded successfully!");
+    }
+
+    // Step 4: Copy Data from Admin Sheet to User Sheet
+    if (values.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: userSheetId,
+        range: `${userSheetName}!A1`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values },
+      });
+      console.log("Data copied successfully!");
+    } else {
+      console.log("No data found in Admin Sheet.");
+    }
+
+    // Step 5: Copy Formatting & Data Validation
+    console.log("Copying formatting and data validation...");
+
+    const requests = [];
+    const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
+
+    const headers = headerRow.map((header) => header.stringValue || "");
+
+    // Step 6: Apply formulas based on column headers
+    const SNoIndex = headers.indexOf("S.No");
+    const SKUIDIndex = headers.indexOf("SKU Code (SKU ID)");
+    const productNameIndex = headers.indexOf("Product Name");
+    const categoryIndex = headers.indexOf("Category");
+    const brandIndex = headers.indexOf("Brand or Manufacturer");
+    const colorIndex = headers.indexOf("Color");
+    const maxStockSizeIndex = headers.indexOf("Max Stock Size");
+    const productTypeIndex = headers.indexOf("Product Type");
+    const locationIndex = headers.indexOf("Location");
+    const manufacturingDateIndex = headers.indexOf("Batch or Manufacturing Date (Optional)");
+    const expiryDateIndex = headers.indexOf("End of Batch/Expiry Date (Optional)");
+    const quantityIndex = headers.indexOf("Quantity");
+    const weightIndex = headers.indexOf("Weight in kgs");
+    const numberOfWallsOfRacksIndex = headers.indexOf("No of Walls of Rack(s)");
+    const numberOfRacksInAWallIndex = headers.indexOf("No of Racks in a (Wall)");
+    const stockLevelIndex = headers.indexOf("Stock Level");
+    const lowStockIndex = headers.indexOf("Low Stock");
+    const mediumStockIndex = headers.indexOf("Medium Stock");
+    const highStockIndex = headers.indexOf("High Stock");
+    const numberOfRacksIndex = headers.indexOf("Number of Racks");
+    const numberOfShelvesIndex = headers.indexOf("Number of Shelves");
+    const lengthOfShelfIndex = headers.indexOf("Length of Shelf");
+    const breadthOfShelfIndex = headers.indexOf("Breadth of Shelf");
+    const heightOfShelfIndex = headers.indexOf("Height of Shelf");
+    const totalAreaOfShelfIndex = headers.indexOf("Total Area of Shelf");
+    const totalShelfAreaInRackIndex = headers.indexOf("Total Shelf Area in Rack");
+    const maxAreaOfStockIndex = headers.indexOf("Max Area of Stock");
+    const totalShelvesIndex = headers.indexOf("Total Shelves");
+    const maxRacksIndex = headers.indexOf("Max Racks");
+    const extraShelvesIndex = headers.indexOf("Shelves extra");
+    const itemsPerShelfIndex = headers.indexOf("Items Per Shelf");
+    const maxRackIndex = headers.indexOf("Max Rack");
+    const maxShelvesIndex = headers.indexOf("Max Shelves");
+
+    // Loop through the rows and columns to apply dynamic formulas
+    adminSheet.data[0].rowData.forEach((row, rowIndex) => {
+      if (rowIndex >= lastRowIndex) return;
+      if (!row.values) return;
+
+      row.values.forEach((cell, colIndex) => {
+        if (colIndex >= lastColumn) return;
+
+        const formatRequest = {};
+        if (cell.effectiveFormat) {
+          formatRequest.userEnteredFormat = cell.effectiveFormat;
+        }
+        if (cell.dataValidation) {
+          formatRequest.dataValidation = cell.dataValidation;
+        }
+
+        const filledRows = queryData.map((data, index) => {
+          const row = Array(lastColumn).fill("");
+
+          const getColumnLetter = (index) => {
+            if (index < 26) {
+              return String.fromCharCode(65 + index); // Single letter A-Z
+            }
+            const firstChar = String.fromCharCode(64 + Math.floor(index / 26));
+            const secondChar = String.fromCharCode(65 + (index % 26));
+            return `${firstChar}${secondChar}`;
+          };
+
+          
+          const SKUID = data.sku_id || "";
+          const skuParts = SKUID.split("_");
+
+          const [
+            item, 
+            item_no, 
+            pName,
+            pCategory,
+            pBrand,
+            pColor,
+            maxStock,
+            pType,
+          ] = skuParts;
+        
+          if (SKUIDIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: SKUIDIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: SKUIDIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: SKUID || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (productNameIndex !== -1) {
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: productNameIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: productNameIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: pName || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (categoryIndex !== -1) {
+          
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: categoryIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: categoryIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: pCategory || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+        
+          if (brandIndex !== -1) {
+           
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: brandIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: brandIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: pBrand || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+        
+          if (colorIndex !== -1) {
+           
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: colorIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: colorIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: pColor || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (maxStockSizeIndex !== -1) {
+          
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxStockSizeIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxStockSizeIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(maxStock) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (productTypeIndex !== -1) {
+          
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: productTypeIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: productTypeIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: pType || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (locationIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: locationIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: locationIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: rackWallData.store_location?.description || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+        
+          if (manufacturingDateIndex !== -1) {
+            const dateOnly = new Date(data.manufacturing_date);
+            const dateSerial = (dateOnly - new Date("1899-12-30")) / (24 * 60 * 60 * 1000); // Convert to serial date
+          
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: manufacturingDateIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: manufacturingDateIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: dateSerial, // Correct for date format
+                        },
+                        userEnteredFormat: {
+                          numberFormat: {
+                            type: "DATE",
+                          },
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue, userEnteredFormat.numberFormat",
+              },
+            });
+          }
+          
+          if (expiryDateIndex !== -1) {
+            const dateOnly = new Date(data.expiry_date);
+            const dateSerial = (dateOnly - new Date("1899-12-30")) / (24 * 60 * 60 * 1000);
+          
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: expiryDateIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: expiryDateIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: dateSerial,
+                        },
+                        userEnteredFormat: {
+                          numberFormat: {
+                            type: "DATE",
+                          },
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue, userEnteredFormat.numberFormat",
+              },
+            });
+          }
+          
+          if (quantityIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: quantityIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: quantityIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(data.inventory_or_stock_quantity) || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (weightIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: weightIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: weightIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseFloat(data.item_weight) || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (numberOfWallsOfRacksIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfWallsOfRacksIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfWallsOfRacksIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackWallData.no_of_walls_of_rack) || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (numberOfRacksInAWallIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfRacksInAWallIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfRacksInAWallIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(rackWallData.no_of_racks_per_wall) || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (stockLevelIndex !== -1) {
+            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex)}${index + 2}`;
+            const quantityCell = `${getColumnLetter(quantityIndex)}${index + 2}`;
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: stockLevelIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: stockLevelIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${quantityCell}/${maxStockSizeCell}*100` || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (lowStockIndex !== -1) {
+            const stockLevelCell = `${getColumnLetter(stockLevelIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: lowStockIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: lowStockIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=IF(${stockLevelCell}>"30","Low in Stock","N.A")` || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (mediumStockIndex !== -1) {
+            const stockLevelCell = `${getColumnLetter(stockLevelIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: mediumStockIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: mediumStockIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=IF(${stockLevelCell}<"50","Med in Stock","N.A")` || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (highStockIndex !== -1) {
+            const stockLevelCell = `${getColumnLetter(stockLevelIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: highStockIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: highStockIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=IF(${stockLevelCell}>"80","High in Stock","N.A")` || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+          
+          if (numberOfRacksIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfRacksIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfRacksIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(data.no_of_racks) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (numberOfShelvesIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: numberOfShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: numberOfShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseInt(data.no_of_shelves) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (lengthOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: lengthOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: lengthOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseFloat(data.shelf_length) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (breadthOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: breadthOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: breadthOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseFloat(data.shelf_breadth) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (heightOfShelfIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: heightOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: heightOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseFloat(data.shelf_height) || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
+          if (totalAreaOfShelfIndex !== -1) {
+            const lengthOfShelfCell = `${getColumnLetter(lengthOfShelfIndex)}${index + 2}`;
+            const breadthOfShelfCell = `${getColumnLetter(breadthOfShelfIndex) }${index + 2}`;
+            const heightOfShelfCell = `${getColumnLetter(heightOfShelfIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: totalAreaOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: totalAreaOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=2 * (${lengthOfShelfCell} * ${breadthOfShelfCell} + ${breadthOfShelfCell} * ${heightOfShelfCell} + ${heightOfShelfCell} * ${lengthOfShelfCell})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (totalShelfAreaInRackIndex !== -1) {
+            const totalAreaOfShelfCell = `${ getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+            
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: totalShelfAreaInRackIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: totalShelfAreaInRackIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${totalAreaOfShelfCell}*${numberOfShelvesCell}`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxAreaOfStockIndex !== -1) {
+            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex) }${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxAreaOfStockIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxAreaOfStockIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${maxStockSizeCell}*${parseFloat(data.area_size_lateral)}`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (totalShelvesIndex !== -1) {
+            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+            const maxAreaOfStockCell = `${getColumnLetter(maxAreaOfStockIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: totalShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: totalShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${maxAreaOfStockCell}/${totalAreaOfShelfCell}`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxRacksIndex !== -1) {
+            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxRacksIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxRacksIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${totalShelvesCell}/${numberOfShelvesCell}`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (extraShelvesIndex !== -1) {
+            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: extraShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: extraShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=ROUNDDOWN(${totalAreaOfShelfCell}/${parseFloat(data.area_size_lateral)})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (itemsPerShelfIndex !== -1) {
+            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: itemsPerShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: itemsPerShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=ROUNDUP(${totalAreaOfShelfCell}/${parseFloat(data.area_size_lateral)})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxRackIndex !== -1) {
+            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxRackIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxRackIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=ROUNDDOWN(${maxRacksCell})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxShelvesIndex !== -1) {
+            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
+            const extraShelvesCell = `${getColumnLetter(extraShelvesIndex)}${index + 2}`;
+
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=ROUNDDOWN(${totalShelvesCell}+${extraShelvesCell})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          return row;
+        });
+        
+
+        // Apply formulas based on column headers
+        if (SNoIndex !== -1) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: userSheet.properties.sheetId,
+                startRowIndex: rowIndex + 1,
+                startColumnIndex: SNoIndex,
+                endRowIndex: rowIndex + 2,
+                endColumnIndex: SNoIndex + 1,
+              },
+              rows: [
+                {
+                  values: [
+                    {
+                      userEnteredValue: {
+                        formulaValue: `=IF(B${rowIndex + 2} <> "", ROW(A${rowIndex + 2}) - 1, "")`,
+                      },
+                    },
+                  ],
+                },
+              ],
+              fields: "userEnteredValue.formulaValue",
+            },
+          });
+        }
+        if (Object.keys(formatRequest).length > 0) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: userSheet.properties.sheetId,
+                startRowIndex: rowIndex,
+                startColumnIndex: colIndex,
+                endRowIndex: rowIndex + 1,
+                endColumnIndex: colIndex + 1,
+              },
+              rows: [{ values: [formatRequest] }],
+              fields: Object.keys(formatRequest).join(","),
+            },
+          });
+        }
+      });
+    });
+
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: userSheetId,
+        requestBody: { requests },
+      });
+      console.log("Formatting and data validation copied successfully!");
+    } else {
+      console.log("No formatting or validation found to copy.");
+    }
+
+    return file.data;
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
 
 async function grantPermission(drive, email, fileId) {
   try {
@@ -1452,4 +2650,80 @@ async function createItemCsv(email, shop_no, rackData) {
 }
 
 
-module.exports = { processDrive, createItemCsv };
+async function createSKUCsv(email, shop_no, rackWallData) {
+  try {
+    const result = await ambarsariyaPool.query(
+      `SELECT DISTINCT ON (p.product_name) 
+    p.product_name,
+    i.sku_id, 
+    i.weight_of_item AS item_weight,
+    i.no_of_racks, 
+    i.no_of_shelves,  
+    i.shelf_length, 
+    i.shelf_breadth, 
+    i.shelf_height, 
+    p.manufacturing_date,
+    p.expiry_date,
+    p.inventory_or_stock_quantity,
+    p.area_size_lateral,
+    e.oauth_access_token,
+    e.oauth_refresh_token
+FROM 
+    sell.items i
+JOIN 
+    sell.products p 
+    ON p.shop_no = i.shop_no AND p.product_id = i.product_id
+JOIN 
+    sell.eshop_form e 
+    ON e.shop_no = i.shop_no
+WHERE 
+    i.shop_no = $1
+ORDER BY 
+    p.product_name, 
+    i.sku_id; -- or any other field to determine priority
+`,
+      [shop_no]
+    );
+
+    if (!result.rowCount) throw new Error("User not authenticated.");
+
+    const { oauth_access_token, oauth_refresh_token } = result.rows[0];
+
+    oAuth2Client.setCredentials({
+      access_token: oauth_access_token,
+      refresh_token: oauth_refresh_token,
+    });
+
+    const auth = new google.auth.JWT(
+      process.env.GCP_CLIENT_EMAIL,
+      null,
+      process.env.GCP_PRIVATE_KEY.replace(/\\n/g, "\n"), // Fix multi-line issue
+      [
+        "https://www.googleapis.com/auth/spreadsheets", 
+        "https://www.googleapis.com/auth/drive.file", // Ensure correct scope
+        "https://www.googleapis.com/auth/drive" // Ensure correct scope
+      ]
+    );
+
+    const drive = google.drive({ version: "v3", auth: oAuth2Client });
+    const sheets = google.sheets({ version: "v4", auth: auth });
+    const sheet2 = google.sheets({ version: "v4", auth: oAuth2Client });
+
+    // Step 1: Get or create base folder
+    const folderId = await getBaseFolder(drive, email);
+
+    // Step 3: Check if file exists, else create it
+    let file = await getSKUFile(drive, folderId, email);
+    if (!file) file = await createSKUSheet(drive, sheets,folderId, email,result.rows, rackWallData);
+
+    await grantPermission(drive, email, file.id);
+
+    return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
+  } catch (error) {
+    console.error("Error processing Drive:", error.message);
+    return { success: false, message: error.message };
+  }
+}
+
+
+module.exports = { processDrive, createItemCsv, createSKUCsv };
