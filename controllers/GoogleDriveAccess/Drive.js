@@ -484,9 +484,11 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     let lastColumn = 0;
     let headerRow = []; // To store header names
 
+    console.log(adminSheet);
+    
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
-      if (queryData && queryData.length>0) {
-        lastRow = queryData.length + 1; // Last non-empty row
+      if (queryData && queryData?.length>0) {
+        lastRow = queryData?.length + 1; // Last non-empty row
       }
       row.values?.forEach((cell, colIndex) => {
         if (cell.effectiveValue) {
@@ -500,7 +502,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     });
 
     console.log(`Item Sheet: ${lastRow} rows, ${lastColumn} columns`);
-    console.log(headerRow);
 
     // Convert column index to letter notation
     const getColumnLetter = (colIndex) => {
@@ -597,7 +598,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
 
     const headers = headerRow.map((header) => header.stringValue || "");
-    console.log("Headers: ", headers);
 
     // Step 6: Apply formulas based on column headers
     const itemNoIndex = headers.indexOf("Item No");
@@ -619,8 +619,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     const breadthOfShelfIndex = headers.indexOf("Breadth of Shelf");
     const heightOfShelfIndex = headers.indexOf("Height of Shelf");
     const skuIdIndex = headers.indexOf("SKU ID");
-
-    console.log("Item index ", itemNoIndex);
 
     // Loop through the rows and columns to apply dynamic formulas
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
@@ -775,7 +773,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             const itemPackageDimensionsCell = `${String.fromCharCode(65 + itemPackageDimensionsIndex)}${index + 2}`;
             const noOfItemsCell = `${String.fromCharCode(65 + noOfItemsIndex)}${index + 2}`;
 
-            console.log(itemPackageDimensionsCell, noOfItemsCell);
             requests.push({
               updateCells: {
                 range: {
@@ -911,7 +908,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             const itemAreaCell = `${String.fromCharCode(65 + itemAreaIndex)}${index + 2}`;
             const maxItemQuantityCell = `${String.fromCharCode(65 + maxItemQuantityIndex)}${index + 2}`;
 
-            console.log(itemAreaCell, maxItemQuantityCell);
             
           
             requests.push({
