@@ -9,7 +9,7 @@ const XLSX = require("xlsx");
 const ambarsariyaPool = createDbPool();
 
 const adminSheetId = process.env.ADMIN_SHEET_ID; // Ensure this is set in `.env`
-const adminItemSheetId = '13vYVxmguYXUjefWZIehPopptDvSPEbV2s4G-GfGbZOw';
+const adminItemSheetId = process.env.ADMIN_ITEM_SHEET_ID;
 const adminSkuSheetId = process.env.ADMIN_SKU_SHEET_ID;
 
 const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
@@ -608,13 +608,14 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     const itemIdIndex = headers.indexOf("Item ID");
     const noOfItemsIndex = headers.indexOf("No of Items");
     const maxProductQuantityIndex = headers.indexOf("Max Product Quantity");
+    const weightOfItemKgsIndex = headers.indexOf("Weight of item kgs");
     const storageOccupiedIndex = headers.indexOf("Storage Occupied");
     const quantityInStockIndex = headers.indexOf("Quantity in stock");
     const maxItemQuantityIndex = headers.indexOf("Max Item Quantity");
     const itemAreaIndex = headers.indexOf("Item area");
     const sellingPriceIndex = headers.indexOf("Selling Price");
     const costPriceIndex = headers.indexOf("Cost Price");
-    const itemPackageDimensionsIndex = headers.indexOf("ITEM ID Package Dimensions");
+    const itemPackageDimensionsIndex = headers.indexOf("ITEM ID Package Dimensions (max)");
     const numberOfRacksIndex = headers.indexOf("Number of Racks");
     const numberOfShelvesIndex = headers.indexOf("Number of Shelves");
     const lengthOfShelfIndex = headers.indexOf("Length of Shelf");
@@ -761,6 +762,31 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
                       {
                         userEnteredValue: {
                           numberValue: data.max_quantity || 0,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+          if (weightOfItemKgsIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: weightOfItemKgsIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: weightOfItemKgsIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          numberValue: parseFloat(data.product_weight_in_kg) || 0,
                         },
                       },
                     ],
@@ -953,7 +979,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE("item_", A${index + 2}, "_", C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", IF(NOT(ISBLANK(U${index + 2})), U${index + 2}, " "), "_", N${index + 2} * "${data.variations}", "_", "${data.product_type}"), " ", "-"))`},
+                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", "${data.variations}"), " ", "-"))`},
                       },
                     ],
                   },
@@ -1374,6 +1400,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
     const itemsPerShelfIndex = headers.indexOf("Items Per Shelf");
     const maxRackIndex = headers.indexOf("Max Rack");
     const maxShelvesIndex = headers.indexOf("Max Shelves");
+    const RKUIdIndex = headers.indexOf("RKU ID");
 
     // Loop through the rows and columns to apply dynamic formulas
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
@@ -1408,14 +1435,9 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           const skuParts = SKUID.split("_");
 
           const [
-            item, 
-            item_no, 
             pName,
             pCategory,
             pBrand,
-            pColor,
-            maxStock,
-            pType,
           ] = skuParts;
         
           if (SKUIDIndex !== -1) {
@@ -1541,7 +1563,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          stringValue: pColor || "",
+                          stringValue: "",
                         },
                       },
                     ],
@@ -1568,7 +1590,9 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          numberValue: parseInt(maxStock) || 0,
+                          numberValue:
+                          (parseInt(data.inventory_or_stock_quantity || 0) *
+                            parseInt(data.variations || 0)) || 0,
                         },
                       },
                     ],
@@ -1595,7 +1619,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          stringValue: pType || "",
+                          stringValue: data.product_type || "",
                         },
                       },
                     ],
@@ -1741,7 +1765,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          numberValue: parseFloat(data.item_weight) || 0,                        
+                          numberValue: parseFloat(data.product_weight) || 0,                        
                         },
                       },
                     ],
@@ -1849,7 +1873,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=IF(${stockLevelCell}>"30","Low in Stock","N.A")` || 0,                        
+                          formulaValue: `=(${stockLevelCell}<=30)` || 'N.A',                        
                         },
                       },
                     ],
@@ -1877,7 +1901,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=IF(${stockLevelCell}<"50","Med in Stock","N.A")` || 0,                        
+                          formulaValue: `=IF(AND(${stockLevelCell}>30, ${stockLevelCell}<80), TRUE, FALSE)` || 'N.A',                        
                         },
                       },
                     ],
@@ -1905,7 +1929,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=IF(${stockLevelCell}>"80","High in Stock","N.A")` || 0,                        
+                          formulaValue: `=${stockLevelCell}>=80` || 'N.A',                        
                         },
                       },
                     ],
@@ -2193,7 +2217,8 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (extraShelvesIndex !== -1) {
-            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+            const maxAreaOfStockCell = `${getColumnLetter(maxAreaOfStockIndex)}${index + 2}`;
+            const totalShelfAreaInRackCell = `${getColumnLetter(totalShelfAreaInRackIndex)}${index + 2}`;
 
             requests.push({
               updateCells: {
@@ -2209,7 +2234,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDDOWN(${totalAreaOfShelfCell}/${parseFloat(data.area_size_lateral)})`
+                          formulaValue: `=ROUNDUP(${maxAreaOfStockCell}/${totalShelfAreaInRackCell})`
                         },
                       },
                     ],
@@ -2249,7 +2274,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (maxRackIndex !== -1) {
-            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${index + 2}`;
+            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
 
             requests.push({
               updateCells: {
@@ -2265,7 +2290,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDDOWN(${maxRacksCell})`
+                          formulaValue: `=ROUNDDOWN(${totalShelvesCell}/${parseFloat(data.area_size_lateral)})`
                         },
                       },
                     ],
@@ -2277,8 +2302,8 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (maxShelvesIndex !== -1) {
-            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
-            const extraShelvesCell = `${getColumnLetter(extraShelvesIndex)}${index + 2}`;
+            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex)}${index + 2}`;
+            const itemsPerShelfCell = `${getColumnLetter(itemsPerShelfIndex)}${index + 2}`;
 
 
             requests.push({
@@ -2295,7 +2320,37 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDDOWN(${totalShelvesCell}+${extraShelvesCell})`
+                          formulaValue: `=ROUNDUP(${maxStockSizeCell}/${itemsPerShelfCell})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (RKUIdIndex !== -1) {
+            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex)}${index + 2}`;
+            const itemsPerShelfCell = `${getColumnLetter(itemsPerShelfIndex)}${index + 2}`;
+
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: RKUIdIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: RKUIdIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: ``
                         },
                       },
                     ],
@@ -2571,6 +2626,7 @@ async function createItemCsv(email, shop_no, rackData) {
           split_part(iku_value, '_', 4)::int AS no_of_items,
           p.inventory_or_stock_quantity AS max_quantity,
           p.area_size_lateral,
+          p.product_weight_in_kg,
           p.selling_price,
           p.price AS cost_price,
           p.brand,
@@ -2652,35 +2708,55 @@ async function createItemCsv(email, shop_no, rackData) {
 async function createSKUCsv(email, shop_no, rackWallData) {
   try {
     const result = await ambarsariyaPool.query(
-      `SELECT DISTINCT ON (p.product_name) 
-    p.product_name,
-    i.sku_id, 
-    i.weight_of_item AS item_weight,
-    i.no_of_racks, 
-    i.no_of_shelves,  
-    i.shelf_length, 
-    i.shelf_breadth, 
-    i.shelf_height, 
-    p.manufacturing_date,
-    p.expiry_date,
-    p.inventory_or_stock_quantity,
-    p.area_size_lateral,
-    e.oauth_access_token,
-    e.oauth_refresh_token
-FROM 
-    sell.items i
-JOIN 
-    sell.products p 
-    ON p.shop_no = i.shop_no AND p.product_id = i.product_id
-JOIN 
-    sell.eshop_form e 
-    ON e.shop_no = i.shop_no
-WHERE 
-    i.shop_no = $1
-ORDER BY 
-    p.product_name, 
-    i.sku_id; -- or any other field to determine priority
-`,
+      `SELECT 
+          p.product_name,
+          p.product_type,
+          i.sku_id, 
+          p.product_weight_in_kg AS product_weight,
+          i.no_of_racks, 
+          i.no_of_shelves,  
+          i.shelf_length, 
+          i.shelf_breadth, 
+          i.shelf_height, 
+          p.manufacturing_date,
+          p.expiry_date,
+          p.inventory_or_stock_quantity,
+          p.area_size_lateral,
+          -- Count of non-null variations
+          array_length(
+              array_remove(
+                  ARRAY[
+                      CASE WHEN p.variation_1 IS NOT NULL AND p.variation_1 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_2 IS NOT NULL AND p.variation_2 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_3 IS NOT NULL AND p.variation_3 != '' THEN 1 ELSE NULL END,
+                      CASE WHEN p.variation_4 IS NOT NULL AND p.variation_4 != '' THEN 1 ELSE NULL END
+                  ], 
+                  NULL
+              ), 
+              1
+          ) AS variations,
+          e.oauth_access_token,
+          e.oauth_refresh_token
+      FROM 
+          sell.items i
+      JOIN 
+          sell.products p 
+          ON p.shop_no = i.shop_no AND p.product_id = i.product_id
+      JOIN 
+          sell.eshop_form e 
+          ON e.shop_no = i.shop_no
+      WHERE 
+          i.shop_no = $1
+      GROUP BY 
+          p.product_name, i.sku_id, i.weight_of_item, i.no_of_racks, 
+          i.no_of_shelves, i.shelf_length, i.shelf_breadth, 
+          i.shelf_height, p.manufacturing_date, p.expiry_date, 
+          p.inventory_or_stock_quantity, p.area_size_lateral,
+          p.variation_1, p.variation_2, p.variation_3, p.variation_4,
+          e.oauth_access_token, e.oauth_refresh_token
+      ORDER BY 
+          i.sku_id;
+      `,
       [shop_no]
     );
 
