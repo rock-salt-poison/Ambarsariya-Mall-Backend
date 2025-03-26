@@ -471,10 +471,12 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
 
     // Step 2: Get Admin Sheet Details
     console.log("Fetching Admin Sheet data...");
+    console.log('adminSheets');
     const adminSheets = await sheets.spreadsheets.get({
       spreadsheetId: adminItemSheetId,
       includeGridData: true,
     });
+    console.log(adminSheets);
 
     const adminSheet = adminSheets.data.sheets[0]; // Assuming first sheet
     const adminSheetName = adminSheet.properties.title;
