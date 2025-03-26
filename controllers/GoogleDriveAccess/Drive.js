@@ -2748,7 +2748,7 @@ async function createSKUCsv(email, shop_no, rackWallData) {
       WHERE 
           i.shop_no = $1
       GROUP BY 
-          p.product_name, i.sku_id, i.weight_of_item, i.no_of_racks, 
+          p.product_name,p.product_type, i.sku_id, p.product_weight_in_kg, i.no_of_racks, 
           i.no_of_shelves, i.shelf_length, i.shelf_breadth, 
           i.shelf_height, p.manufacturing_date, p.expiry_date, 
           p.inventory_or_stock_quantity, p.area_size_lateral,
