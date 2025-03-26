@@ -17,6 +17,10 @@ app.use(cors());
 
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Use routes for each database
 app.use('/api/ambarsariya', ambarsariyaRoutes);
 app.use('/admin/api', adminRoutes);
@@ -35,6 +39,9 @@ app.use((err, req, res, next) => {
 
 // Start the server
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+server.keepAliveTimeout = 120 * 1000; // 120 seconds
+server.headersTimeout = 125 * 1000;
