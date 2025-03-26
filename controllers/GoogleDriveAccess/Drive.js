@@ -446,6 +446,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
   try {
     console.log(`Creating a new items Google Sheet inside User's My Drive...`);
     console.log('rackdata : ', rackData);
+    console.log('adminSheetItem', adminItemSheetId);
     
 
     // Step 1: Create a new Google Sheet in User's My Drive
