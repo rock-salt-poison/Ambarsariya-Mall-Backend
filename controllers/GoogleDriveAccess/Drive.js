@@ -9,7 +9,7 @@ const XLSX = require("xlsx");
 const ambarsariyaPool = createDbPool();
 
 const adminSheetId = process.env.ADMIN_SHEET_ID; // Ensure this is set in `.env`
-const adminItemSheetId = process.env.ADMIN_ITEM_SHEET_ID;
+const adminItemSheetId = '13vYVxmguYXUjefWZIehPopptDvSPEbV2s4G-GfGbZOw';
 const adminSkuSheetId = process.env.ADMIN_SKU_SHEET_ID;
 
 const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
