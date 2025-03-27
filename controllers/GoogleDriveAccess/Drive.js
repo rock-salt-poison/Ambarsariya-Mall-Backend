@@ -11,6 +11,7 @@ const ambarsariyaPool = createDbPool();
 const adminSheetId = process.env.ADMIN_SHEET_ID; // Ensure this is set in `.env`
 const adminItemSheetId = process.env.ADMIN_ITEM_SHEET_ID;
 const adminSkuSheetId = process.env.ADMIN_SKU_SHEET_ID;
+const adminRkuSheetId = process.env.ADMIN_RKU_SHEET_ID;
 
 const serviceAccountEmail = process.env.GCP_CLIENT_EMAIL;
 
@@ -145,7 +146,19 @@ async function getSKUFile(drive, folderId, email) {
 
     return res.data.files.length ? res.data.files[0] : null;
   } catch (error) {
-    throw new Error("Failed to check items file.");
+    throw new Error("Failed to check sku file.");
+  }
+}
+
+async function getRKUFile(drive, folderId, email) {
+  try {
+    const query = `mimeType='application/vnd.google-apps.spreadsheet' and name='RKU_${email}' and '${folderId}' in parents and trashed=false`;
+
+    const res = await drive.files.list({ q: query, fields: "files(id, name, webViewLink)" });
+
+    return res.data.files.length ? res.data.files[0] : null;
+  } catch (error) {
+    throw new Error("Failed to check rku file.");
   }
 }
 
@@ -506,7 +519,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     console.log(`Item Sheet: ${lastRow} rows, ${lastColumn} columns`);
 
     // Convert column index to letter notation
-    const getColumnLetter = (colIndex) => {
+    const get_Column_Letter = (colIndex) => {
       let letter = "";
       while (colIndex >= 0) {
         letter = String.fromCharCode((colIndex % 26) + 65) + letter;
@@ -515,7 +528,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
       return letter;
     };
 
-    const lastColumnLetter = getColumnLetter(lastColumn - 1);
+    const lastColumnLetter = get_Column_Letter(lastColumn - 1);
     const range = `${adminSheetName}!A1:${lastColumnLetter}${lastRow}`;
     console.log(`Fetching data from range: ${range}`);
 
@@ -639,8 +652,18 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
           formatRequest.dataValidation = cell.dataValidation;
         }
 
+        
         const filledRows = queryData.map((data, index) => {
           const row = Array(lastColumn).fill("");
+
+          const getColumnLetter = (index) => {
+            if (index < 26) {
+              return String.fromCharCode(65 + index); // Single letter A-Z
+            }
+            const firstChar = String.fromCharCode(64 + Math.floor(index / 26));
+            const secondChar = String.fromCharCode(65 + (index % 26));
+            return `${firstChar}${secondChar}`;
+          };
         
           if (productNameIndex !== -1) {
             requests.push({
@@ -965,6 +988,8 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
           
 
           if (skuIdIndex !== -1) {
+
+            const maxItemQuantityCell = `${getColumnLetter(maxItemQuantityIndex)}${index + 2}`
             requests.push({
               updateCells: {
                 range: {
@@ -979,7 +1004,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", "${data.variations}"), " ", "-"))`},
+                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", "${data.variations}", "_", ${data.variations}*${maxItemQuantityCell}), " ", "-"))`},
                       },
                     ],
                   },
@@ -1369,6 +1394,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
     // Step 6: Apply formulas based on column headers
     const SNoIndex = headers.indexOf("S.No");
     const SKUIDIndex = headers.indexOf("SKU Code (SKU ID)");
+    const productIDIndex = headers.indexOf("Product ID");
     const productNameIndex = headers.indexOf("Product Name");
     const categoryIndex = headers.indexOf("Category");
     const brandIndex = headers.indexOf("Brand or Manufacturer");
@@ -1456,6 +1482,32 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                       {
                         userEnteredValue: {
                           stringValue: SKUID || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
+          if (productIDIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: productIDIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: productIDIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: data.product_id || "",
                         },
                       },
                     ],
@@ -2332,9 +2384,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (RKUIdIndex !== -1) {
-            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex)}${index + 2}`;
-            const itemsPerShelfCell = `${getColumnLetter(itemsPerShelfIndex)}${index + 2}`;
-
+            const quantityCell = `${getColumnLetter(quantityIndex)}${index + 2}`;
 
             requests.push({
               updateCells: {
@@ -2350,7 +2400,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: ``
+                          formulaValue: `=TEXTJOIN(",", TRUE, "${data.iku_id}", ${quantityCell})`
                         },
                       },
                     ],
@@ -2360,6 +2410,284 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
               },
             });
           }
+
+          return row;
+        });
+        
+
+        // Apply formulas based on column headers
+        if (SNoIndex !== -1) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: userSheet.properties.sheetId,
+                startRowIndex: rowIndex + 1,
+                startColumnIndex: SNoIndex,
+                endRowIndex: rowIndex + 2,
+                endColumnIndex: SNoIndex + 1,
+              },
+              rows: [
+                {
+                  values: [
+                    {
+                      userEnteredValue: {
+                        formulaValue: `=IF(B${rowIndex + 2} <> "", ROW(A${rowIndex + 2}) - 1, "")`,
+                      },
+                    },
+                  ],
+                },
+              ],
+              fields: "userEnteredValue.formulaValue",
+            },
+          });
+        }
+        if (Object.keys(formatRequest).length > 0) {
+          requests.push({
+            updateCells: {
+              range: {
+                sheetId: userSheet.properties.sheetId,
+                startRowIndex: rowIndex,
+                startColumnIndex: colIndex,
+                endRowIndex: rowIndex + 1,
+                endColumnIndex: colIndex + 1,
+              },
+              rows: [{ values: [formatRequest] }],
+              fields: Object.keys(formatRequest).join(","),
+            },
+          });
+        }
+      });
+    });
+
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: userSheetId,
+        requestBody: { requests },
+      });
+      console.log("Formatting and data validation copied successfully!");
+    } else {
+      console.log("No formatting or validation found to copy.");
+    }
+
+    return file.data;
+  } catch (error) {
+    console.error("Error:", error.message);
+  }
+}
+
+
+async function createRKUSheet(drive, sheets, folderId, email, queryData) {
+  try {
+    console.log(`Creating a new rku Google Sheet inside User's My Drive...`);
+
+    // Step 1: Create a new Google Sheet in User's My Drive
+    const fileMetadata = {
+      name: `RKU_${email}`,
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      parents: [folderId],
+    };
+
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: "id, webViewLink, owners",
+    });
+
+    if (!file || !file.data || !file.data.id) {
+      console.error("File creation failed, no file data received.");
+      return;
+    }
+
+    const userSheetId = file.data.id;
+    console.log(`Sheet created successfully! ID: ${userSheetId}`);
+
+    // Step 2: Get Admin Sheet Details
+    console.log("Fetching Admin Sheet data...");
+    const adminSheets = await sheets.spreadsheets.get({
+      spreadsheetId: adminRkuSheetId,
+      includeGridData: true,
+    });
+
+    const adminSheet = adminSheets.data.sheets[0]; // Assuming first sheet
+    const adminSheetName = adminSheet.properties.title;
+
+    // Find the last non-empty row dynamically
+    let lastRow = 0;
+    let lastColumn = 0;
+    let headerRow = []; // To store header names
+
+    adminSheet.data[0].rowData.forEach((row, rowIndex) => {
+      if (queryData && queryData.length>0) {
+        lastRow = queryData.length + 1; // Last non-empty row
+      }
+      row.values?.forEach((cell, colIndex) => {
+        if (cell.effectiveValue) {
+          lastColumn = Math.max(lastColumn, colIndex + 1);
+        }
+        // Collect headers in the first row
+        if (rowIndex === 0 && cell.effectiveValue) {
+          headerRow.push(cell.effectiveValue);
+        }
+      });
+    });
+
+    console.log(`RKU Sheet: ${lastRow} rows, ${lastColumn} columns`);
+    console.log(headerRow);
+
+    // Convert column index to letter notation
+    const get_Column_Letter = (colIndex) => {
+      let letter = "";
+      while (colIndex >= 0) {
+        letter = String.fromCharCode((colIndex % 26) + 65) + letter;
+        colIndex = Math.floor(colIndex / 26) - 1;
+      }
+      return letter;
+    };
+
+    const lastColumnLetter = get_Column_Letter(lastColumn - 1);
+    const range = `${adminSheetName}!A1:${lastColumnLetter}${lastRow}`;
+    console.log(`Fetching data from range: ${range}`);
+
+    // Fetch data
+    const dataResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: adminRkuSheetId,
+      range: range,
+    });
+
+    const values = dataResponse.data.values || [];
+    console.log("Data fetched successfully!");
+
+    // Grant user permission
+    await grantPermission(drive, email, userSheetId);
+
+    // Get User Sheet details
+    const userSheets = await sheets.spreadsheets.get({
+      spreadsheetId: userSheetId,
+    });
+    const userSheet = userSheets.data.sheets[0]; // Assuming first sheet
+    const userSheetName = userSheet.properties.title;
+
+    // Step 3: Expand User Sheet Rows & Columns If Needed
+    const updateRequests = [];
+
+    if (lastColumn > userSheet.properties.gridProperties.columnCount) {
+      console.log(
+        `Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`
+      );
+      updateRequests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: userSheet.properties.sheetId,
+            gridProperties: { columnCount: lastColumn },
+          },
+          fields: "gridProperties.columnCount",
+        },
+      });
+    }
+
+    if (lastRow > userSheet.properties.gridProperties.rowCount) {
+      console.log(
+        `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
+      );
+      updateRequests.push({
+        updateSheetProperties: {
+          properties: {
+            sheetId: userSheet.properties.sheetId,
+            title: "RKU",
+            gridProperties: { rowCount: lastRow },
+          },
+          fields: "gridProperties.rowCount",
+        },
+      });
+    }
+
+    if (updateRequests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: userSheetId,
+        requestBody: { requests: updateRequests },
+      });
+      console.log("Sheet expanded successfully!");
+    }
+
+    // Step 4: Copy Data from Admin Sheet to User Sheet
+    if (values.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: userSheetId,
+        range: `${userSheetName}!A1`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values },
+      });
+      console.log("Data copied successfully!");
+    } else {
+      console.log("No data found in Admin Sheet.");
+    }
+
+    // Step 5: Copy Formatting & Data Validation
+    console.log("Copying formatting and data validation...");
+
+    const requests = [];
+    const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
+
+    const headers = headerRow.map((header) => header.stringValue || "");
+
+    // Step 6: Apply formulas based on column headers
+    const SNoIndex = headers.indexOf("S.No");
+    const RKUIDIndex = headers.indexOf("RKU ID");
+
+    // Loop through the rows and columns to apply dynamic formulas
+    adminSheet.data[0].rowData.forEach((row, rowIndex) => {
+      if (rowIndex >= lastRowIndex) return;
+      if (!row.values) return;
+
+      row.values.forEach((cell, colIndex) => {
+        if (colIndex >= lastColumn) return;
+
+        const formatRequest = {};
+        if (cell.effectiveFormat) {
+          formatRequest.userEnteredFormat = cell.effectiveFormat;
+        }
+        if (cell.dataValidation) {
+          formatRequest.dataValidation = cell.dataValidation;
+        }
+
+        const filledRows = queryData.map((data, index) => {
+          const row = Array(lastColumn).fill("");
+
+          const getColumnLetter = (index) => {
+            if (index < 26) {
+              return String.fromCharCode(65 + index); // Single letter A-Z
+            }
+            const firstChar = String.fromCharCode(64 + Math.floor(index / 26));
+            const secondChar = String.fromCharCode(65 + (index % 26));
+            return `${firstChar}${secondChar}`;
+          };
+
+        
+          if (RKUIDIndex !== -1) {
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: RKUIDIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: RKUIDIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          stringValue: data.rku_id || "",
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.stringValue",
+              },
+            });
+          }
+
 
           return row;
         });
@@ -2704,13 +3032,14 @@ async function createItemCsv(email, shop_no, rackData) {
   }
 }
 
-
 async function createSKUCsv(email, shop_no, rackWallData) {
   try {
     const result = await ambarsariyaPool.query(
       `SELECT 
           p.product_name,
+          p.product_id,
           p.product_type,
+          p.iku_id,
           i.sku_id, 
           p.product_weight_in_kg AS product_weight,
           i.no_of_racks, 
@@ -2748,7 +3077,7 @@ async function createSKUCsv(email, shop_no, rackWallData) {
       WHERE 
           i.shop_no = $1
       GROUP BY 
-          p.product_name,p.product_type, i.sku_id, p.product_weight_in_kg, i.no_of_racks, 
+          p.product_name, p.product_id, p.product_type,p.iku_id, i.sku_id, p.product_weight_in_kg, i.no_of_racks, 
           i.no_of_shelves, i.shelf_length, i.shelf_breadth, 
           i.shelf_height, p.manufacturing_date, p.expiry_date, 
           p.inventory_or_stock_quantity, p.area_size_lateral,
@@ -2801,4 +3130,69 @@ async function createSKUCsv(email, shop_no, rackWallData) {
 }
 
 
-module.exports = { processDrive, createItemCsv, createSKUCsv };
+async function createRKUCsv(email, shop_no) {
+  try {
+    const result = await ambarsariyaPool.query(
+      `SELECT
+          rku AS rku_id,
+          s.total_area_of_shelf ,
+          p.area_size_lateral ,
+          e.oauth_access_token,
+          e.oauth_refresh_token
+      FROM
+          sell.sku s
+      JOIN
+          sell.products p ON p.shop_no = s.shop_no AND p.product_id = s.product_id
+      JOIN 
+            sell.eshop_form e 
+            ON e.shop_no = s.shop_no,
+          unnest(s.rku_id) WITH ORDINALITY AS rku (rku, idx)
+      WHERE
+          s.shop_no = $1
+          AND s.rku_id IS NOT NULL
+          AND idx < array_length(s.rku_id, 1)
+      `,
+      [shop_no]
+    );
+
+    if (!result.rowCount) throw new Error("User not authenticated.");
+
+    const { oauth_access_token, oauth_refresh_token } = result.rows[0];
+
+    oAuth2Client.setCredentials({
+      access_token: oauth_access_token,
+      refresh_token: oauth_refresh_token,
+    });
+
+    const auth = new google.auth.JWT(
+      process.env.GCP_CLIENT_EMAIL,
+      null,
+      process.env.GCP_PRIVATE_KEY.replace(/\\n/g, "\n"), // Fix multi-line issue
+      [
+        "https://www.googleapis.com/auth/spreadsheets", 
+        "https://www.googleapis.com/auth/drive.file", // Ensure correct scope
+        "https://www.googleapis.com/auth/drive" // Ensure correct scope
+      ]
+    );
+
+    const drive = google.drive({ version: "v3", auth: oAuth2Client });
+    const sheets = google.sheets({ version: "v4", auth: auth });
+    const sheet2 = google.sheets({ version: "v4", auth: oAuth2Client });
+
+    // Step 1: Get or create base folder
+    const folderId = await getBaseFolder(drive, email);
+
+    // Step 3: Check if file exists, else create it
+    let file = await getRKUFile(drive, folderId, email);
+    if (!file) file = await createRKUSheet(drive, sheets,folderId, email,result.rows);
+
+    await grantPermission(drive, email, file.id);
+
+    return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
+  } catch (error) {
+    console.error("Error processing Drive:", error.message);
+    return { success: false, message: error.message };
+  }
+}
+
+module.exports = { processDrive, createItemCsv, createSKUCsv, createRKUCsv };

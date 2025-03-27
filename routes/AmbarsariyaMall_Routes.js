@@ -7,6 +7,7 @@ const usernameOtpController = require('../controllers/UserNameOtp_controller');
 const productController = require('../controllers/Product_Controller');
 const purchaseController = require('../controllers/PurchaseOrder_Controller');
 const itemController = require('../controllers/Item_Controller');
+const skuController = require('../controllers/SKU_Controller');
 const saleController = require('../controllers/SaleOrder_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
@@ -87,6 +88,7 @@ router.get('/purchase_orders/:po_no', purchaseController.get_purchase_orders);
 router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchase_order_numbers);
 router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_orders);
 router.get('/sell/items/:shop_no', itemController.get_items);
+router.get('/sell/sku/:shop_no', skuController.get_sku);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
 router.get('/sale_order_no/:seller_id', saleController.get_sale_order_numbers);
@@ -98,6 +100,7 @@ router.post('/sell/verify_otp', eshopController.post_verify_otp);
 router.post('/purchase_order', purchaseController.post_purchaseOrder);
 router.post('/sale_order', saleController.post_saleOrder);
 router.post('/sell/items', itemController.post_items);
+router.post('/sell/sku', skuController.post_sku);
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);

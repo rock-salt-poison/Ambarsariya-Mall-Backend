@@ -7,6 +7,7 @@ const driveController = require('../controllers/Drive_Controller');
 router.post('/open-file/:email', driveController.post_openFile);
 router.post('/open-items-file/:email/:shop_no', driveController.post_openItemsCSVFile);
 router.post('/open-sku-file/:email/:shop_no', driveController.post_openSKUCSVFile);
+router.post('/open-rku-file/:email/:shop_no', driveController.post_openRKUCSVFile);
 router.get('/check-drive-access/:email', driveController.get_checkDriveAccess);
 router.get('/request-drive-access', driveController.get_requestDriveAccess);
 router.get('/auth/google/callback', driveController.get_handleAuthCallback);

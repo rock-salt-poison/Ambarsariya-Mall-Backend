@@ -1,5 +1,5 @@
 const { google } = require("googleapis");
-const { processDrive, createItemCsv, createSKUCsv } = require("./GoogleDriveAccess/Drive");
+const { processDrive, createItemCsv, createSKUCsv, createRKUCsv } = require("./GoogleDriveAccess/Drive");
 const { oAuth2Client, driveService, sheetsService } = require("./GoogleDriveAccess/GoogleAuth");
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
@@ -228,10 +228,86 @@ const post_openSKUCSVFile = async (req, res) => {
     const response = await createSKUCsv(email, shop_no, rackWallData);
     return res.json(response);
   } catch (e) {
-    console.error("Error opening items file:", e);
+    console.error("Error opening sku file:", e);
     return res
       .status(500)
-      .json({ success: false, message: "Error opening items file" });
+      .json({ success: false, message: "Error opening sku file" });
+  }
+};
+
+const post_openRKUCSVFile = async (req, res) => {
+  const { email, shop_no } = req.params;
+
+  try {
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
+
+    // 🔍 Fetch OAuth tokens using JOIN on user_id
+    const result = await ambarsariyaPool.query(
+      `SELECT ef.oauth_access_token, ef.oauth_refresh_token, ef.user_id
+      FROM sell.eshop_form ef
+      JOIN sell.user_credentials uc 
+      ON ef.user_id = uc.user_id
+      WHERE uc.username = $1`,
+      [email]
+    );
+
+    if (!result.rows.length)
+      return res
+        .status(401)
+        .json({ success: false, message: "User not authenticated" });
+
+    let { oauth_access_token, oauth_refresh_token, user_id } = result.rows[0];
+
+    // 🔄 Refresh Token if Access Token is Expired
+    if (!oauth_access_token) {
+      if (!oauth_refresh_token) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Re-authentication required" });
+      }
+
+      try {
+        const { credentials } = await oAuth2Client.refreshToken(
+          oauth_refresh_token
+        );
+        oauth_access_token = credentials.access_token;
+
+        // ✅ Check if a new refresh token is provided, update both tokens if needed
+        if (credentials.refresh_token) {
+          oauth_refresh_token = credentials.refresh_token;
+
+          await ambarsariyaPool.query(
+            `UPDATE sell.eshop_form 
+            SET oauth_access_token = $1, oauth_refresh_token = $2 
+            WHERE user_id = $3`,
+            [oauth_access_token, oauth_refresh_token, user_id]
+          );
+        } else {
+          await ambarsariyaPool.query(
+            `UPDATE sell.eshop_form 
+            SET oauth_access_token = $1 
+            WHERE user_id = $2`,
+            [oauth_access_token, user_id]
+          );
+        }
+      } catch (refreshError) {
+        console.error("Failed to refresh token:", refreshError.message);
+        return res
+          .status(403)
+          .json({ success: false, message: "Re-authentication required" });
+      }
+    }
+
+    const response = await createRKUCsv(email, shop_no);
+    return res.json(response);
+  } catch (e) {
+    console.error("Error opening rku file:", e);
+    return res
+      .status(500)
+      .json({ success: false, message: "Error opening rku file" });
   }
 };
 
@@ -408,6 +484,7 @@ module.exports = {
   post_openFile,
   post_openItemsCSVFile,
   post_openSKUCSVFile,
+  post_openRKUCSVFile,
   get_checkDriveAccess,
   get_requestDriveAccess,
   get_handleAuthCallback,
