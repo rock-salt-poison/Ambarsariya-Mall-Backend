@@ -996,7 +996,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
       });
 
 
-    async function sendBatchRequests(sheets, spreadsheetId, requests, batchSize = 50000) {
+    async function sendBatchRequests(sheets, spreadsheetId, requests, batchSize = 1000) {
       console.log(`Total Requests to Process: ${requests.length}`);
       
       for (let i = 0; i < requests.length; i += batchSize) {
