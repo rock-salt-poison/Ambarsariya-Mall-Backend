@@ -652,524 +652,302 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
           formatRequest.dataValidation = cell.dataValidation;
         }
 
-        
-        const filledRows = queryData.map((data, index) => {
-          const row = Array(lastColumn).fill("");
 
-          const getColumnLetter = (index) => {
-            if (index < 26) {
-              return String.fromCharCode(65 + index); // Single letter A-Z
-            }
-            const firstChar = String.fromCharCode(64 + Math.floor(index / 26));
-            const secondChar = String.fromCharCode(65 + (index % 26));
-            return `${firstChar}${secondChar}`;
-          };
+        const createUpdateRequest = (sheetId, startRow, startCol, endCol, value, fieldType) => ({
+          updateCells: {
+            range: {
+              sheetId,
+              startRowIndex: startRow,
+              startColumnIndex: startCol,
+              endRowIndex: startRow + 1,
+              endColumnIndex: endCol,
+            },
+            rows: [
+              {
+                values: [
+                  {
+                    userEnteredValue:
+                      fieldType === "formula"
+                        ? { formulaValue: value }
+                        : { [`${fieldType}Value`]: value },
+                  },
+                ],
+              },
+            ],
+            fields: `userEnteredValue.${fieldType}Value`,
+          },
+        });
+        
+        // Helper function to get column letter for a given index
+        const getColumnLetter = (index) => {
+          if (index < 26) return String.fromCharCode(65 + index);
+          return String.fromCharCode(64 + Math.floor(index / 26)) + String.fromCharCode(65 + (index % 26));
+        };
+        
+        // Loop through the rows and columns to apply dynamic formulas
+        queryData.forEach((data, index) => {
+          const rowIndex = index + 1;
+        
+          const rowRequests = [];
         
           if (productNameIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: productNameIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: productNameIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          stringValue: data.product_name || "",
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.stringValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productNameIndex,
+                productNameIndex + 1,
+                data.product_name || "",
+                "string"
+              )
+            );
           }
-
+        
           if (productIDIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: productIDIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: productIDIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          stringValue: data.product_id || "",
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.stringValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productIDIndex,
+                productIDIndex + 1,
+                data.product_id || "",
+                "string"
+              )
+            );
           }
         
           if (itemIdIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: itemIdIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: itemIdIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          stringValue: data.iku_id || "",
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.stringValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                itemIdIndex,
+                itemIdIndex + 1,
+                data.iku_id || "",
+                "string"
+              )
+            );
           }
         
           if (noOfItemsIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: noOfItemsIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: noOfItemsIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.no_of_items || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                noOfItemsIndex,
+                noOfItemsIndex + 1,
+                data.no_of_items || 0,
+                "number"
+              )
+            );
           }
         
           if (maxProductQuantityIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: maxProductQuantityIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: maxProductQuantityIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.max_quantity || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                maxProductQuantityIndex,
+                maxProductQuantityIndex + 1,
+                data.max_quantity || 0,
+                "number"
+              )
+            );
           }
+        
           if (weightOfItemKgsIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: weightOfItemKgsIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: weightOfItemKgsIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseFloat(data.product_weight_in_kg) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                weightOfItemKgsIndex,
+                weightOfItemKgsIndex + 1,
+                parseFloat(data.product_weight_in_kg) || 0,
+                "number"
+              )
+            );
           }
-
+        
           if (storageOccupiedIndex !== -1) {
-            const itemPackageDimensionsCell = `${String.fromCharCode(65 + itemPackageDimensionsIndex)}${index + 2}`;
-            const noOfItemsCell = `${String.fromCharCode(65 + noOfItemsIndex)}${index + 2}`;
-
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: storageOccupiedIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: storageOccupiedIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          formulaValue: `=${itemPackageDimensionsCell} * ${noOfItemsCell}`,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            const itemPackageDimensionsCell = `${getColumnLetter(itemPackageDimensionsIndex)}${rowIndex + 1}`;
+            const noOfItemsCell = `${getColumnLetter(noOfItemsIndex)}${rowIndex + 1}`;
+        
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                storageOccupiedIndex,
+                storageOccupiedIndex + 1,
+                `=${itemPackageDimensionsCell} * ${noOfItemsCell}`,
+                "formula"
+              )
+            );
           }
-
+        
           if (quantityInStockIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: quantityInStockIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: quantityInStockIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.no_of_items || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                quantityInStockIndex,
+                quantityInStockIndex + 1,
+                data.no_of_items || 0,
+                "number"
+              )
+            );
           }
-
+        
           if (maxItemQuantityIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: maxItemQuantityIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: maxItemQuantityIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.max_quantity || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                maxItemQuantityIndex,
+                maxItemQuantityIndex + 1,
+                data.max_quantity || 0,
+                "number"
+              )
+            );
           }
         
           if (sellingPriceIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: sellingPriceIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: sellingPriceIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseFloat(
-                            (String(data.selling_price).split('$')?.[1] || '0').replace(/,/g, '')
-                          )                    
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            const sellingPrice = parseFloat((String(data.selling_price).split("$")[1] || "0").replace(/,/g, ""));
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                sellingPriceIndex,
+                sellingPriceIndex + 1,
+                sellingPrice || 0,
+                "number"
+              )
+            );
           }
-
+        
           if (costPriceIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: costPriceIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: costPriceIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.cost_price || 0,                        
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                costPriceIndex,
+                costPriceIndex + 1,
+                data.cost_price || 0,
+                "number"
+              )
+            );
           }
         
           if (itemPackageDimensionsIndex !== -1 && itemAreaIndex !== -1 && maxItemQuantityIndex !== -1) {
-            const itemAreaCell = `${String.fromCharCode(65 + itemAreaIndex)}${index + 2}`;
-            const maxItemQuantityCell = `${String.fromCharCode(65 + maxItemQuantityIndex)}${index + 2}`;
-
-            
-          
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: itemPackageDimensionsIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: itemPackageDimensionsIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          formulaValue: `=${itemAreaCell} * ${maxItemQuantityCell}`,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.formulaValue",
-              },
-            });
+            const itemAreaCell = `${getColumnLetter(itemAreaIndex)}${rowIndex + 1}`;
+            const maxItemQuantityCell = `${getColumnLetter(maxItemQuantityIndex)}${rowIndex + 1}`;
+        
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                itemPackageDimensionsIndex,
+                itemPackageDimensionsIndex + 1,
+                `=${itemAreaCell} * ${maxItemQuantityCell}`,
+                "formula"
+              )
+            );
           }
-          
-
+        
           if (skuIdIndex !== -1) {
-
-            const maxItemQuantityCell = `${getColumnLetter(maxItemQuantityIndex)}${index + 2}`
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: skuIdIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: skuIdIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          formulaValue: `=LOWER(SUBSTITUTE(CONCATENATE(C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", "${data.variations}", "_", ${data.variations}*${maxItemQuantityCell}), " ", "-"))`},
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.formulaValue",
-              },
-            });
+            const maxItemQuantityCell = `${getColumnLetter(maxItemQuantityIndex)}${rowIndex + 1}`;
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                skuIdIndex,
+                skuIdIndex + 1,
+                `=LOWER(SUBSTITUTE(CONCATENATE(C${index + 2}, "_", "${data.category_name}", "_", "${data.brand}", "_", "${data.variations}", "_", ${data.variations}*${maxItemQuantityCell}), " ", "-"))`,
+                "formula"
+              )
+            );
           }
-
 
           if (numberOfRacksIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: numberOfRacksIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: numberOfRacksIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseInt(rackData.no_of_racks) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                numberOfRacksIndex,
+                numberOfRacksIndex + 1,
+                parseInt(rackData.no_of_racks) || 0,
+                "number"
+              )
+            );
           }
+
           if (numberOfShelvesIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: numberOfShelvesIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: numberOfShelvesIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseInt(rackData.no_of_shelves) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                numberOfShelvesIndex,
+                numberOfShelvesIndex + 1,
+                parseInt(rackData.no_of_shelves) || 0,
+                "number"
+              )
+            );
           }
+
           if (lengthOfShelfIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: lengthOfShelfIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: lengthOfShelfIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseInt(rackData.shelf_length) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                lengthOfShelfIndex,
+                lengthOfShelfIndex + 1,
+                parseFloat(rackData.shelf_length) || 0,
+                "number"
+              )
+            );
           }
+
           if (breadthOfShelfIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: breadthOfShelfIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: breadthOfShelfIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseInt(rackData.shelf_breadth) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                breadthOfShelfIndex,
+                breadthOfShelfIndex + 1,
+                parseFloat(rackData.shelf_breadth) || 0,
+                "number"
+              )
+            );
           }
+
           if (heightOfShelfIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: heightOfShelfIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: heightOfShelfIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: parseInt(rackData.shelf_height) || 0,
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                heightOfShelfIndex,
+                heightOfShelfIndex + 1,
+                parseFloat(rackData.shelf_height) || 0,
+                "number"
+              )
+            );
           }
 
           if (itemAreaIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: itemAreaIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: itemAreaIndex + 1,
-                },
-                rows: [
-                  {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          numberValue: data.area_size_lateral || 0
-                        },
-                      },
-                    ],
-                  },
-                ],
-                fields: "userEnteredValue.numberValue",
-              },
-            });
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                itemAreaIndex,
+                itemAreaIndex + 1,
+                data.area_size_lateral || 0,
+                "number"
+              )
+            );
           }
-        
-          return row;
+
+          requests.push(...rowRequests);
+
         });
-        
 
         // Apply formulas based on column headers
         if (itemNoIndex !== -1) {
@@ -1197,11 +975,8 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             },
           });
         }
-
-
-        
-
-
+  
+  
         if (Object.keys(formatRequest).length > 0) {
           requests.push({
             updateCells: {
@@ -1217,18 +992,34 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             },
           });
         }
-      });
     });
+      });
+
+
+    async function sendBatchRequests(sheets, spreadsheetId, requests, batchSize = 50000) {
+      console.log(`Total Requests to Process: ${requests.length}`);
+      
+      for (let i = 0; i < requests.length; i += batchSize) {
+        const batch = requests.slice(i, i + batchSize);
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: batch,
+          },
+        });
+        console.log(`Processed ${i + batchSize > requests.length ? requests.length : i + batchSize} of ${requests.length} requests.`);
+      }
+      console.log("All requests processed successfully!");
+    }
+    
 
     if (requests.length > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: userSheetId,
-        requestBody: { requests },
-      });
-      console.log("Formatting and data validation copied successfully!");
+      await sendBatchRequests(sheets, userSheetId, requests);
+      console.log("Formatting and data applied successfully!");
     } else {
-      console.log("No formatting or validation found to copy.");
+      console.log("No formatting or data to apply.");
     }
+    
 
     return file.data;
   } catch (error) {
