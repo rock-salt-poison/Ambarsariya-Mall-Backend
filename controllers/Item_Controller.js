@@ -133,7 +133,7 @@ const get_items = async (req, res) => {
 
   try {
     if (shop_no) {
-      let query = `SELECT item_id FROM sell.items WHERE shop_no = $1`;
+      let query = `SELECT item_id, no_of_racks, no_of_shelves, shelf_length, shelf_height, shelf_breadth FROM sell.items WHERE shop_no = $1`;
       let result = await ambarsariyaPool.query(query, [shop_no]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid

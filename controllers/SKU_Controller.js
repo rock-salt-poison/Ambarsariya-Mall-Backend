@@ -113,7 +113,10 @@ const get_sku = async (req, res) => {
 
   try {
     if (shop_no) {
-      let query = `SELECT sku_id FROM sell.sku WHERE shop_no = $1`;
+      let query = `SELECT sku_id, 
+            no_of_walls_of_rack,
+            no_of_racks_in_a_wall 
+          FROM sell.sku WHERE shop_no = $1`;
       let result = await ambarsariyaPool.query(query, [shop_no]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
