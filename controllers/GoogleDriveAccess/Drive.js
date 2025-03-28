@@ -996,38 +996,30 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
       });
 
 
-      async function sendBatchWithRetry(sheets, spreadsheetId, requests, batchSize = 500, maxRetries = 5) {
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+      
+      async function sendBatchRequests(sheets, spreadsheetId, requests, batchSize = 500) {
         console.log(`Total Requests to Process: ${requests.length}`);
       
         for (let i = 0; i < requests.length; i += batchSize) {
           const batch = requests.slice(i, i + batchSize);
       
-          let retries = 0;
-          let success = false;
-      
-          while (retries < maxRetries && !success) {
-            try {
-              // Send batch update
-              await sheets.spreadsheets.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                  requests: batch,
-                },
-              });
-              success = true;
-              console.log(`Processed ${Math.min(i + batchSize, requests.length)} of ${requests.length} requests.`);
-            } catch (error) {
-              retries++;
-              console.error(`Error processing batch. Retrying in ${2 ** retries * 1000} ms...`);
-              await delay(2 ** retries * 1000); // Exponential backoff delay
-            }
+          try {
+            // Send batch update
+            await sheets.spreadsheets.batchUpdate({
+              spreadsheetId,
+              requestBody: {
+                requests: batch,
+              },
+            });
+            console.log(`Processed ${Math.min(i + batchSize, requests.length)} of ${requests.length} requests.`);
+          } catch (error) {
+            console.error(`Error processing batch: ${error.message}`);
           }
       
-          if (!success) {
-            console.error(`Failed to process batch after ${maxRetries} attempts. Skipping...`);
-          }
-      
-          // Add delay to prevent hitting quota
+          // Add a 2-second delay between batches to avoid quota limit
           if (i + batchSize < requests.length) {
             console.log("Waiting to prevent quota limit...");
             await delay(2000);
@@ -1037,10 +1029,11 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
         console.log("All requests processed successfully!");
       }
       
+      
     
 
     if (requests.length > 0) {
-      await sendBatchWithRetry(sheets, userSheetId, requests);
+      await sendBatchRequests(sheets, userSheetId, requests);
       console.log("Formatting and data applied successfully!");
     } else {
       console.log("No formatting or data to apply.");
