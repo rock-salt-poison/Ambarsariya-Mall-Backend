@@ -14,7 +14,7 @@ const post_items = async (req, res) => {
       const category_no = item.product_id.split("_")[4]; // e.g., 597 from prod_1_shop_3_597_wg_gloves
 
       // Create item_id dynamically
-      const item_id = `item_${item.item_no}_prod_${prod_no}_${item.shop_no}_category_${category_no}`;
+      const item_id = `item_${item.item_no}_prod_${prod_no}_${item.shop_no}_category_${category_no}_${item.itemID}`;
 
       // Insert or update the item
       const itemQuery = `

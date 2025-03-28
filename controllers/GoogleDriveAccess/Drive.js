@@ -2517,8 +2517,6 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
               },
             });
           }
-
-
           return row;
         });
         
@@ -2964,23 +2962,49 @@ async function createRKUCsv(email, shop_no) {
   try {
     const result = await ambarsariyaPool.query(
       `SELECT
-          rku AS rku_id,
-          s.total_area_of_shelf ,
-          p.area_size_lateral ,
+          rku.rku AS rku_id,
+          s.total_area_of_shelf,
+          s.sku_id,
+          s.total_shelves,
+          s.no_of_walls_of_rack,
+          s.no_of_racks_in_a_wall,
+          s.items_per_shelf,
+          s.max_rack,
+          s.shelves_extra,
+          s.max_shelves,
+          p.area_size_lateral,
+          p.product_id,
+          p.inventory_or_stock_quantity,
+          p.product_dimensions_width_in_cm,
+          p.product_dimensions_breadth_in_cm,
+          p.product_dimensions_height_in_cm,
           e.oauth_access_token,
-          e.oauth_refresh_token
+          e.oauth_refresh_token,
+          t.item_id,
+          t.no_of_shelves,
+          t.shelf_length,
+          t.shelf_breadth,
+          t.shelf_height,
+          t.item_area,
+          t.no_of_items
       FROM
           sell.sku s
       JOIN
-          sell.products p ON p.shop_no = s.shop_no AND p.product_id = s.product_id
-      JOIN 
-            sell.eshop_form e 
-            ON e.shop_no = s.shop_no,
+          sell.products p 
+          ON p.shop_no = s.shop_no AND p.product_id = s.product_id
+      JOIN
+          sell.eshop_form e 
+          ON e.shop_no = s.shop_no
+      JOIN
+          sell.items t  -- Removed DISTINCT ON to get all item rows
+          ON t.shop_no = s.shop_no AND t.product_id = s.product_id
+      CROSS JOIN
           unnest(s.rku_id) WITH ORDINALITY AS rku (rku, idx)
       WHERE
           s.shop_no = $1
           AND s.rku_id IS NOT NULL
-          AND idx < array_length(s.rku_id, 1)
+          AND idx <= array_length(s.rku_id, 1)
+          AND regexp_replace(t.item_id, '.*_category_[0-9]+_', '') = rku;
       `,
       [shop_no]
     );
