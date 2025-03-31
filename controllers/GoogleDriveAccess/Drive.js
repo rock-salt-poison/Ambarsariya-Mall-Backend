@@ -2568,7 +2568,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
                 rowIndex,
                 RKUIDIndex,
                 RKUIDIndex + 1,
-                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", TEXT(NOW(), "yyyy-mm-ddTHH:MM:SS"))`,
+                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}","_","${data.item_id}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", TEXT(NOW(), "yyyy-mm-ddThh:mm:ss.000"))`,
                 "formula"
               )
             );
