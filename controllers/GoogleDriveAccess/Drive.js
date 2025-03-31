@@ -2461,6 +2461,8 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
 
     // Step 6: Apply formulas based on column headers
     const SNoIndex = headers.indexOf("S.No");
+    const productIndex = headers.indexOf("Product");
+    const itemIndex = headers.indexOf("Item");
     const RKUIDIndex = headers.indexOf("RKU ID");
     const shelfDimensionsAndSpecificationsIndex = headers.indexOf("Shelf Dimensions and Specifications");
     const productDimensionsIndex = headers.indexOf("Product Dimensions");
@@ -2532,6 +2534,32 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
           const rowIndex = index + 1;
         
           const rowRequests = [];
+
+          if (productIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productIndex,
+                productIndex + 1,
+                data.product_id,
+                "string"
+              )
+            );
+          }
+
+          if (itemIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                itemIndex,
+                itemIndex + 1,
+                data.item_id,
+                "string"
+              )
+            );
+          }
         
           if (RKUIDIndex !== -1) {
             rowRequests.push(
@@ -2540,7 +2568,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
                 rowIndex,
                 RKUIDIndex,
                 RKUIDIndex + 1,
-                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", "${new Date().toISOString()}")`,
+                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", TEXT(NOW(), "yyyy-mm-ddTHH:MM:SS"))`,
                 "formula"
               )
             );

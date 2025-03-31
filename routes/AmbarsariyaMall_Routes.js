@@ -8,6 +8,7 @@ const productController = require('../controllers/Product_Controller');
 const purchaseController = require('../controllers/PurchaseOrder_Controller');
 const itemController = require('../controllers/Item_Controller');
 const skuController = require('../controllers/SKU_Controller');
+const rkuController = require('../controllers/RKU_Controller');
 const saleController = require('../controllers/SaleOrder_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
@@ -101,6 +102,7 @@ router.post('/purchase_order', purchaseController.post_purchaseOrder);
 router.post('/sale_order', saleController.post_saleOrder);
 router.post('/sell/items', itemController.post_items);
 router.post('/sell/sku', skuController.post_sku);
+router.post('/sell/rku', rkuController.post_rku);
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
