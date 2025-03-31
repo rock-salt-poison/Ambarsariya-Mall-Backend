@@ -26,7 +26,7 @@ const post_products = async (req, res) => {
       const productNameAbbreviation = product.product_name
         .split(" ")
         .map(word => word[0])
-        .join("")
+        .join("_")
         .toLowerCase();
 
       const product_id = `prod_${product.product_no}_${product.shop_no}_${product.category}_${productNameAbbreviation}_${product.product_type.toLowerCase()}`;
