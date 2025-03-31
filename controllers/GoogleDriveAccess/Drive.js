@@ -992,7 +992,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             },
           });
         }
-    });
+      });
       });
 
 
@@ -2462,6 +2462,24 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
     // Step 6: Apply formulas based on column headers
     const SNoIndex = headers.indexOf("S.No");
     const RKUIDIndex = headers.indexOf("RKU ID");
+    const shelfDimensionsAndSpecificationsIndex = headers.indexOf("Shelf Dimensions and Specifications");
+    const productDimensionsIndex = headers.indexOf("Product Dimensions");
+    const numberOfWallsIndex = headers.indexOf("Number of Walls");
+    const numberOfRacksInAWallIndex = headers.indexOf("Number of Racks in a Wall");
+    const areaOfItemIDIndex = headers.indexOf("Area of Item ID");
+    const productsPerShelfIndex = headers.indexOf("Product (s) per Shelf ");
+    const maxRacksIndex = headers.indexOf("Max Racks");
+    const extraShelvesMaxIndex = headers.indexOf("Extra Shelves (Max)");
+    const rackNoRKUIDIndex = headers.indexOf("Rack No (RKU ID)");
+    const shelfNoProductIDIndex = headers.indexOf("Shelf No (Product ID)");
+    const productIDIndex = headers.indexOf("Product ID");
+    const placementMaxIndex = headers.indexOf("Placement (max)");
+    const quantitySaleIndex = headers.indexOf("Quantity Sale");
+    const placementForSOIndex = headers.indexOf("Placement for S.O");
+    const updateQuantityIndex = headers.indexOf("Update Quantity");
+    const quantityPurchaseIndex = headers.indexOf("Quantity Purchase");
+    const placementForPOIndex = headers.indexOf("Placement for P.O");
+
 
     // Loop through the rows and columns to apply dynamic formulas
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
@@ -2479,48 +2497,273 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
           formatRequest.dataValidation = cell.dataValidation;
         }
 
-        const filledRows = queryData.map((data, index) => {
-          const row = Array(lastColumn).fill("");
-
-          const getColumnLetter = (index) => {
-            if (index < 26) {
-              return String.fromCharCode(65 + index); // Single letter A-Z
-            }
-            const firstChar = String.fromCharCode(64 + Math.floor(index / 26));
-            const secondChar = String.fromCharCode(65 + (index % 26));
-            return `${firstChar}${secondChar}`;
-          };
-
-        
-          if (RKUIDIndex !== -1) {
-            requests.push({
-              updateCells: {
-                range: {
-                  sheetId: userSheet.properties.sheetId,
-                  startRowIndex: index + 1,
-                  startColumnIndex: RKUIDIndex,
-                  endRowIndex: index + 2,
-                  endColumnIndex: RKUIDIndex + 1,
-                },
-                rows: [
+        const createUpdateRequest = (sheetId, startRow, startCol, endCol, value, fieldType) => ({
+          updateCells: {
+            range: {
+              sheetId,
+              startRowIndex: startRow,
+              startColumnIndex: startCol,
+              endRowIndex: startRow + 1,
+              endColumnIndex: endCol,
+            },
+            rows: [
+              {
+                values: [
                   {
-                    values: [
-                      {
-                        userEnteredValue: {
-                          stringValue: data.rku_id || "",
-                        },
-                      },
-                    ],
+                    userEnteredValue:
+                      fieldType === "formula"
+                        ? { formulaValue: value }
+                        : { [`${fieldType}Value`]: value },
                   },
                 ],
-                fields: "userEnteredValue.stringValue",
               },
-            });
-          }
-          return row;
+            ],
+            fields: `userEnteredValue.${fieldType}Value`,
+          },
         });
         
+        // Helper function to get column letter for a given index
+        const getColumnLetter = (index) => {
+          if (index < 26) return String.fromCharCode(65 + index);
+          return String.fromCharCode(64 + Math.floor(index / 26)) + String.fromCharCode(65 + (index % 26));
+        };
 
+        queryData.forEach((data, index) => {
+          const rowIndex = index + 1;
+        
+          const rowRequests = [];
+        
+          if (RKUIDIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                RKUIDIndex,
+                RKUIDIndex + 1,
+                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", "${new Date().toISOString()}")`,
+                "formula"
+              )
+            );
+          }
+        
+          if (shelfDimensionsAndSpecificationsIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                shelfDimensionsAndSpecificationsIndex,
+                shelfDimensionsAndSpecificationsIndex + 1,
+                `=CONCATENATE("L_", ${data.shelf_length}, "_B_", ${data.shelf_breadth}, "_H_", ${data.shelf_height})`,
+                "formula"
+              )
+            );
+          }
+
+          if (productDimensionsIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productDimensionsIndex,
+                productDimensionsIndex + 1,
+                `=CONCATENATE("L_", ${data.product_dimensions_width_in_cm}, "_B_", ${data.product_dimensions_breadth_in_cm}, "_H_", ${data.product_dimensions_height_in_cm})`,
+                "formula"
+              )
+            );
+          }
+
+          if (numberOfWallsIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                numberOfWallsIndex,
+                numberOfWallsIndex + 1,
+                parseInt(data.no_of_walls_of_rack),
+                "number"
+              )
+            );
+          }
+
+          if (numberOfRacksInAWallIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                numberOfRacksInAWallIndex,
+                numberOfRacksInAWallIndex + 1,
+                parseInt(data.no_of_racks_in_a_wall),
+                "number"
+              )
+            );
+          }
+
+          if (areaOfItemIDIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                areaOfItemIDIndex,
+                areaOfItemIDIndex + 1,
+                parseFloat(data.item_area),
+                "number"
+              )
+            );
+          }
+
+          if (productsPerShelfIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productsPerShelfIndex,
+                productsPerShelfIndex + 1,
+                parseInt(data.items_per_shelf),
+                "number"
+              )
+            );
+          }
+
+          if (maxRacksIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                maxRacksIndex,
+                maxRacksIndex + 1,
+                parseInt(data.max_rack),
+                "number"
+              )
+            );
+          }
+        
+          if (extraShelvesMaxIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                extraShelvesMaxIndex,
+                extraShelvesMaxIndex + 1,
+                parseInt(data.shelves_extra),
+                "number"
+              )
+            );
+          }
+
+          if (rackNoRKUIDIndex !== -1) {
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                rackNoRKUIDIndex,
+                rackNoRKUIDIndex + 1,
+                 `=ROUNDDOWN((${data.no_of_items}/${data.items_per_shelf})/${data.no_of_shelves})`,
+                "formula"
+              )
+            );
+          }
+
+          if (shelfNoProductIDIndex !== -1) {
+            const rackNoRKUIDCell = `${getColumnLetter(rackNoRKUIDIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                shelfNoProductIDIndex,
+                shelfNoProductIDIndex + 1,
+                 `=(${rackNoRKUIDCell} * ${data.no_of_shelves})/${rackNoRKUIDCell}`,
+                "formula"
+              )
+            );
+          }
+
+          if (productIDIndex !== -1) {
+            const RKUIDCell = `${getColumnLetter(RKUIDIndex)}${rowIndex + 1}`;
+            const productDimensionsCell = `${getColumnLetter(productDimensionsIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                productIDIndex,
+                productIDIndex + 1,
+                 `=CONCATENATE(${RKUIDCell},"_",${productDimensionsCell},"_")`,
+                "formula"
+              )
+            );
+          }
+
+          if (placementMaxIndex !== -1) {
+            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${rowIndex + 1}`;
+            const numberOfRacksInAWallCell = `${getColumnLetter(numberOfRacksInAWallIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                placementMaxIndex,
+                placementMaxIndex + 1,
+                 `=CONCATENATE("Number of walls ", ROUNDDOWN(${data.max_shelves}/${maxRacksCell}), " + Number of Racks ",ROUNDDOWN((${data.items_per_shelf}/${data.items_per_shelf})/${numberOfRacksInAWallCell}), " + Shelves ", ${data.shelves_extra} )`,
+                "formula"
+              )
+            );
+          }
+
+          if (placementForSOIndex !== -1) {
+            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${rowIndex + 1}`;
+            const numberOfRacksInAWallCell = `${getColumnLetter(numberOfRacksInAWallIndex)}${rowIndex + 1}`;
+            const numberOfWallsCell = `${getColumnLetter(numberOfWallsIndex)}${rowIndex + 1}`;
+            const quantitySaleCell = `${getColumnLetter(quantitySaleIndex)}${rowIndex + 1}`;
+            const productsPerShelfCell = `${getColumnLetter(productsPerShelfIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                placementForSOIndex,
+                placementForSOIndex + 1,
+                 `=CONCATENATE("Wall No : ", ROUNDDOWN((${maxRacksCell}/${data.items_per_shelf})* (${data.no_of_shelves})/${numberOfRacksInAWallCell}), " Rack No : ", ROUNDDOWN((${maxRacksCell}/${data.items_per_shelf})* (${data.no_of_shelves})/${numberOfWallsCell}), " Shelf No : ", ROUNDUP(${quantitySaleCell}/${productsPerShelfCell}), " Total Quantity Required : ", ${quantitySaleCell})`,
+                "formula"
+              )
+            );
+          }
+
+          if (updateQuantityIndex !== -1) {
+            const quantitySaleCell = `${getColumnLetter(quantitySaleIndex)}${rowIndex + 1}`;
+            const quantityPurchaseCell = `${getColumnLetter(quantityPurchaseIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                updateQuantityIndex,
+                updateQuantityIndex + 1,
+                 `=${data.no_of_items}-${quantitySaleCell}+${quantityPurchaseCell}`,
+                "formula"
+              )
+            );
+          }
+
+          if (placementForPOIndex !== -1) {
+            const updateQuantityCell = `${getColumnLetter(updateQuantityIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                placementForPOIndex,
+                placementForPOIndex + 1,
+                 `=CONCATENATE("Rack No 1 to ",ROUNDDOWN((${updateQuantityCell}/${data.items_per_shelf})/${data.no_of_shelves}), " Extra Shelf ", ROUNDUP((${updateQuantityCell}/${data.items_per_shelf})/${data.no_of_shelves}))`,
+                "formula"
+              )
+            );
+          }
+        
+
+          requests.push(...rowRequests);
+
+        });
         // Apply formulas based on column headers
         if (SNoIndex !== -1) {
           requests.push({
@@ -2547,6 +2790,8 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
             },
           });
         }
+
+
         if (Object.keys(formatRequest).length > 0) {
           requests.push({
             updateCells: {
@@ -2565,15 +2810,69 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
       });
     });
 
-    if (requests.length > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: userSheetId,
-        requestBody: { requests },
-      });
-      console.log("Formatting and data validation copied successfully!");
-    } else {
-      console.log("No formatting or validation found to copy.");
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
+    
+    // Exponential backoff for retrying failed requests
+    async function exponentialBackoff(attempt) {
+      const delayTime = Math.pow(2, attempt) * 1000; // 2^attempt * 1000ms
+      console.log(`Retrying after ${delayTime / 1000} seconds...`);
+      await delay(delayTime);
+    }
+    
+    async function sendBatchRequests(sheets, spreadsheetId, requests, batchSize = 10000) {
+      console.log(`Total Requests to Process: ${requests.length}`);
+    
+      for (let i = 0; i < requests.length; i += batchSize) {
+        const batch = requests.slice(i, i + batchSize);
+    
+        let success = false;
+        let attempt = 0;
+        
+        while (!success && attempt < 5) {  // Max 5 retry attempts
+          try {
+            // Send batch update
+            await sheets.spreadsheets.batchUpdate({
+              spreadsheetId,
+              requestBody: {
+                requests: batch,
+              },
+            });
+    
+            console.log(`Processed ${Math.min(i + batchSize, requests.length)} of ${requests.length} requests.`);
+            success = true;
+          } catch (error) {
+            if (error.code === 429 || error.message.includes("Quota exceeded")) {
+              console.error(`Quota limit reached. Retrying... (Attempt ${attempt + 1})`);
+              attempt++;
+              await exponentialBackoff(attempt);
+            } else {
+              console.error(`Error processing batch: ${error.message}`);
+              break; // Exit the loop if it's not a quota error
+            }
+          }
+        }
+    
+        // Add a 2-second delay to avoid hitting quota limits
+        if (i + batchSize < requests.length) {
+          console.log("Waiting to prevent quota limit...");
+          await delay(2000);
+        }
+      }
+    
+      console.log("All requests processed successfully!");
+    }
+    
+  
+
+  if (requests.length > 0) {
+    await sendBatchRequests(sheets, userSheetId, requests);
+    console.log("Formatting and data applied successfully!");
+  } else {
+    console.log("No formatting or data to apply.");
+  }
+  
 
     return file.data;
   } catch (error) {
