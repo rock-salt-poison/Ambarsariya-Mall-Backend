@@ -4,6 +4,7 @@ const fs = require("fs");
 const { oAuth2Client, sheetsService } = require("./GoogleAuth");
 const { createDbPool } = require("../../db_config/db");
 const XLSX = require("xlsx");
+const { broadcastMessage } = require("../../webSocket");
 
 
 const ambarsariyaPool = createDbPool();
@@ -31,7 +32,9 @@ async function getBaseFolder(drive, email) {
         
         if (ownerEmail !== email) {
           console.log(`Found folder '${folderName}', but it belongs to ${ownerEmail}, not ${email}. Creating a new one.`);
+          broadcastMessage(`Creating a new folder.`);
         } else {
+          broadcastMessage(`Folder found for user.`);
           console.log("Folder found for user:", email, folder.id);
           return folder.id;
         }
@@ -46,10 +49,11 @@ async function getBaseFolder(drive, email) {
       },
       fields: "id",
     });
-
+    broadcastMessage(`New folder created for user.`);
     console.log("New folder created for user:", email, folder.data.id);
     return folder.data.id;
   } catch (error) {
+    broadcastMessage(`Failed to get or create user-specific base folder.`);
     console.error("Error getting/creating user-specific folder:", error.message);
     throw new Error("Failed to get or create user-specific base folder.");
   }
@@ -77,17 +81,20 @@ async function createSubFolders(drive, parentFolderId, serviceAccountEmail) {
 
         console.log(`Sub-folder '${folderName}' created inside base folder.`);
         folderIds[folderName] = folder.data.id;
+        broadcastMessage(`Sub-folder '${folderName}' created inside base folder.`)
 
         // Grant permission to service account
         await grantPermissionToFolder(drive, folder.data.id, serviceAccountEmail);
       } else {
         console.log(`Sub-folder '${folderName}' already exists.`);
+        broadcastMessage(`Sub-folder '${folderName}' already exists.`)
         folderIds[folderName] = folderRes.data.files[0].id;
       }
     }
 
     return folderIds;
   } catch (error) {
+    broadcastMessage(`Error creating sub-folders.`);
     console.error("Error creating sub-folders:", error.message);
     throw new Error("Failed to create sub-folders.");
   }
@@ -106,8 +113,10 @@ async function grantPermissionToFolder(drive, folderId, serviceAccountEmail) {
     });
 
     console.log(`Permission granted to service account for folder ID: ${folderId}`);
+    broadcastMessage(`Permission granted to service account for folder ID: ${folderId}`);
   } catch (error) {
     console.error(`Error granting permission to folder ${folderId}:`, error.message);
+    broadcastMessage(`Error granting permission to folder ${folderId}`);
     throw new Error("Failed to grant permission.");
   }
 }
@@ -122,6 +131,7 @@ async function getProductsFile(drive, folderId, email) {
 
     return res.data.files.length ? res.data.files[0] : null;
   } catch (error) {
+    broadcastMessage("Failed to check products file.");
     throw new Error("Failed to check products file.");
   }
 }
@@ -134,6 +144,7 @@ async function getItemsFile(drive, folderId, email) {
 
     return res.data.files.length ? res.data.files[0] : null;
   } catch (error) {
+    broadcastMessage("Failed to check items file.");
     throw new Error("Failed to check items file.");
   }
 }
@@ -146,6 +157,7 @@ async function getSKUFile(drive, folderId, email) {
 
     return res.data.files.length ? res.data.files[0] : null;
   } catch (error) {
+    broadcastMessage("Failed to check sku file.");
     throw new Error("Failed to check sku file.");
   }
 }
@@ -158,12 +170,14 @@ async function getRKUFile(drive, folderId, email) {
 
     return res.data.files.length ? res.data.files[0] : null;
   } catch (error) {
+    broadcastMessage("Failed to check rku file.");
     throw new Error("Failed to check rku file.");
   }
 }
 
 async function copyAdminSheet(drive, sheets, folderId, email) {
   try {
+    broadcastMessage("Creating a new Google Sheet inside My Drive....");
     console.log(`Creating a new Google Sheet inside User's My Drive...`);
 
     // Step 1: Create a new Google Sheet in User's My Drive
@@ -179,14 +193,17 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
     });
 
     if (!file || !file.data || !file.data.id) {
+      broadcastMessage("File creation failed, no file data received.");
       console.error('File creation failed, no file data received.');
       return;
     }
 
     const userSheetId = file.data.id;
+    broadcastMessage(`Sheet created successfully! ID: ${userSheetId}`);
     console.log(`Sheet created successfully! ID: ${userSheetId}`);
 
     // Step 2: Get Admin Sheet Details
+    broadcastMessage(`Fetching Sheet data.`);
     console.log("Fetching Admin Sheet data...");
     const adminSheets = await sheets.spreadsheets.get({
       spreadsheetId: adminSheetId,
@@ -246,6 +263,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
     const values = dataResponse.data.values || [];
     console.log("Data fetched successfully!");
+    broadcastMessage(`Data fetched successfully!`);
 
     // Grant user permission
     await grantPermission(drive, email, userSheetId);
@@ -260,6 +278,8 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
     if (lastColumn > userSheet.properties.gridProperties.columnCount) {
       console.log(`Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`);
+      broadcastMessage(`Expanding columns...`);
+
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -273,6 +293,8 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
     if (lastRow > userSheet.properties.gridProperties.rowCount) {
       console.log(`Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`);
+      broadcastMessage(`Expanding rows...`);
+
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -291,6 +313,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         requestBody: { requests: updateRequests },
       });
       console.log("Sheet expanded successfully!");
+      broadcastMessage(`Sheet expanded successfully!`);
     }
 
     // Step 4: Copy Data from Admin Sheet to User Sheet
@@ -302,12 +325,15 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         requestBody: { values },
       });
       console.log("Data copied successfully!");
+      broadcastMessage(`Data copied successfully!`);
     } else {
       console.log("No data found in Admin Sheet.");
+      broadcastMessage(`No data found in Admin Sheet.`);
     }
-
+    
     // Step 5: Copy Formatting & Data Validation
     console.log("Copying formatting and data validation...");
+    broadcastMessage(`Copying formatting and data validation...`);
 
     const requests = [];
     const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
@@ -442,14 +468,17 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
         spreadsheetId: userSheetId,
         requestBody: { requests },
       });
+      broadcastMessage(`Formatting and data validation copied successfully!`);
       console.log("Formatting and data validation copied successfully!");
     } else {
+      broadcastMessage(`No formatting or validation found to copy.`);
       console.log("No formatting or validation found to copy.");
     }
-
+    
     return file.data;
-
+    
   } catch (error) {
+    broadcastMessage(`Error : ${error.message}`);
     console.error("Error:", error.message);
   }
 }
@@ -457,6 +486,7 @@ async function copyAdminSheet(drive, sheets, folderId, email) {
 
 async function createItemsSheet(drive, sheets, folderId, email, queryData, rackData) {
   try {
+    broadcastMessage(`Creating a new items Google Sheet inside My Drive...`);
     console.log(`Creating a new items Google Sheet inside User's My Drive...`);
     console.log('rackdata : ', rackData);
     console.log('adminSheetItem', adminItemSheetId);
@@ -475,15 +505,18 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     });
 
     if (!file || !file.data || !file.data.id) {
+      broadcastMessage("File creation failed, no file data received.");
       console.error("File creation failed, no file data received.");
       return;
     }
 
     const userSheetId = file.data.id;
+    broadcastMessage(`Sheet created successfully!`);
     console.log(`Sheet created successfully! ID: ${userSheetId}`);
 
     // Step 2: Get Admin Sheet Details
     console.log("Fetching Admin Sheet data...");
+    broadcastMessage("Fetching Admin Sheet data...");
     console.log('adminSheets');
     const adminSheets = await sheets.spreadsheets.get({
       spreadsheetId: adminItemSheetId,
@@ -540,7 +573,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
 
     const values = dataResponse.data.values || [];
     console.log("Data fetched successfully!");
-
+    broadcastMessage("Data fetched successfully!");
     // Grant user permission
     await grantPermission(drive, email, userSheetId);
 
@@ -558,6 +591,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
       console.log(
         `Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`
       );
+      broadcastMessage("Expanding columns...");
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -573,6 +607,8 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
       console.log(
         `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
       );
+      broadcastMessage("Expanding rows...");
+
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -591,6 +627,8 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
         requestBody: { requests: updateRequests },
       });
       console.log("Sheet expanded successfully!");
+      broadcastMessage("Sheet expanded successfully!");
+
     }
 
     // Step 4: Copy Data from Admin Sheet to User Sheet
@@ -602,12 +640,15 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
         requestBody: { values },
       });
       console.log("Data copied successfully!");
+      broadcastMessage("Data copied successfully!")
     } else {
       console.log("No data found in Admin Sheet.");
+      broadcastMessage("No data found in the Sheet.");
     }
 
     // Step 5: Copy Formatting & Data Validation
     console.log("Copying formatting and data validation...");
+    broadcastMessage("Copying formatting and data validation...");
 
     const requests = [];
     const lastRowIndex = lastRow; // Ensure this is dynamic, use lastRow
@@ -1031,6 +1072,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
             } catch (error) {
               if (error.code === 429 || error.message.includes("Quota exceeded")) {
                 console.error(`Quota limit reached. Retrying... (Attempt ${attempt + 1})`);
+                broadcastMessage("Quota limit reached.");
                 attempt++;
                 await exponentialBackoff(attempt);
               } else {
@@ -1054,8 +1096,10 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
 
     if (requests.length > 0) {
       await sendBatchRequests(sheets, userSheetId, requests);
+      broadcastMessage("Formatting and data applied successfully!");
       console.log("Formatting and data applied successfully!");
     } else {
+      broadcastMessage("No formatting or data to apply.");
       console.log("No formatting or data to apply.");
     }
     
@@ -1068,6 +1112,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
 
 async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWallData) {
   try {
+    broadcastMessage(`Creating a new sku Google Sheet inside My Drive...`);
     console.log(`Creating a new sku Google Sheet inside User's My Drive...`);
     console.log('rackdata : ', rackWallData);
     
@@ -1086,14 +1131,17 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
 
     if (!file || !file.data || !file.data.id) {
       console.error("File creation failed, no file data received.");
+      broadcastMessage("File creation failed, no file data received.");
       return;
     }
 
     const userSheetId = file.data.id;
+    broadcastMessage("Sheet created successfully!");
     console.log(`Sheet created successfully! ID: ${userSheetId}`);
 
     // Step 2: Get Admin Sheet Details
     console.log("Fetching Admin Sheet data...");
+    broadcastMessage("Fetching Admin Sheet data...");
     const adminSheets = await sheets.spreadsheets.get({
       spreadsheetId: adminSkuSheetId,
       includeGridData: true,
@@ -1147,6 +1195,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
 
     const values = dataResponse.data.values || [];
     console.log("Data fetched successfully!");
+    broadcastMessage("Data fetched successfully!");
 
     // Grant user permission
     await grantPermission(drive, email, userSheetId);
@@ -1165,6 +1214,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
       console.log(
         `Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`
       );
+      broadcastMessage("Expanding columns...")
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -1180,6 +1230,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
       console.log(
         `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
       );
+      broadcastMessage("Expanding rows...")
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -1198,6 +1249,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
         requestBody: { requests: updateRequests },
       });
       console.log("Sheet expanded successfully!");
+      broadcastMessage("Sheet expanded successfully!");
     }
 
     // Step 4: Copy Data from Admin Sheet to User Sheet
@@ -1209,11 +1261,14 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
         requestBody: { values },
       });
       console.log("Data copied successfully!");
+      broadcastMessage("Data copied successfully!");
     } else {
+      broadcastMessage("No data found in Admin Sheet.");
       console.log("No data found in Admin Sheet.");
     }
-
+    
     // Step 5: Copy Formatting & Data Validation
+    broadcastMessage("Copying formatting and data validation...");
     console.log("Copying formatting and data validation...");
 
     const requests = [];
@@ -2294,8 +2349,10 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
         spreadsheetId: userSheetId,
         requestBody: { requests },
       });
+      broadcastMessage("Formatting and data validation copied successfully!");
       console.log("Formatting and data validation copied successfully!");
     } else {
+      broadcastMessage("No formatting or validation found to copy.");
       console.log("No formatting or validation found to copy.");
     }
 
@@ -2308,6 +2365,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
 
 async function createRKUSheet(drive, sheets, folderId, email, queryData) {
   try {
+    broadcastMessage("Creating a new rku Google Sheet inside My Drive...");
     console.log(`Creating a new rku Google Sheet inside User's My Drive...`);
 
     // Step 1: Create a new Google Sheet in User's My Drive
@@ -2324,14 +2382,17 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
 
     if (!file || !file.data || !file.data.id) {
       console.error("File creation failed, no file data received.");
+      broadcastMessage("File creation failed, no file data received.");
       return;
     }
 
     const userSheetId = file.data.id;
+    broadcastMessage("Sheet created successfully!");
     console.log(`Sheet created successfully! ID: ${userSheetId}`);
-
+    
     // Step 2: Get Admin Sheet Details
     console.log("Fetching Admin Sheet data...");
+    broadcastMessage("Fetching Admin Sheet data...");
     const adminSheets = await sheets.spreadsheets.get({
       spreadsheetId: adminRkuSheetId,
       includeGridData: true,
@@ -2385,6 +2446,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
 
     const values = dataResponse.data.values || [];
     console.log("Data fetched successfully!");
+    broadcastMessage("Data fetched successfully!");
 
     // Grant user permission
     await grantPermission(drive, email, userSheetId);
@@ -2403,6 +2465,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
       console.log(
         `Expanding columns from ${userSheet.properties.gridProperties.columnCount} to ${lastColumn}...`
       );
+      broadcastMessage("Expanding columns...");
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -2413,11 +2476,12 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
         },
       });
     }
-
+    
     if (lastRow > userSheet.properties.gridProperties.rowCount) {
       console.log(
         `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
       );
+      broadcastMessage("Expanding rows...");
       updateRequests.push({
         updateSheetProperties: {
           properties: {
@@ -2436,6 +2500,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
         requestBody: { requests: updateRequests },
       });
       console.log("Sheet expanded successfully!");
+      broadcastMessage("Sheet expanded successfully!");
     }
 
     // Step 4: Copy Data from Admin Sheet to User Sheet
@@ -2447,11 +2512,14 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
         requestBody: { values },
       });
       console.log("Data copied successfully!");
+      broadcastMessage("Data copied successfully!");
     } else {
       console.log("No data found in Admin Sheet.");
+      broadcastMessage("No data found in Admin Sheet.");
     }
-
+    
     // Step 5: Copy Formatting & Data Validation
+    broadcastMessage("Copying formatting and data validation...");
     console.log("Copying formatting and data validation...");
 
     const requests = [];
@@ -2873,6 +2941,7 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
           } catch (error) {
             if (error.code === 429 || error.message.includes("Quota exceeded")) {
               console.error(`Quota limit reached. Retrying... (Attempt ${attempt + 1})`);
+              broadcastMessage("Quota limit reached");
               attempt++;
               await exponentialBackoff(attempt);
             } else {
@@ -2897,8 +2966,10 @@ async function createRKUSheet(drive, sheets, folderId, email, queryData) {
   if (requests.length > 0) {
     await sendBatchRequests(sheets, userSheetId, requests);
     console.log("Formatting and data applied successfully!");
+    broadcastMessage("Formatting and data applied successfully!");
   } else {
     console.log("No formatting or data to apply.");
+    broadcastMessage("No formatting or data to apply.");
   }
   
 
@@ -2927,7 +2998,9 @@ async function grantPermission(drive, email, fileId) {
     }
 
     console.log(`Permissions granted to ${email} and ${SERVICE_ACCOUNT_EMAIL}`);
+    broadcastMessage('Permissions granted');
   } catch (error) {
+    broadcastMessage('Failed to grant permission');
     throw new Error("Failed to grant permission.");
   }
 }
@@ -2968,6 +3041,7 @@ async function addSheetToFile(sheets, fileId, categoryName, email, drive, oAuth2
   try {
     // Step 1: Validate the fileId
     if (!fileId) {
+      broadcastMessage("Invalid fileId. Cannot proceed with duplicating the sheet.");
       throw new Error("Invalid fileId. Cannot proceed with duplicating the sheet.");
     }
 
@@ -2981,6 +3055,7 @@ async function addSheetToFile(sheets, fileId, categoryName, email, drive, oAuth2
     // Step 3: Get sheet data and check if the spreadsheet has any sheets
     const sheetData = fileData.data.sheets;
     if (!sheetData || sheetData.length === 0) {
+      broadcastMessage("No sheets found in the spreadsheet.");
       throw new Error("No sheets found in the spreadsheet.");
     }
 
@@ -3033,6 +3108,7 @@ async function addSheetToFile(sheets, fileId, categoryName, email, drive, oAuth2
 
 async function processDrive(email) {
   try {
+    broadcastMessage(`Processing drive for: ${email}`);
     const result = await ambarsariyaPool.query(
       `SELECT ef.oauth_access_token, 
               ef.oauth_refresh_token, 
@@ -3045,7 +3121,10 @@ async function processDrive(email) {
       [email]
     );
 
-    if (!result.rowCount) throw new Error("User not authenticated.");
+    if (!result.rowCount) {
+      broadcastMessage("User not authenticated.");
+      throw new Error("User not authenticated.")
+    };
 
     const { oauth_access_token, oauth_refresh_token, category_names } = result.rows[0];
 
@@ -3084,6 +3163,7 @@ async function processDrive(email) {
     // Step 4: Add new category sheets
     for (const category of category_names) {
       await addSheetToFile(sheets, file.id, category, email, drive, oAuth2Client);
+      broadcastMessage(`Added category sheet: ${category}`);
     }
 
     await removeFirstSheet(sheets, file.id);
@@ -3099,6 +3179,8 @@ async function processDrive(email) {
 
 async function createItemCsv(email, shop_no, rackData) {
   try {
+    broadcastMessage(`Processing drive for: ${email}`);
+
     const result = await ambarsariyaPool.query(
       `SELECT
           p.shop_no,
@@ -3147,7 +3229,10 @@ async function createItemCsv(email, shop_no, rackData) {
       [shop_no]
     );
 
-    if (!result.rowCount) throw new Error("User not authenticated.");
+    if (!result.rowCount) {
+      broadcastMessage("User not authenticated.");
+      throw new Error("User not authenticated.");
+    }
 
     const { oauth_access_token, oauth_refresh_token, category_names } = result.rows[0];
 
@@ -3183,12 +3268,14 @@ async function createItemCsv(email, shop_no, rackData) {
     return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
   } catch (error) {
     console.error("Error processing Drive:", error.message);
+    broadcastMessage("Error processing Drive.");
     return { success: false, message: error.message };
   }
 }
 
 async function createSKUCsv(email, shop_no, rackWallData) {
   try {
+    broadcastMessage(`Processing drive for: ${email}`);
     const result = await ambarsariyaPool.query(
       `SELECT 
           p.product_name,
@@ -3244,7 +3331,10 @@ async function createSKUCsv(email, shop_no, rackWallData) {
       [shop_no]
     );
 
-    if (!result.rowCount) throw new Error("User not authenticated.");
+    if (!result.rowCount) {
+      broadcastMessage("User not authenticated.");
+      throw new Error("User not authenticated.");
+    }
 
     const { oauth_access_token, oauth_refresh_token } = result.rows[0];
 
@@ -3280,6 +3370,7 @@ async function createSKUCsv(email, shop_no, rackWallData) {
     return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
   } catch (error) {
     console.error("Error processing Drive:", error.message);
+    broadcastMessage("Error processing Drive.");
     return { success: false, message: error.message };
   }
 }
@@ -3336,7 +3427,10 @@ async function createRKUCsv(email, shop_no) {
       [shop_no]
     );
 
-    if (!result.rowCount) throw new Error("User not authenticated.");
+    if (!result.rowCount) {
+      broadcastMessage("User not authenticated.");
+      throw new Error("User not authenticated.");
+    }
 
     const { oauth_access_token, oauth_refresh_token } = result.rows[0];
 
@@ -3372,6 +3466,7 @@ async function createRKUCsv(email, shop_no) {
     return { success: true, url: `https://docs.google.com/spreadsheets/d/${file.id}/edit` };
   } catch (error) {
     console.error("Error processing Drive:", error.message);
+    broadcastMessage("Error processing Drive");
     return { success: false, message: error.message };
   }
 }

@@ -9,6 +9,7 @@ const ambarsariyaPool = createDbPool();
  */
 const post_openFile = async (req, res) => {
   const { email } = req.params;
+  const channel = `drive-channel-${email}`;  // A unique channel per user, for example
 
   try {
     if (!email)
@@ -73,7 +74,7 @@ const post_openFile = async (req, res) => {
       }
     }
 
-    const response = await processDrive(email, oauth_access_token);
+    const response = await processDrive(email, channel);
     return res.json(response);
   } catch (e) {
     console.error("Error opening file:", e);
