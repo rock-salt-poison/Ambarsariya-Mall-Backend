@@ -7,9 +7,13 @@ const post_rku = async (req, res) => {
   try {
     await ambarsariyaPool.query("BEGIN"); // Start a transaction
 
-    // Insert or update items
-    for (let rku of rku_data) {
+    const shopNo = rku_data[0].shop_no; // Get shop_no from the first record
+
     
+      // Delete all existing records with matching shop_no
+      await ambarsariyaPool.query("DELETE FROM Sell.rku WHERE shop_no = $1", [shopNo]);
+    // Insert items
+    for (let rku of rku_data) {
       // Insert or update the item
       const itemQuery = `
         INSERT INTO Sell.rku (
@@ -28,23 +32,7 @@ const post_rku = async (req, res) => {
           shop_no
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-        )
-        ON CONFLICT (rku_id) 
-        DO UPDATE SET
-          RKU_ID = EXCLUDED.RKU_ID,
-          product = EXCLUDED.product,
-          item = EXCLUDED.item,
-          rack_no = EXCLUDED.rack_no,
-          shelf_no = EXCLUDED.shelf_no,
-          product_id = EXCLUDED.product_id,
-          placement_max = EXCLUDED.placement_max,
-          quantity_sale = EXCLUDED.quantity_sale,
-          placement_for_so = EXCLUDED.placement_for_so,
-          update_quantity = EXCLUDED.update_quantity,
-          quantity_purchase = EXCLUDED.quantity_purchase,
-          placement_for_po = EXCLUDED.placement_for_po,
-          shop_no = EXCLUDED.shop_no;
-      `;
+        )`;
 
       // Execute query with item values
       await ambarsariyaPool.query(itemQuery, [
