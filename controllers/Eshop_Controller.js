@@ -502,6 +502,54 @@ const update_eshop = async (req, resp) => {
   }
 };
 
+const update_eshop_location = async (req, resp) => {
+  const { location_pin_drop, distance_from_pin, shop_access_token } = req.body;
+
+  // Validate input
+  if (!shop_access_token) {
+    return resp.status(400).json({ message: "Shop access token is required." });
+  }
+  if (!location_pin_drop || typeof location_pin_drop !== "object") {
+    return resp.status(400).json({ message: "Invalid location data." });
+  }
+
+  try {
+    console.log("Updating e-shop location:", {
+      location_pin_drop,
+      distance_from_pin,
+      shop_access_token,
+    });
+
+    // Perform the UPDATE operation
+    const eshopResult = await ambarsariyaPool.query(
+      `UPDATE Sell.eshop_form
+       SET location_pin_drop = $1::jsonb, 
+           distance_from_pin = $2
+       WHERE shop_access_token = $3
+       RETURNING *`,
+      [
+        JSON.stringify(location_pin_drop), // Ensure JSON format
+        parseFloat(distance_from_pin), // Ensure it's a number
+        shop_access_token,
+      ]
+    );
+
+    // If no rows were affected, return an error
+    if (eshopResult.rows.length === 0) {
+      return resp.status(404).json({ message: "No e-shop found with the provided access token." });
+    }
+
+    resp.status(200).json({
+      message: "E-shop location successfully updated.",
+      data: eshopResult.rows[0], // Return updated row
+    });
+  } catch (err) {
+    console.error("Error updating e-shop location:", err);
+    resp.status(500).json({ message: "Error updating data", error: err.message });
+  }
+};
+
+
 const get_shopUserData = async (req, res) => {
   try {
     const { shop_access_token } = req.query;
@@ -543,6 +591,8 @@ const get_shopUserData = async (req, res) => {
     ef.premium_service AS "premium_service",
     ef.business_name AS "business_name",
     ef.establishment_date AS "establishment_date", 
+    ef.location_pin_drop, 
+    ef.distance_from_pin, 
     ef.usp_values_url AS "usp_values_url",
     ef.product_sample_url AS "product_sample_url",
     ef.upi_id AS "upi_id",
@@ -1639,6 +1689,7 @@ const get_nearby_shops = async (req, res) => {
 module.exports = {
   post_book_eshop,
   update_eshop,
+  update_eshop_location,
   get_shopUserData,
   get_otherShops,
   post_authLogin,
