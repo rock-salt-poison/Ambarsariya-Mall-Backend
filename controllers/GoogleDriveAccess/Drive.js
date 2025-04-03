@@ -2212,7 +2212,8 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
 
           if (maxRackIndex !== -1) {
             const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
-
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+            
             requests.push({
               updateCells: {
                 range: {
@@ -2227,7 +2228,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDDOWN(${totalShelvesCell}/${parseFloat(data.area_size_lateral)})`
+                          formulaValue: `=${totalShelvesCell}/${numberOfShelvesCell}`
                         },
                       },
                     ],

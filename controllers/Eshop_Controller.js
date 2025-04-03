@@ -520,15 +520,17 @@ const update_eshop_location = async (req, resp) => {
       shop_access_token,
     });
 
+    const locationPinDropArray = location_pin_drop.map((obj) => JSON.stringify(obj));
+
     // Perform the UPDATE operation
     const eshopResult = await ambarsariyaPool.query(
       `UPDATE Sell.eshop_form
-       SET location_pin_drop = $1::jsonb, 
+       SET location_pin_drop = $1::jsonb[], 
            distance_from_pin = $2
        WHERE shop_access_token = $3
        RETURNING *`,
       [
-        JSON.stringify(location_pin_drop), // Ensure JSON format
+        locationPinDropArray, // Ensure JSON format
         parseFloat(distance_from_pin), // Ensure it's a number
         shop_access_token,
       ]
