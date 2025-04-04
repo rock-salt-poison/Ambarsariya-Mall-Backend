@@ -4,6 +4,8 @@ const bcrypt = require("bcrypt");
 const { uploadFileToGCS } = require("../utils/storageBucket");
 const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
 const { encryptData, decryptData } = require("../utils/cryptoUtils");
+const nodemailer = require('nodemailer');
+const {broadcastMessage} = require("../webSocket");
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -1184,35 +1186,56 @@ const get_visitorData = async (req, res) => {
 // };
 
 
+
 const put_visitorData = async (req, resp) => {
   const { name, phone_no, domain, sector, purpose, message, user_type, access_token } = req.body;
-  console.log(req.file);
+  console.log('Received request to process visitor data', req.body);
+  broadcastMessage('Processing visitor\'s data');
 
   try {
+    // Check if there are merchants with the same domain and sector
+    const merchantsCheckQuery = await ambarsariyaPool.query(
+      `SELECT ef.shop_no, uc.username, uc.user_id
+      FROM sell.eshop_form ef 
+      JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+      WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
+      [domain, sector, access_token]
+    );
+
+    if (merchantsCheckQuery.rows.length === 0) {
+      const errorMessage = 'No merchants found with the same domain and sector.';
+      console.error(errorMessage);
+      broadcastMessage(errorMessage);
+      return resp.status(400).json({ message: errorMessage });
+    }
+
     let uploadedFile = null;
     const currentfile = req.file ? req.file : null;
 
     if (currentfile) {
       uploadedFile = await uploadFileToGCS(currentfile, "support_page/file_attached");
+      console.log('File uploaded to GCS:', uploadedFile);
+      broadcastMessage('File uploaded to GCS');
     }
 
     // Check if access_token already exists
     const existingRecord = await ambarsariyaPool.query(
-      `SELECT file_attached FROM Sell.support WHERE access_token = $1`,
+      `SELECT visitor_id, file_attached FROM Sell.support WHERE access_token = $1`,
       [access_token]
     );
 
     let result;
+    let visitor_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].visitor_id : null;
 
     if (existingRecord.rows.length > 0) {
       const existingFile = existingRecord.rows[0].file_attached;
 
-      // Delete old file if new file is uploaded
       if (existingFile && uploadedFile) {
         await deleteFileFromGCS(existingFile);
+        console.log('Old file deleted from GCS:', existingFile);
+        broadcastMessage('Old file deleted from GCS');
       }
 
-      // Update the existing record
       result = await ambarsariyaPool.query(
         `UPDATE Sell.support
          SET domain_id = $1,
@@ -1222,29 +1245,106 @@ const put_visitorData = async (req, resp) => {
              file_attached = $5,
              updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
          WHERE access_token = $6
-         RETURNING access_token`,
+         RETURNING visitor_id`,
         [domain, sector, purpose, message, uploadedFile || existingFile, access_token]
       );
+      console.log('Visitor data updated successfully');
+      broadcastMessage('Visitor data updated successfully!');
+
     } else {
-      // Insert a new record
       result = await ambarsariyaPool.query(
         `INSERT INTO Sell.support 
          (name, phone_no, domain_id, sector_id, purpose, message, file_attached, user_type, access_token, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
-         RETURNING access_token`,
-        [name, phone_no, domain, sector, purpose, message, uploadedFile,user_type, access_token]
+         RETURNING visitor_id`,
+        [name, phone_no, domain, sector, purpose, message, uploadedFile, user_type, access_token]
       );
+      console.log('New visitor record created successfully');
+      broadcastMessage('New visitor record created successfully!');
+      visitor_id = result.rows[0].visitor_id;
     }
 
-    const visitor_access_token = result.rows[0].access_token;
+    if (purpose.toLowerCase() === 'buy') {
+      console.log('Purpose is "buy". Notifying merchants...');
+      broadcastMessage('Notifying merchants...');
+
+      const usersQuery = await ambarsariyaPool.query(
+        `SELECT ef.shop_no, uc.username, uc.user_id
+         FROM sell.support s
+         JOIN sell.eshop_form ef ON ef.domain = s.domain_id AND ef.sector = s.sector_id
+         JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+         WHERE s.domain_id = $1 AND s.sector_id = $2 AND uc.access_token != $3`,
+        [domain, sector, access_token]
+      );
+
+      if (usersQuery.rows.length > 0) {
+        console.log('Merchants to be notified:', usersQuery.rows);
+
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+
+        for (let user of usersQuery.rows) {
+          const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: user.username,
+            subject: 'New Buyer Inquiry',
+            text: `Hello ${user.username}, 
+
+A new user has shown interest in buying something from your store. 
+
+Details:
+- Name: ${name}
+- Phone No: ${phone_no}
+- Message: ${message}
+
+Please review the inquiry and take appropriate action.
+https://ambarsariya-emall-frontend.vercel.app/AmbarsariyaMall/sell/support
+
+Best regards,
+Your Support Team`,
+          };
+
+          try {
+            await transporter.sendMail(mailOptions);
+            console.log(`Email sent to merchant: ${user.username}`);
+            broadcastMessage('Email sent to merchants.');
+
+            // Insert notification record
+            await ambarsariyaPool.query(
+              `INSERT INTO sell.support_chat_notifications 
+               (domain_id, sector_id, visitor_id, shop_id, created_at)
+               VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')`,
+              [domain, sector, visitor_id, user.shop_no]
+            );
+
+          } catch (error) {
+            console.error(`Error sending email to ${user.username}:`, error);
+            broadcastMessage('Error sending email to merchants.');
+          }
+        }
+      } else {
+        console.log('No merchants found with the same domain and sector.');
+        broadcastMessage('No merchants found with the same domain and sector.');
+      }
+    } else {
+      console.log('Purpose is not "buy". No email will be sent.');
+      broadcastMessage('Purpose is not "buy". No email will be sent.');
+    }
 
     resp.status(200).json({
       message: existingRecord.rows.length > 0
         ? "Visitor data updated successfully."
         : "New visitor record created successfully.",
-      visitor_access_token,
+      visitor_access_token: visitor_id,
     });
   } catch (err) {
     console.error("Error processing visitor data:", err);
@@ -1254,6 +1354,8 @@ const put_visitorData = async (req, resp) => {
     });
   }
 };
+
+
 
 
 

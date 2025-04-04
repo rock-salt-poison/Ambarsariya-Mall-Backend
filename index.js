@@ -7,7 +7,7 @@ const path = require('path');
 const multer = require('multer');
 
 // Import WebSocket functions
-const { initializeWebSocket, broadcastMessage } = require('./webSocket');
+const { initializeWebSocket } = require('./webSocket');
 
 // Import routes
 const ambarsariyaRoutes = require('./routes/AmbarsariyaMall_Routes');

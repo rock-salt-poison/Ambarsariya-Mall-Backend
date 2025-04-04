@@ -12,7 +12,8 @@ const initializeWebSocket = (server) => {
     console.log('A client connected');
     
     // Send a welcome message to the newly connected client
-    socket.emit('message', 'Welcome to the dashboard!');
+    // socket.emit('message', 'Welcome to the dashboard!');
+    // socket.emit();
     
     // Handle when a client disconnects
     socket.on('disconnect', () => {
