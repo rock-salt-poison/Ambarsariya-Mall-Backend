@@ -91,6 +91,7 @@ router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchas
 router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_orders);
 router.get('/sell/items/:shop_no', itemController.get_items);
 router.get('/sell/sku/:shop_no', skuController.get_sku);
+router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supportChatNotifications);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
 router.get('/sale_order_no/:seller_id', saleController.get_sale_order_numbers);
@@ -131,6 +132,10 @@ router.put("/sell/support", (req, res, next) => {
 
 router.put('/sell/send-otp', otpController.sendOTP);
 router.post('/sell/username-otp', usernameOtpController.sendOTP);
+
+
+router.delete('/sell/support-chat-notifications/:id', eshopController.delete_supportChatNotifications);
+
 
 
 module.exports = router;

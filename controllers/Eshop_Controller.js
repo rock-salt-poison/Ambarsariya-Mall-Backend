@@ -1226,9 +1226,10 @@ const put_visitorData = async (req, resp) => {
 
     let result;
     let visitor_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].visitor_id : null;
+    let existingFile = null;
 
     if (existingRecord.rows.length > 0) {
-      const existingFile = existingRecord.rows[0].file_attached;
+      existingFile = existingRecord.rows[0].file_attached; // Set existingFile only if record exists
 
       if (existingFile && uploadedFile) {
         await deleteFileFromGCS(existingFile);
@@ -1272,10 +1273,9 @@ const put_visitorData = async (req, resp) => {
 
       const usersQuery = await ambarsariyaPool.query(
         `SELECT ef.shop_no, uc.username, uc.user_id
-         FROM sell.support s
-         JOIN sell.eshop_form ef ON ef.domain = s.domain_id AND ef.sector = s.sector_id
-         JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
-         WHERE s.domain_id = $1 AND s.sector_id = $2 AND uc.access_token != $3`,
+      FROM sell.eshop_form ef 
+      JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+      WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
         [domain, sector, access_token]
       );
 
@@ -1293,18 +1293,24 @@ const put_visitorData = async (req, resp) => {
         });
 
         for (let user of usersQuery.rows) {
+          // Determine the link to the file, either new or existing
+          const fileLink = uploadedFile || existingFile
+            ? `You can view the file here: ${uploadedFile || existingFile}`
+            : 'No file attached';
+
           const mailOptions = {
             from: process.env.SMTP_USER,
             to: user.username,
             subject: 'New Buyer Inquiry',
-            text: `Hello ${user.username}, 
+            text: `Hello ${user.username},
 
-A new user has shown interest in buying something from your store. 
+A new user has shown interest in buying something from your store.
 
 Details:
 - Name: ${name}
 - Phone No: ${phone_no}
 - Message: ${message}
+- File: ${fileLink}
 
 Please review the inquiry and take appropriate action.
 https://ambarsariya-emall-frontend.vercel.app/AmbarsariyaMall/sell/support
@@ -1321,9 +1327,9 @@ Your Support Team`,
             // Insert notification record
             await ambarsariyaPool.query(
               `INSERT INTO sell.support_chat_notifications 
-               (domain_id, sector_id, visitor_id, shop_id, created_at)
-               VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')`,
-              [domain, sector, visitor_id, user.shop_no]
+               (domain_id, sector_id, visitor_id, shop_id, purpose, message, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')`,
+              [domain, sector, visitor_id, user.shop_no, purpose, message]
             );
 
           } catch (error) {
@@ -1356,6 +1362,46 @@ Your Support Team`,
 };
 
 
+
+const get_supportChatNotifications = async (req, res) => {
+  try {
+    const { shop_no } = req.params; // Extract the shop_no from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT scn.id, scn.created_at as notification_received_at, s.*, scn.shop_id, scn.message as notification, scn.purpose as notification_purpose
+            FROM sell.support_chat_notifications scn
+            JOIN sell.support s
+            ON s.visitor_id = scn.visitor_id
+            WHERE shop_id = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [shop_no]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid shop number" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const delete_supportChatNotifications = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM sell.support_chat_notifications WHERE id = $1", [id]);
+    res.json({ message: "Notification deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting notification:", err);
+    res.status(500).json({ error: "Failed to delete message" });
+  }
+}
 
 
 
@@ -1470,7 +1516,6 @@ const post_verify_otp = async (req, res) => {
     res.status(500).send({ message: 'Error verifying OTP.' });
   }
 };
-
 
 
 // const post_discount_coupons = async (req, res) => {
@@ -1804,6 +1849,8 @@ module.exports = {
   post_visitorData,
   get_visitorData,
   put_visitorData,
+  get_supportChatNotifications,
+  delete_supportChatNotifications,
   put_forgetPassword,
   post_verify_otp,
   post_discount_coupons,
