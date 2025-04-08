@@ -1308,6 +1308,8 @@ A new user has shown interest in buying something from your store.
 
 Details:
 - Name: ${name}
+- Domain: ${domain}
+- Sector: ${sector}
 - Phone No: ${phone_no}
 - Purpose: ${purpose}
 - Message: ${message}

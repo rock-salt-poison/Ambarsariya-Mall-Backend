@@ -5,7 +5,7 @@ const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
-require('./controllers/CRONJob');
+// require('./controllers/CRONJob');
 
 // Import WebSocket functions
 const { initializeWebSocket } = require('./webSocket');
