@@ -5,6 +5,7 @@ const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
+require('./controllers/CRONJob');
 
 // Import WebSocket functions
 const { initializeWebSocket } = require('./webSocket');
@@ -17,8 +18,10 @@ const photosRoutes = require('./routes/GooglePhotos_Routes');
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
-app.use(cors());
-
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow only your frontend URL
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'], // Allow methods including PATCH
+}));
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
 
 app.get('/health', (req, res) => {

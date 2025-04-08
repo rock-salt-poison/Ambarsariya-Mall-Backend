@@ -1309,6 +1309,7 @@ A new user has shown interest in buying something from your store.
 Details:
 - Name: ${name}
 - Phone No: ${phone_no}
+- Purpose: ${purpose}
 - Message: ${message}
 - File: ${fileLink}
 
@@ -1362,6 +1363,37 @@ Your Support Team`,
 };
 
 
+const patch_supportChatResponse = async (req, resp) => {
+  const { support_id } = req.params;
+  const response = req.body;  // The new response object
+
+  console.log(response);
+
+  const responseArray = [response];  // This will ensure it's an array of JSON objects
+
+  try {
+    // Ensure response is in the correct format as a JSONB array
+    const result = await ambarsariyaPool.query(
+      `UPDATE sell.support
+       SET response = 
+         CASE
+           WHEN response IS NULL THEN $1::jsonb[]
+           ELSE response || $1::jsonb[]
+         END
+       WHERE support_id = $2
+       RETURNING *`,
+      [responseArray, support_id]  // Pass the response array directly (without JSON.stringify)
+    );
+
+    resp.json({ valid: true, data: result.rows[0], message:'Response submitted' });
+  } catch (error) {
+    console.error(error);
+    resp.status(500).json({ valid: false, error: "Failed to update response" });
+  }
+};
+
+
+
 
 const get_supportChatNotifications = async (req, res) => {
   try {
@@ -1369,10 +1401,20 @@ const get_supportChatNotifications = async (req, res) => {
 
     // Query for full visitor data
     const query = `
-            SELECT scn.id, scn.created_at as notification_received_at, s.*, scn.shop_id, scn.message as notification, scn.purpose as notification_purpose
+            SELECT scn.id, 
+                scn.created_at as notification_received_at, 
+                s.*, scn.shop_id, 
+                scn.message as notification, 
+                scn.purpose as notification_purpose,
+                d.domain_name,
+                sectors.sector_name
             FROM sell.support_chat_notifications scn
             JOIN sell.support s
             ON s.visitor_id = scn.visitor_id
+            JOIN domains d
+            ON d.domain_id = scn.domain_id
+            JOIN sectors sectors
+            ON sectors.sector_id = scn.sector_id
             WHERE shop_id = $1
         `;
     const result = await ambarsariyaPool.query(query, [shop_no]);
@@ -1849,6 +1891,7 @@ module.exports = {
   post_visitorData,
   get_visitorData,
   put_visitorData,
+  patch_supportChatResponse,
   get_supportChatNotifications,
   delete_supportChatNotifications,
   put_forgetPassword,
