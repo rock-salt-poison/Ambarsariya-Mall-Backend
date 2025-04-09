@@ -19,7 +19,7 @@ const photosRoutes = require('./routes/GooglePhotos_Routes');
 // Middleware to parse incoming JSON requests
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:3000', // Allow only your frontend URL
+  origin: '*', 
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'], // Allow methods including PATCH
 }));
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
