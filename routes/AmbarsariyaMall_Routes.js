@@ -92,6 +92,7 @@ router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_o
 router.get('/sell/items/:shop_no', itemController.get_items);
 router.get('/sell/sku/:shop_no', skuController.get_sku);
 router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supportChatNotifications);
+router.get('/sell/support-chat-messages/:support_id', eshopController.get_supportChatMessages);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
@@ -106,6 +107,7 @@ router.post('/sale_order', saleController.post_saleOrder);
 router.post('/sell/items', itemController.post_items);
 router.post('/sell/sku', skuController.post_sku);
 router.post('/sell/rku', rkuController.post_rku);
+router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);

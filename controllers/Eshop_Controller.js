@@ -1188,7 +1188,7 @@ const get_visitorData = async (req, res) => {
 
 
 const put_visitorData = async (req, resp) => {
-  const { name, phone_no, domain, sector, purpose, message, user_type, access_token } = req.body;
+  const { name, phone_no, domain, domain_name, sector, sector_name, purpose, message, user_type, access_token } = req.body;
   console.log('Received request to process visitor data', req.body);
   broadcastMessage('Processing visitor\'s data');
 
@@ -1220,12 +1220,13 @@ const put_visitorData = async (req, resp) => {
 
     // Check if access_token already exists
     const existingRecord = await ambarsariyaPool.query(
-      `SELECT visitor_id, file_attached FROM Sell.support WHERE access_token = $1`,
+      `SELECT visitor_id,support_id, file_attached FROM Sell.support WHERE access_token = $1`,
       [access_token]
     );
 
     let result;
     let visitor_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].visitor_id : null;
+    let support_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].support_id : null;
     let existingFile = null;
 
     if (existingRecord.rows.length > 0) {
@@ -1246,7 +1247,7 @@ const put_visitorData = async (req, resp) => {
              file_attached = $5,
              updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
          WHERE access_token = $6
-         RETURNING visitor_id`,
+         RETURNING visitor_id, support_id`,
         [domain, sector, purpose, message, uploadedFile || existingFile, access_token]
       );
       console.log('Visitor data updated successfully');
@@ -1259,12 +1260,13 @@ const put_visitorData = async (req, resp) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
-         RETURNING visitor_id`,
+         RETURNING visitor_id, support_id`,
         [name, phone_no, domain, sector, purpose, message, uploadedFile, user_type, access_token]
       );
       console.log('New visitor record created successfully');
       broadcastMessage('New visitor record created successfully!');
       visitor_id = result.rows[0].visitor_id;
+      support_id = result.rows[0].support_id;
     }
 
     if (purpose.toLowerCase() === 'buy') {
@@ -1272,9 +1274,10 @@ const put_visitorData = async (req, resp) => {
       broadcastMessage('Notifying merchants...');
 
       const usersQuery = await ambarsariyaPool.query(
-        `SELECT ef.shop_no, uc.username, uc.user_id
+        `SELECT ef.shop_no, uc.username, uc.user_id, u.user_type
       FROM sell.eshop_form ef 
       JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+      JOIN sell.users u ON u.user_id = uc.user_id
       WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
         [domain, sector, access_token]
       );
@@ -1293,6 +1296,8 @@ const put_visitorData = async (req, resp) => {
         });
 
         for (let user of usersQuery.rows) {
+          console.log(support_id);
+          
           // Determine the link to the file, either new or existing
           const fileLink = uploadedFile || existingFile
             ? `You can view the file here: ${uploadedFile || existingFile}`
@@ -1308,8 +1313,9 @@ A new user has shown interest in buying something from your store.
 
 Details:
 - Name: ${name}
-- Domain: ${domain}
-- Sector: ${sector}
+- Domain: ${domain_name}
+- Sector: ${sector_name}
+- User Type: ${user_type}
 - Phone No: ${phone_no}
 - Purpose: ${purpose}
 - Message: ${message}
@@ -1323,17 +1329,42 @@ Your Support Team`,
           };
 
           try {
+            // Insert into support_chat_notifications and return the notification_id
+            const notificationResult = await ambarsariyaPool.query(
+              `INSERT INTO sell.support_chat_notifications 
+                (domain_id, sector_id, visitor_id, sent_to, purpose, message, created_at)
+              VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
+              RETURNING id`,
+              [domain, sector, visitor_id, user.shop_no, purpose, message]
+            );
+
+            const notification_id = notificationResult.rows[0].id;
+
+            // Send the email
             await transporter.sendMail(mailOptions);
             console.log(`Email sent to merchant: ${user.username}`);
             broadcastMessage('Email sent to merchants.');
 
-            // Insert notification record
+            // Insert the corresponding chat message
             await ambarsariyaPool.query(
-              `INSERT INTO sell.support_chat_notifications 
-               (domain_id, sector_id, visitor_id, shop_id, purpose, message, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')`,
-              [domain, sector, visitor_id, user.shop_no, purpose, message]
+              `INSERT INTO Sell.support_chat_messages (
+                visitor_id, notification_id, support_id, sender_id, sender_type, 
+                receiver_id, receiver_type, message, sent_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
+              )`,
+              [
+                visitor_id,
+                notification_id,
+                support_id,
+                visitor_id,
+                user_type,
+                user.shop_no,
+                'shop',
+                message,
+              ]
             );
+
 
           } catch (error) {
             console.error(`Error sending email to ${user.username}:`, error);
@@ -1394,8 +1425,86 @@ const patch_supportChatResponse = async (req, resp) => {
   }
 };
 
+const post_supportChatMessage = async (req, res) => {
+  const { data } = req.body;
+  console.log(data);
 
+  const {
+    visitor_id,
+    notification_id,
+    support_id,
+    sender_id,
+    sender_type,
+    receiver_id,
+    receiver_type,
+    message,
+  } = data;
 
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    const chatQuery = `
+      INSERT INTO Sell.support_chat_messages (
+        visitor_id, notification_id, support_id, sender_id, sender_type, 
+        receiver_id, receiver_type, message, sent_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP
+      )
+      RETURNING id
+    `;
+
+    const chatRequest = await ambarsariyaPool.query(chatQuery, [
+      visitor_id,
+      notification_id,
+      support_id,
+      sender_id,
+      sender_type,
+      receiver_id,
+      receiver_type,
+      message,
+    ]);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(201).json({
+      message: "Chat created successfully",
+      chat_id: chatRequest.rows[0].id,
+    });
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error inserting chat message:", err);
+    res.status(400).json({
+      error: "Message failed",
+      message: err.message,
+    });
+  }
+};
+
+const get_supportChatMessages = async (req, res) => {
+  try {
+    const { support_id } = req.params; // Extract the shop_no from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT *
+            FROM sell.support_chat_messages 
+            WHERE support_id = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [support_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid support id" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
 
 const get_supportChatNotifications = async (req, res) => {
   try {
@@ -1405,7 +1514,7 @@ const get_supportChatNotifications = async (req, res) => {
     const query = `
             SELECT scn.id, 
                 scn.created_at as notification_received_at, 
-                s.*, scn.shop_id, 
+                s.*, scn.sent_to, 
                 scn.message as notification, 
                 scn.purpose as notification_purpose,
                 d.domain_name,
@@ -1417,7 +1526,7 @@ const get_supportChatNotifications = async (req, res) => {
             ON d.domain_id = scn.domain_id
             JOIN sectors sectors
             ON sectors.sector_id = scn.sector_id
-            WHERE shop_id = $1
+            WHERE scn.sent_to = $1
         `;
     const result = await ambarsariyaPool.query(query, [shop_no]);
 
@@ -1894,7 +2003,9 @@ module.exports = {
   get_visitorData,
   put_visitorData,
   patch_supportChatResponse,
+  post_supportChatMessage,
   get_supportChatNotifications,
+  get_supportChatMessages,
   delete_supportChatNotifications,
   put_forgetPassword,
   post_verify_otp,
