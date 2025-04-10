@@ -1120,20 +1120,47 @@ const post_visitorData = async (req, resp) => {
 
 const get_visitorData = async (req, res) => {
   try {
-    const { token } = req.params; // Extract the token from the request
+    const { token, sender_id } = req.params; // Extract the token from the request
 
     // Query for full visitor data
     const query = `
-            SELECT  
-                v.*,
-                d.domain_name,
-                s.sector_name
+           SELECT  
+              v.support_id,
+              v.visitor_id,
+              v.name,
+              v.phone_no,
+              v.purpose,
+              v.message,
+              v.file_attached,
+              v.user_type,
+              v.response,
+              v.access_token,
+              d.domain_name,
+              s.sector_name,
+              (
+                SELECT json_agg(response_obj)
+                FROM (
+                  SELECT DISTINCT ON (sc.sender_id)
+                    json_build_object(
+                      'sender_id', sc.sender_id,
+                      'sender_type', sc.sender_type,
+                      'sender_response', sc.message,
+                      'notification_id', sc.notification_id,
+                      'business_name', ef.business_name,
+                      'shop_access_token', ef.shop_access_token
+                    ) AS response_obj
+                  FROM sell.support_chat_messages sc
+                  LEFT JOIN sell.eshop_form ef ON ef.shop_no = sc.sender_id
+                  WHERE sc.support_id = v.support_id AND sc.sender_id != $2
+                  ORDER BY sc.sender_id, sc.sent_at DESC
+                ) latest_responses
+              ) AS response
             FROM sell.support v
             LEFT JOIN domains d ON d.domain_id = v.domain_id
             LEFT JOIN sectors s ON s.sector_id = v.sector_id
-            WHERE access_token = $1
+            WHERE v.access_token = $1;
         `;
-    const result = await ambarsariyaPool.query(query, [token]);
+    const result = await ambarsariyaPool.query(query, [token, sender_id]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -1188,7 +1215,7 @@ const get_visitorData = async (req, res) => {
 
 
 const put_visitorData = async (req, resp) => {
-  const { name, phone_no, domain, domain_name, sector, sector_name, purpose, message, user_type, access_token } = req.body;
+  const { name, phone_no, domain, domain_name, sector, sector_name,sending_from, purpose, message, user_type, access_token } = req.body;
   console.log('Received request to process visitor data', req.body);
   broadcastMessage('Processing visitor\'s data');
 
@@ -1332,10 +1359,10 @@ Your Support Team`,
             // Insert into support_chat_notifications and return the notification_id
             const notificationResult = await ambarsariyaPool.query(
               `INSERT INTO sell.support_chat_notifications 
-                (domain_id, sector_id, visitor_id, sent_to, purpose, message, created_at)
-              VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
+                (domain_id, sector_id, visitor_id, sent_to, sent_from, purpose, message, created_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
               RETURNING id`,
-              [domain, sector, visitor_id, user.shop_no, purpose, message]
+              [domain, sector, visitor_id, user.shop_no, sending_from, purpose, message]
             );
 
             const notification_id = notificationResult.rows[0].id;
@@ -1357,7 +1384,7 @@ Your Support Team`,
                 visitor_id,
                 notification_id,
                 support_id,
-                visitor_id,
+                sending_from,
                 user_type,
                 user.shop_no,
                 'shop',
@@ -1394,7 +1421,6 @@ Your Support Team`,
     });
   }
 };
-
 
 const patch_supportChatResponse = async (req, resp) => {
   const { support_id } = req.params;
@@ -1448,7 +1474,7 @@ const post_supportChatMessage = async (req, res) => {
         visitor_id, notification_id, support_id, sender_id, sender_type, 
         receiver_id, receiver_type, message, sent_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP
+        $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
       )
       RETURNING id
     `;
@@ -1463,6 +1489,14 @@ const post_supportChatMessage = async (req, res) => {
       receiver_type,
       message,
     ]);
+
+    if (sender_id !== visitor_id) {
+      await ambarsariyaPool.query(`
+        UPDATE Sell.support
+        SET response = true
+        WHERE support_id = $1
+      `, [support_id]);
+    }
 
     await ambarsariyaPool.query("COMMIT");
 
@@ -1482,19 +1516,39 @@ const post_supportChatMessage = async (req, res) => {
 
 const get_supportChatMessages = async (req, res) => {
   try {
-    const { support_id } = req.params; // Extract the shop_no from the request
+    const { support_id, notification_id } = req.params; // Extract the shop_no from the request
 
     // Query for full visitor data
     const query = `
-            SELECT *
-            FROM sell.support_chat_messages 
-            WHERE support_id = $1
+          select scm.id,
+                scm.visitor_id,
+                scm.notification_id,
+                scm.support_id,
+                scm.sender_id,
+                scm.sender_type,
+                scm.receiver_id,
+                scm.receiver_type,
+                scm.message,
+                scm.sent_at,
+                scm.is_read,
+                scn.domain_id,
+                scn.sector_id,
+                scn.purpose,
+                sc.name,
+                sc.phone_no,
+                sc.file_attached
+            from sell.support_chat_messages scm
+            join sell.support_chat_notifications scn
+            on scn.id = scm.notification_id and scn.visitor_id = scm.visitor_id
+            join sell.support sc
+            on sc.visitor_id = scm.visitor_id
+            where scm.support_id = $1 and scm.notification_id = $2 
         `;
-    const result = await ambarsariyaPool.query(query, [support_id]);
+    const result = await ambarsariyaPool.query(query, [support_id, notification_id]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid support id" });
+      res.status(404).json({ valid: false, message: "Invalid support id or notificaiton id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -1514,7 +1568,7 @@ const get_supportChatNotifications = async (req, res) => {
     const query = `
             SELECT scn.id, 
                 scn.created_at as notification_received_at, 
-                s.*, scn.sent_to, 
+                s.*, scn.sent_to,scn.sent_from, 
                 scn.message as notification, 
                 scn.purpose as notification_purpose,
                 d.domain_name,

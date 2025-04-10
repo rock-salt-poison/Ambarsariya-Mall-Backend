@@ -5,7 +5,12 @@ let io;
 
 const initializeWebSocket = (server) => {
   // Initialize socket.io with the server
-  io = socketIo(server);
+  io = socketIo(server,{
+    cors: {
+      origin: '*', // Or restrict to specific domain
+      methods: ['GET', 'POST'],
+    },
+  });
 
   // When a client connects
   io.on('connection', (socket) => {

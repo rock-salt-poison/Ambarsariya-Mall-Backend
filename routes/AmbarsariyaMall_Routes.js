@@ -78,7 +78,7 @@ router.post("/sell/member", (req, res, next) => {
 
 router.get('/sell/member', eshopController.get_memberData);
 router.get('/sell/user', eshopController.get_userData);
-router.get('/sell/support/:token', eshopController.get_visitorData);
+router.get('/sell/support/:token/:sender_id', eshopController.get_visitorData);
 router.get('/sell/discount-coupons/:shop_no', eshopController.get_discountCoupons);
 router.get('/sell/products/:shop_no', productController.get_products);
 router.get('/sell/product-names/:shop_no', productController.get_product_names);
@@ -92,7 +92,7 @@ router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_o
 router.get('/sell/items/:shop_no', itemController.get_items);
 router.get('/sell/sku/:shop_no', skuController.get_sku);
 router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supportChatNotifications);
-router.get('/sell/support-chat-messages/:support_id', eshopController.get_supportChatMessages);
+router.get('/sell/support-chat-messages/:support_id/:notification_id', eshopController.get_supportChatMessages);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
