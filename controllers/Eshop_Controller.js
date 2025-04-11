@@ -748,10 +748,17 @@ const get_userData = async (req, res) => {
         ef.shop_access_token AS "shop_access_token",
         uc.access_token AS "user_access_token",
         s.support_id,
-        s.visitor_id
+        s.visitor_id,
+        mp.member_id,
+        CASE 
+          WHEN u.user_type = 'member' THEN u.full_name
+          ELSE ef.business_name
+        END AS "name"
       FROM sell.users u
       JOIN sell.user_credentials uc 
         ON u.user_id = uc.user_id
+      LEFT join sell.member_profiles mp
+      ON mp.user_id = u.user_id
       LEFT JOIN sell.eshop_form ef
         ON u.user_id = ef.user_id
       LEFT JOIN sell.support s
@@ -765,11 +772,13 @@ const get_userData = async (req, res) => {
     if (userResult.rows.length === 0) {
       const supportResult = await ambarsariyaPool.query(
         `SELECT 
-                    user_type,
-                    support_id, visitor_id, 
-                    access_token as "user_access_token" 
-                FROM sell.support 
-                WHERE access_token = $1`,
+            user_type,
+            support_id, 
+            visitor_id, 
+            name,
+            access_token as "user_access_token" 
+        FROM sell.support 
+        WHERE access_token = $1`,
         [userAccessToken]
       );
 
@@ -1388,7 +1397,7 @@ Your Support Team`,
                 user_type,
                 user.shop_no,
                 'shop',
-                message,
+                  `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
               ]
             );
 
@@ -1520,29 +1529,43 @@ const get_supportChatMessages = async (req, res) => {
 
     // Query for full visitor data
     const query = `
-          select scm.id,
-                scm.visitor_id,
-                scm.notification_id,
-                scm.support_id,
-                scm.sender_id,
-                scm.sender_type,
-                scm.receiver_id,
-                scm.receiver_type,
-                scm.message,
-                scm.sent_at,
-                scm.is_read,
-                scn.domain_id,
-                scn.sector_id,
-                scn.purpose,
-                sc.name,
-                sc.phone_no,
-                sc.file_attached
-            from sell.support_chat_messages scm
-            join sell.support_chat_notifications scn
-            on scn.id = scm.notification_id and scn.visitor_id = scm.visitor_id
-            join sell.support sc
-            on sc.visitor_id = scm.visitor_id
-            where scm.support_id = $1 and scm.notification_id = $2 
+          SELECT 
+              scm.id,
+              scm.visitor_id,
+              scm.notification_id,
+              scm.support_id,
+              scm.sender_id,
+              scm.sender_type,
+              scm.receiver_id,
+              scm.receiver_type,
+              scm.message,
+              scm.sent_at,
+              scm.is_read,
+              scn.domain_id,
+              scn.sector_id,
+              scn.purpose,
+              sc.name AS visitor_name,
+              sc.phone_no,
+              sc.file_attached,
+
+              CASE 
+                  WHEN scm.sender_type = 'member' THEN ru.full_name
+                  WHEN scm.sender_type = 'shop' THEN ef.poc_name
+                  WHEN scm.sender_type = 'visitor' THEN rv.name
+              END AS receiver_name
+
+          FROM sell.support_chat_messages scm
+          JOIN sell.support_chat_notifications scn
+            ON scn.id = scm.notification_id AND scn.visitor_id = scm.visitor_id
+          JOIN sell.support sc
+            ON sc.visitor_id = scm.visitor_id
+
+          LEFT JOIN sell.member_profiles rmp ON scm.sender_type = 'member' AND rmp.member_id = scm.sender_id
+          LEFT JOIN sell.users ru ON ru.user_id = rmp.user_id
+          LEFT JOIN sell.eshop_form ef ON scm.sender_type = 'shop' AND ef.shop_no = scm.sender_id
+          LEFT JOIN sell.support rv ON scm.sender_type = 'visitor' AND rv.visitor_id = scm.sender_id
+          WHERE scm.support_id = $1 AND scm.notification_id = $2
+          ORDER BY scm.sent_at ASC;
         `;
     const result = await ambarsariyaPool.query(query, [support_id, notification_id]);
 
