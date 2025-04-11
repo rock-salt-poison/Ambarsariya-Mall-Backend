@@ -108,6 +108,7 @@ router.post('/sell/items', itemController.post_items);
 router.post('/sell/sku', skuController.post_sku);
 router.post('/sell/rku', rkuController.post_rku);
 router.post('/sell/support/chat', eshopController.post_supportChatMessage);
+router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);

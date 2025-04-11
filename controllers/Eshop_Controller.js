@@ -133,145 +133,6 @@ const post_book_eshop = async (req, resp) => {
   }
 };
 
-// const post_member_data = async (req, resp) => {
-//   const { name, username, password, address, phone, gender, dob } = req.body;
-
-//   // Validate that required fields are provided
-//   if (!name || !username || !password) {
-//     return resp
-//       .status(400)
-//       .json({ message: "Full name, username, and password are required." });
-//   }
-
-//   // Determine title based on gender
-//   let title = "";
-//   if (gender === "Male") {
-//     title = "Mr.";
-//   } else if (gender === "Female") {
-//     title = "Ms.";
-//   } else {
-//     title = "Other"; // or set a default title if needed
-//   }
-
-//   try {
-//     // Start a transaction
-//     await ambarsariyaPool.query("BEGIN");
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     // Insert into users table
-//     const userResult = await ambarsariyaPool.query(
-//       `INSERT INTO sell.users 
-//             (full_name, title, phone_no_1, user_type, address, gender, dob)
-//             VALUES ($1, $2, $3, $4, $5, $6, $7)
-//             RETURNING user_id`,
-//       [name, title, phone, "member", address, gender, dob] // Assuming user_type is 'member' here
-//     );
-//     const newUserId = userResult.rows[0].user_id;
-
-//     // Insert into user_credentials table
-//     const user_credentials = await ambarsariyaPool.query(
-//       `INSERT INTO sell.user_credentials 
-//             (user_id, username, password)
-//             VALUES ($1, $2, $3)
-//             RETURNING access_token`,
-//       [newUserId, username, hashedPassword]
-//     );
-
-//     const user_access_token = user_credentials.rows[0].access_token;
-
-//     // Commit the transaction
-//     await ambarsariyaPool.query("COMMIT");
-//     resp.status(201).json({
-//       message: "Form submitted successfully.",
-//       user_access_token,
-//     });
-//   } catch (err) {
-//     // Rollback the transaction in case of error
-//     await ambarsariyaPool.query("ROLLBACK");
-//     console.error("Error storing data", err);
-//     resp
-//       .status(500)
-//       .json({ message: "Error storing data", error: err.message });
-//   }
-// };
-
-
-// const post_member_data = async (req, resp) => {
-
-//   console.log('Received files:', req.files["profile_img"]); // Log the file
-
-//   const { name, username, password, address,latitude, longitude, phone, gender, dob } = req.body;
-
-//   if (!name || !username || !password) {
-//     return resp
-//       .status(400)
-//       .json({ message: "Full name, username, and password are required." });
-//   }
-
-//   let uploadedProfileUrl = null;
-//   let uploadedBgImgUrl = null;
-
-//   const profileFile = req.files["profile_img"] ? req.files["profile_img"][0] : null;
-//   const bgFile = req.files["bg_img"] ? req.files["bg_img"][0] : null;
-
-//   if (profileFile) {
-//     uploadedProfileUrl = await uploadFileToGCS(profileFile, "member_display_picture");
-//   }
-//   if (bgFile) {
-//     uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member_background_picture");
-//   }
-
-//   // Determine title based on gender
-//   let title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
-
-//   try {
-//     await ambarsariyaPool.query("BEGIN"); // Start transaction
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     // Insert into users table
-//     const userResult = await ambarsariyaPool.query(
-//       `INSERT INTO sell.users 
-//             (full_name, title, phone_no_1, user_type, gender)
-//             VALUES ($1, $2, $3, $4, $5)
-//             RETURNING user_id`,
-//       [name, title, phone, "member", gender]
-//     );
-//     const newUserId = userResult.rows[0].user_id;
-
-//     // Insert into user_credentials table
-//     const userCredentials = await ambarsariyaPool.query(
-//       `INSERT INTO sell.user_credentials 
-//             (user_id, username, password)
-//             VALUES ($1, $2, $3)
-//             RETURNING access_token`,
-//       [newUserId, username, hashedPassword]
-//     );
-
-//     const userAccessToken = userCredentials.rows[0].access_token;
-
-//     // Insert into member_profiles table
-//     await ambarsariyaPool.query(
-//       `INSERT INTO sell.member_profiles 
-//             (user_id, address, latitude, longitude, dob, profile_img, bg_img)
-//             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-//       [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
-//     );
-
-//     await ambarsariyaPool.query("COMMIT"); // Commit transaction
-
-//     resp.status(201).json({
-//       message: "Form submitted successfully.",
-//       user_access_token: userAccessToken,
-//     });
-//   } catch (err) {
-//     await ambarsariyaPool.query("ROLLBACK"); // Rollback in case of error
-//     console.error("Error storing data", err);
-//     resp.status(500).json({ message: "Error storing data", error: err.message });
-//   }
-// };
-
 
 const post_member_data = async (req, resp) => {
   console.log("Received files:", req.files["profile_img"]); // Log the file
@@ -1091,42 +952,6 @@ const post_visitorData = async (req, resp) => {
   }
 };
 
-// const post_visitorData = async (req, resp) => {
-//   const { name, phone_no, otp } = req.body;
-
-//   try {
-//     // Start a transaction
-//     await ambarsariyaPool.query("BEGIN");
-
-
-//     let newAccessToken = null;
-
-//       // If user does not exist in users table, create a new access token
-//       const insertSupport = await ambarsariyaPool.query(
-//         `INSERT INTO sell.support (name, phone_no, otp)
-//                 VALUES ($1, $2, $3)
-//                 RETURNING access_token`,
-//         [name, phone_no, otp]
-//       );
-//       newAccessToken = insertSupport.rows[0].access_token;
-
-//     // Commit the transaction
-//     await ambarsariyaPool.query("COMMIT");
-
-//     return resp.status(201).json({
-//       message: "Form submitted successfully.",
-//       access_token: newAccessToken,
-//     });
-//   } catch (err) {
-//     await ambarsariyaPool.query("ROLLBACK");
-//     console.error("Error storing data:", err);
-//     return resp
-//       .status(500)
-//       .json({ message: "Error storing data", error: err.message });
-//   }
-// };
-
-
 const get_visitorData = async (req, res) => {
   try {
     const { token, sender_id } = req.params; // Extract the token from the request
@@ -1184,43 +1009,6 @@ const get_visitorData = async (req, res) => {
       .json({ message: "Error processing request.", error: err.message });
   }
 };
-
-// const put_visitorData = async (req, resp) => {
-//   const { domain, sector, purpose, message, access_token } = req.body;
-
-//   try {
-//     const result = await ambarsariyaPool.query(
-//       `UPDATE Sell.support
-//                 SET domain_id = $1,
-//                     sector_id = $2,
-//                     purpose = $3,
-//                     message = $4,
-//                     updated_at = CURRENT_TIMESTAMP
-//                 WHERE access_token = $5
-//                 RETURNING access_token`,
-//       [domain, sector, purpose, message, access_token]
-//     );
-
-//     if (result.rows.length === 0) {
-//       return resp
-//         .status(404)
-//         .json({ message: "No visitor found with the provided access token." });
-//     }
-
-//     const visitor_access_token = result.rows[0].access_token;
-
-//     resp.status(200).json({
-//       message: "Visitor data updated successfully.",
-//       visitor_access_token,
-//     });
-//   } catch (err) {
-//     console.error("Error updating data:", err);
-//     resp
-//       .status(500)
-//       .json({ message: "Error updating data", error: err.message });
-//   }
-// };
-
 
 
 const put_visitorData = async (req, resp) => {
@@ -2064,6 +1852,82 @@ const get_nearby_shops = async (req, res) => {
   }
 };
 
+const post_member_emotional = async (req, res) => {
+  const { member_id } = req.params;
+  const {
+    emotional_range_joy_to_excitement,
+    emotional_range_sadness_to_anger,
+    emotional_reactivity_like_advice,
+    emotional_reactivity_share_experiences,
+    emotional_regulations_recall_adverse_emotions,
+    emotional_regulations_control_anger_and_crying,
+    mental_resolution_date,
+    mental_resolution_time,
+    mental_resolution_message,
+    notify_mental_resolution
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.member_emotional (
+        member_id,
+        emotional_range_joy_to_excitement,
+        emotional_range_sadness_to_anger,
+        emotional_reactivity_like_advice,
+        emotional_reactivity_share_experiences,
+        emotional_regulations_recall_adverse_emotions,
+        emotional_regulations_control_anger_and_crying,
+        mental_resolution_date,
+        mental_resolution_time,
+        mental_resolution_message,
+        notify_mental_resolution
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11
+      )
+      ON CONFLICT (member_id)
+      DO UPDATE SET
+        emotional_range_joy_to_excitement = EXCLUDED.emotional_range_joy_to_excitement,
+        emotional_range_sadness_to_anger = EXCLUDED.emotional_range_sadness_to_anger,
+        emotional_reactivity_like_advice = EXCLUDED.emotional_reactivity_like_advice,
+        emotional_reactivity_share_experiences = EXCLUDED.emotional_reactivity_share_experiences,
+        emotional_regulations_recall_adverse_emotions = EXCLUDED.emotional_regulations_recall_adverse_emotions,
+        emotional_regulations_control_anger_and_crying = EXCLUDED.emotional_regulations_control_anger_and_crying,
+        mental_resolution_date = EXCLUDED.mental_resolution_date,
+        mental_resolution_time = EXCLUDED.mental_resolution_time,
+        mental_resolution_message = EXCLUDED.mental_resolution_message,
+        notify_mental_resolution = EXCLUDED.notify_mental_resolution;
+    `;
+
+    const values = [
+      member_id,
+      emotional_range_joy_to_excitement,
+      emotional_range_sadness_to_anger,
+      emotional_reactivity_like_advice,
+      emotional_reactivity_share_experiences,
+      emotional_regulations_recall_adverse_emotions,
+      emotional_regulations_control_anger_and_crying,
+      mental_resolution_date,
+      mental_resolution_time,
+      mental_resolution_message,
+      notify_mental_resolution
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Data saved successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving emotional data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 
 module.exports = {
   post_book_eshop,
@@ -2090,4 +1954,5 @@ module.exports = {
   get_discountCoupons,
   get_allUsers,
   get_nearby_shops,
+  post_member_emotional,
 };
