@@ -94,6 +94,7 @@ router.get('/sell/sku/:shop_no', skuController.get_sku);
 router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supportChatNotifications);
 router.get('/sell/support-chat-messages/:support_id/:notification_id', eshopController.get_supportChatMessages);
 router.get('/sell/emotional/:member_id', eshopController.get_member_emotional);
+router.get('/sell/personal/:member_id', eshopController.get_member_personal);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
@@ -110,6 +111,34 @@ router.post('/sell/sku', skuController.post_sku);
 router.post('/sell/rku', rkuController.post_rku);
 router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
+
+router.post('/sell/personal/:member_id', (req, res, next) => {
+  UploadFiles.fields([
+    { name: 'personal_traits_file', maxCount: 1 },
+    { name: 'hobby_and_interests_file', maxCount: 1 },
+    { name: 'goals_and_aspirations_file', maxCount: 1 },
+    { name: 'favorite_quotes_or_mottos_file', maxCount: 1 },
+    { name: 'values_and_beliefs_file', maxCount: 1 },
+    { name: 'life_philosophy_file', maxCount: 1 },
+    { name: 'background_information_file', maxCount: 1 },
+    { name: 'unique_personal_facts_file', maxCount: 1 },
+  ])(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        console.log(err);
+        
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "File size exceeds the 1MB limit." });
+        }
+      } else {
+        console.log(err.message);
+        return res.status(400).json({ message: err.message });
+      }
+    }
+    // If no errors, call the controller function
+    eshopController.post_member_personal(req, res);
+  });
+});
 
 // router.put('/sell/support', eshopController.put_visitorData);
 router.put('/sell/forget-password', eshopController.put_forgetPassword);

@@ -1421,8 +1421,6 @@ const delete_supportChatNotifications = async (req, res) => {
   }
 }
 
-
-
 const put_forgetPassword = async (req, resp) => {
   const { username, password, user_type } = req.body;
 console.log(user_type);
@@ -1534,7 +1532,6 @@ const post_verify_otp = async (req, res) => {
     res.status(500).send({ message: 'Error verifying OTP.' });
   }
 };
-
 
 // const post_discount_coupons = async (req, res) => {
 //     const shop_no = req.params.shop_no;
@@ -1954,6 +1951,186 @@ const get_member_emotional = async (req, res) => {
   }
 };
 
+const post_member_personal = async (req, resp) => {
+  console.log("Received files:", req.files["personal_traits_file"]);
+  const { member_id } = req.params;
+  const {
+    personal_traits,
+    hobby_and_interests,
+    goals_and_aspirations,
+    favorite_quotes_or_mottos,
+    values_and_beliefs,
+    life_philosophy,
+    background_information,
+    unique_personal_facts,
+  } = req.body;
+
+  // Map input fields to their GCS folder
+  const fileTraitMap = {
+    personal_traits_file: "personal_traits",
+    hobby_and_interests_file: "hobbies_and_interests",
+    goals_and_aspirations_file: "goal_and_aspirations",
+    favorite_quotes_or_mottos_file: "favorite_quotes_and_mottos",
+    values_and_beliefs_file: "values_and_beliefs",
+    life_philosophy_file: "life_philosophy",
+    background_information_file: "background_information",
+    unique_personal_facts_file: "unique_personal_facts",
+  };
+
+  const uploadedFiles = {};
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    // Check if record exists
+    const existingRecordRes = await ambarsariyaPool.query(
+      `SELECT * FROM sell.member_personal WHERE member_id = $1`,
+      [member_id]
+    );
+
+    const recordExists = existingRecordRes.rows.length > 0;
+    const existingData = recordExists ? existingRecordRes.rows[0] : null;
+
+    // Handle file upload + deletion
+    for (const [formKey, folderName] of Object.entries(fileTraitMap)) {
+      const file = req.files?.[formKey]?.[0];
+
+      if (file) {
+        const existingFilePath = existingData?.[`${formKey}`];
+        if (existingFilePath) {
+          await deleteFileFromGCS(existingFilePath);
+        }
+
+        const newPath = await uploadFileToGCS(file, `member/${folderName}`);
+        uploadedFiles[`${formKey}`] = newPath;
+      } else {
+        uploadedFiles[`${formKey}`] = existingData?.[`${formKey}`] || null;
+      }
+    }
+
+    // Now either insert or update
+    if (recordExists) {
+      await ambarsariyaPool.query(
+        `UPDATE sell.member_personal SET
+          personal_traits = $1,
+          personal_traits_file = $2,
+          hobbies_and_interests = $3,
+          hobbies_and_interests_file = $4,
+          goal_and_aspirations = $5,
+          goal_and_aspirations_file = $6,
+          favorite_quotes_and_mottos = $7,
+          favorite_quotes_and_mottos_file = $8,
+          values_and_beliefs = $9,
+          values_and_beliefs_file = $10,
+          life_philosophy = $11,
+          life_philosophy_file = $12,
+          background_information = $13,
+          background_information_file = $14,
+          unique_personal_facts = $15,
+          unique_personal_facts_file = $16
+        WHERE member_id = $17`,
+        [
+          personal_traits,
+          uploadedFiles.personal_traits_file,
+          hobby_and_interests,
+          uploadedFiles.hobby_and_interests_file,
+          goals_and_aspirations,
+          uploadedFiles.goals_and_aspirations_file,
+          favorite_quotes_or_mottos,
+          uploadedFiles.favorite_quotes_or_mottos_file,
+          values_and_beliefs,
+          uploadedFiles.values_and_beliefs_file,
+          life_philosophy,
+          uploadedFiles.life_philosophy_file,
+          background_information,
+          uploadedFiles.background_information_file,
+          unique_personal_facts,
+          uploadedFiles.unique_personal_facts_file,
+          member_id,
+        ]
+      );
+    } else {
+      await ambarsariyaPool.query(
+        `INSERT INTO sell.member_personal (
+          member_id,
+          personal_traits,
+          personal_traits_file,
+          hobbies_and_interests,
+          hobbies_and_interests_file,
+          goal_and_aspirations,
+          goal_and_aspirations_file,
+          favorite_quotes_and_mottos,
+          favorite_quotes_and_mottos_file,
+          values_and_beliefs,
+          values_and_beliefs_file,
+          life_philosophy,
+          life_philosophy_file,
+          background_information,
+          background_information_file,
+          unique_personal_facts,
+          unique_personal_facts_file
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        [
+          member_id,
+          personal_traits,
+          uploadedFiles.personal_traits_file,
+          hobby_and_interests,
+          uploadedFiles.hobby_and_interests_file,
+          goals_and_aspirations,
+          uploadedFiles.goals_and_aspirations_file,
+          favorite_quotes_or_mottos,
+          uploadedFiles.favorite_quotes_or_mottos_file,
+          values_and_beliefs,
+          uploadedFiles.values_and_beliefs_file,
+          life_philosophy,
+          uploadedFiles.life_philosophy_file,
+          background_information,
+          uploadedFiles.background_information_file,
+          unique_personal_facts,
+          uploadedFiles.unique_personal_facts_file,
+        ]
+      );
+    }
+
+    await ambarsariyaPool.query("COMMIT");
+
+    resp.status(201).json({
+      message: recordExists ? "Details updated successfully." : "Details stored successfully.",
+    });
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error storing data", err);
+    resp.status(500).json({ message: "Error storing data", error: err.message });
+  }
+};
+
+const get_member_personal = async (req, res) => {
+  try {
+    const { member_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT *
+            FROM sell.member_personal
+            WHERE member_id = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid member id" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+
 
 module.exports = {
   post_book_eshop,
@@ -1982,4 +2159,6 @@ module.exports = {
   get_nearby_shops,
   post_member_emotional,
   get_member_emotional,
+  post_member_personal,
+  get_member_personal
 };
