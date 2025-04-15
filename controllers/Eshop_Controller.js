@@ -1928,6 +1928,32 @@ const post_member_emotional = async (req, res) => {
   }
 };
 
+const get_member_emotional = async (req, res) => {
+  try {
+    const { member_id } = req.params; // Extract the shop_no from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT *
+            FROM sell.member_emotional
+            WHERE member_id = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid member id" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
 
 module.exports = {
   post_book_eshop,
@@ -1955,4 +1981,5 @@ module.exports = {
   get_allUsers,
   get_nearby_shops,
   post_member_emotional,
+  get_member_emotional,
 };
