@@ -95,6 +95,7 @@ router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supp
 router.get('/sell/support-chat-messages/:support_id/:notification_id', eshopController.get_supportChatMessages);
 router.get('/sell/emotional/:member_id', eshopController.get_member_emotional);
 router.get('/sell/personal/:member_id', eshopController.get_member_personal);
+router.get('/sell/professional/:member_id/:user_id', eshopController.get_member_professional);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
@@ -111,6 +112,7 @@ router.post('/sell/sku', skuController.post_sku);
 router.post('/sell/rku', rkuController.post_rku);
 router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
+router.post('/sell/professional/:member_id/:user_id', eshopController.post_member_professional);
 
 router.post('/sell/personal/:member_id', (req, res, next) => {
   UploadFiles.fields([

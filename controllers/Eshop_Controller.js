@@ -2132,6 +2132,145 @@ const get_member_personal = async (req, res) => {
 
 
 
+const get_member_professional = async (req, res) => {
+  try {
+    const { member_id, user_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            select u.*, uc.username, mp.address, mp.latitude, mp.longitude, mpr.* 
+            from sell.users u
+            join sell.member_profiles mp 
+            on mp.user_id = u.user_id
+            join sell.user_credentials uc 
+            on uc.user_id = u.user_id
+            left join sell.member_professional mpr
+            on mpr.member_id = mp.member_id and mpr.user_id = u.user_id 
+            WHERE mp.member_id = $1 and u.user_id = $2
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id, user_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid member or user id" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const post_member_professional = async (req, res) => {
+  const { member_id, user_id } = req.params;
+  const {
+    linkedin,
+    portfolio,
+    title,
+    summary,
+    skills,
+    work_experience_in_years,
+    education,
+    certification_and_licenses,
+    personal_attributes,
+    achievements_and_awards,
+    professional_affiliations,
+    publications_and_presentations,
+    projects_and_portfolios,
+    reference,
+    language,
+    volunteer_experience,
+    professional_goals
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.member_professional (
+        member_id,
+        user_id, 
+        linkedin,
+        portfolio,
+        title,
+        summary,
+        skills,
+        work_experience_in_years,
+        education,
+        certification_and_licenses,
+        personal_attributes,
+        achievements_and_awards,
+        professional_affiliations,
+        publications_and_presentations,
+        projects_and_portfolios,
+        reference,
+        language,
+        volunteer_experience,
+        professional_goals
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18, $19
+      )
+      ON CONFLICT (member_id)
+      DO UPDATE SET
+      linkedin = EXCLUDED.linkedin,
+      portfolio = EXCLUDED.portfolio,
+      title = EXCLUDED.title,
+      summary = EXCLUDED.summary,
+      skills = EXCLUDED.skills,
+      work_experience_in_years = EXCLUDED.work_experience_in_years,
+      education = EXCLUDED.education,
+      certification_and_licenses = EXCLUDED.certification_and_licenses,
+      personal_attributes = EXCLUDED.personal_attributes,
+      achievements_and_awards = EXCLUDED.achievements_and_awards,
+      professional_affiliations = EXCLUDED.professional_affiliations,
+      publications_and_presentations = EXCLUDED.publications_and_presentations,
+      projects_and_portfolios = EXCLUDED.projects_and_portfolios,
+      reference = EXCLUDED.reference,
+      language = EXCLUDED.language,
+      volunteer_experience = EXCLUDED.volunteer_experience,
+      professional_goals = EXCLUDED.professional_goals;
+    `;
+
+    const values = [
+      member_id,
+      user_id,
+      linkedin,
+      portfolio,
+      title,
+      summary,
+      skills,
+      work_experience_in_years,
+      education,
+      certification_and_licenses,
+      personal_attributes,
+      achievements_and_awards,
+      professional_affiliations,
+      publications_and_presentations,
+      projects_and_portfolios,
+      reference,
+      language,
+      volunteer_experience,
+      professional_goals
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Data saved successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving emotional data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 module.exports = {
   post_book_eshop,
   update_eshop,
@@ -2160,5 +2299,7 @@ module.exports = {
   post_member_emotional,
   get_member_emotional,
   post_member_personal,
-  get_member_personal
+  get_member_personal, 
+  get_member_professional, 
+  post_member_professional
 };
