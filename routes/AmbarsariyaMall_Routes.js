@@ -113,6 +113,7 @@ router.post('/sell/rku', rkuController.post_rku);
 router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
 router.post('/sell/professional/:member_id/:user_id', eshopController.post_member_professional);
+router.post('/sell/relations/:member_id/:user_id', eshopController.post_member_relations);
 
 router.post('/sell/personal/:member_id', (req, res, next) => {
   UploadFiles.fields([

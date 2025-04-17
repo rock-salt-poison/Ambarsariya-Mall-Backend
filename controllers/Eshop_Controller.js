@@ -2266,7 +2266,104 @@ const post_member_professional = async (req, res) => {
     res.status(200).json({ message: "Data saved successfully." });
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
-    console.error("Error saving emotional data:", error);
+    console.error("Error saving professional data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const post_member_relations = async (req, res) => {
+  const { member_id, user_id } = req.params;
+  const {
+    relation,
+    place_name,
+    address,
+    latitude,
+    longitude,
+    work_yrs,
+    ongoing_or_left,
+    people,
+    name_group,
+    mentor,
+    member_phone_no,
+    people_list,
+    community,
+    last_topic,
+    last_event,
+    total_score,
+    position_score,
+    arrange_event,
+    next_event,
+    passed_event
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.member_relations (
+        member_id,
+        user_id, 
+        relation,
+        place_name,
+        address,
+        latitude,
+        longitude,
+        work_yrs,
+        ongoing_or_left,
+        people,
+        name_group,
+        mentor,
+        member_phone_no,
+        people_list,
+        community,
+        last_topic,
+        last_event,
+        total_score,
+        position_score,
+        arrange_event,
+        next_event,
+        passed_event
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+      )
+    `;
+
+    const values = [
+      member_id,
+      user_id, 
+      relation,
+      place_name,
+      address,
+      latitude,
+      longitude,
+      work_yrs,
+      ongoing_or_left,
+      people,
+      name_group,
+      mentor,
+      member_phone_no,
+      people_list,
+      community,
+      last_topic,
+      last_event,
+      total_score,
+      position_score,
+      arrange_event,
+      next_event,
+      passed_event
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Relation saved successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving relations data:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -2300,6 +2397,7 @@ module.exports = {
   get_member_emotional,
   post_member_personal,
   get_member_personal, 
+  post_member_professional,
   get_member_professional, 
-  post_member_professional
+  post_member_relations
 };
