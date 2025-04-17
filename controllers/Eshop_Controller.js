@@ -2207,7 +2207,7 @@ const post_member_professional = async (req, res) => {
         publications_and_presentations,
         projects_and_portfolios,
         reference,
-        language,
+        languages,
         volunteer_experience,
         professional_goals
       )
@@ -2232,7 +2232,7 @@ const post_member_professional = async (req, res) => {
       publications_and_presentations = EXCLUDED.publications_and_presentations,
       projects_and_portfolios = EXCLUDED.projects_and_portfolios,
       reference = EXCLUDED.reference,
-      language = EXCLUDED.language,
+      languages = EXCLUDED.languages,
       volunteer_experience = EXCLUDED.volunteer_experience,
       professional_goals = EXCLUDED.professional_goals;
     `;
