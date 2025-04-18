@@ -346,6 +346,38 @@ const get_checkDriveAccess = async (req, res) => {
   }
 };
 
+const get_checkGoogleAccess = async (req, res) => {
+  const { email } = req.params;
+  console.log(email);
+  
+  try {
+    if (!email)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
+
+    const result = await ambarsariyaPool.query(
+      `SELECT mp.oauth_access_token
+      FROM sell.member_profiles mp
+      JOIN sell.user_credentials uc 
+      ON mp.user_id = uc.user_id
+      WHERE uc.username = $1`,
+      [email]
+    );
+
+    if (result.rows.length && result.rows[0].oauth_access_token) {
+      return res.json({ accessGranted: true });
+    } else {
+      return res.json({ accessGranted: false });
+    }
+  } catch (e) {
+    console.error("Error checking access:", e.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Error checking access" });
+  }
+};
+
 /**
  * 3️ Request Google Drive Access
  */
@@ -362,6 +394,35 @@ const get_requestDriveAccess = (req, res) => {
 
   res.redirect(url);
 };
+
+
+const get_requestGoogleAccess = (req, res) => {
+  const { username } = req.params;
+  console.log(username);
+  
+  if (!username) {
+    return res.status(400).json({ success: false, message: "Username is required" });
+  }
+
+  const scopes = [
+    'https://www.googleapis.com/auth/contacts.readonly',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/mapsengine',
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/meetings.space.created'
+  ];
+
+  const url = oAuth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: scopes,
+    prompt: "consent",
+    state: username,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+  });
+
+  res.redirect(url);
+};
+
 
 /**
  * 4️ Handle OAuth Callback and Store Tokens in Database
@@ -487,7 +548,9 @@ module.exports = {
   post_openSKUCSVFile,
   post_openRKUCSVFile,
   get_checkDriveAccess,
+  get_checkGoogleAccess,
   get_requestDriveAccess,
+  get_requestGoogleAccess,
   get_handleAuthCallback,
   get_imageLink,
   get_sheetsData

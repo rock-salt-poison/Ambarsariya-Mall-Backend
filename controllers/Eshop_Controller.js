@@ -2131,7 +2131,6 @@ const get_member_personal = async (req, res) => {
 };
 
 
-
 const get_member_professional = async (req, res) => {
   try {
     const { member_id, user_id } = req.params; // Extract the member_id from the request
@@ -2275,6 +2274,7 @@ const post_member_relations = async (req, res) => {
   const { member_id, user_id } = req.params;
   const {
     relation,
+    other_relation,
     place_name,
     address,
     latitude,
@@ -2304,6 +2304,7 @@ const post_member_relations = async (req, res) => {
         member_id,
         user_id, 
         relation,
+        other_relation,
         place_name,
         address,
         latitude,
@@ -2327,7 +2328,7 @@ const post_member_relations = async (req, res) => {
       VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
       )
     `;
 
@@ -2335,6 +2336,7 @@ const post_member_relations = async (req, res) => {
       member_id,
       user_id, 
       relation,
+      other_relation,
       place_name,
       address,
       latitude,
@@ -2365,6 +2367,31 @@ const post_member_relations = async (req, res) => {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving relations data:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const get_member_relations = async (req, res) => {
+  try {
+    const { member_id, user_id, relation } = req.params; // Extract the shop_no from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT * FROM sell.member_relations 
+            WHERE member_id = $1 and user_id = $2 and relation = $3
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id, user_id, relation]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No relation found" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
   }
 };
 
@@ -2399,5 +2426,6 @@ module.exports = {
   get_member_personal, 
   post_member_professional,
   get_member_professional, 
-  post_member_relations
+  post_member_relations,
+  get_member_relations
 };
