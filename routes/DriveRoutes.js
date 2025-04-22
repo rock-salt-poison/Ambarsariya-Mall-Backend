@@ -13,8 +13,10 @@ router.get('/check-google-access/:email', driveController.get_checkGoogleAccess)
 router.get('/request-drive-access', driveController.get_requestDriveAccess);
 router.get('/request-google-access/:username', driveController.get_requestGoogleAccess);
 router.get('/auth/google/callback', driveController.get_handleAuthCallback);
+router.get('/auth/google/callback2', driveController.handleAuthCallback2);
 router.get('/image/:fileId', driveController.get_imageLink);
 router.get('/sheet/:sheetId', driveController.get_sheetsData);
+router.get('/google/contacts/:member_id/:user_id', driveController.getGoogleContacts);
 
 
 module.exports = router;

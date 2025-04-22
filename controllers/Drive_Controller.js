@@ -3,6 +3,8 @@ const { processDrive, createItemCsv, createSKUCsv, createRKUCsv } = require("./G
 const { oAuth2Client, driveService, sheetsService } = require("./GoogleDriveAccess/GoogleAuth");
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
+require("dotenv").config();
+
 
 /**
  * 1️⃣ Open Google Drive File (Check and Refresh Token if Needed)
@@ -379,7 +381,7 @@ const get_checkGoogleAccess = async (req, res) => {
 };
 
 /**
- * 3️ Request Google Drive Access
+ * Request Google Drive Access
  */
 const get_requestDriveAccess = (req, res) => {
   const url = oAuth2Client.generateAuthUrl({
@@ -405,6 +407,7 @@ const get_requestGoogleAccess = (req, res) => {
   }
 
   const scopes = [
+    "https://www.googleapis.com/auth/userinfo.email",
     'https://www.googleapis.com/auth/contacts.readonly',
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/mapsengine',
@@ -416,8 +419,8 @@ const get_requestGoogleAccess = (req, res) => {
     access_type: "offline",
     scope: scopes,
     prompt: "consent",
-    state: username,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    login_hint: username,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
   });
 
   res.redirect(url);
@@ -476,6 +479,72 @@ const get_handleAuthCallback = async (req, res) => {
   } catch (error) {
     console.error("OAuth Error:", error.message);
     res.status(500).send("Authentication failed.");
+  }
+};
+
+const handleAuthCallback2 = async (req, res) => {
+  const code = req.query.code;
+  console.log(code);
+  // Get tokens from the authorization code
+  const { tokens } = await oAuth2Client.getToken({
+    code,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
+  });
+    oAuth2Client.setCredentials(tokens);
+  if (!code) {
+    return res.status(400).json({ success: false, message: "Authorization code missing" });
+  }
+
+  try {
+    console.log("OAuth Tokens Received:", tokens);
+
+    // Get user info from Google
+    const oauth2 = google.oauth2({ auth: oAuth2Client, version: 'v2' });
+    const { data } = await oauth2.userinfo.get();
+    const email = data.email;
+    
+    // You can compare googleEmail with username here if needed
+    console.log(`Google account used: ${email}`);
+
+    const memberResult = await ambarsariyaPool.query(
+      `SELECT mp.member_id 
+      FROM sell.member_profiles mp
+      JOIN sell.user_credentials uc 
+      ON mp.user_id = uc.user_id
+      WHERE uc.username = $1`,
+      [email]
+    );
+
+    if (!memberResult.rows.length) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Member not found" });
+    }
+
+    const member_id = memberResult.rows[0].member_id;
+
+    // Save access token into DB
+    await ambarsariyaPool.query(
+      `UPDATE sell.member_profiles
+      SET 
+        oauth_access_token = $1,
+        oauth_refresh_token = $2
+      WHERE member_id = $3;
+`,
+      [tokens.access_token, tokens.refresh_token, member_id]
+    );
+
+    const FRONTEND_BASE_URL =
+    process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+    const redirectUrl = `${FRONTEND_BASE_URL}/AmbarsariyaMall/sell/esale`;
+
+    console.log("Redirecting to:", redirectUrl);
+    return res.redirect(redirectUrl);
+  } catch (err) {
+    console.log(err);
+    
+    console.error("OAuth callback2 error:", err.message);
+    return res.status(500).json({ success: false, message: "OAuth callback failed" });
   }
 };
 
@@ -541,6 +610,59 @@ const get_sheetsData = async (req, res) => {
 };
 
 
+const getUserOAuthTokens = async (member_id, user_id) => {
+  const result = await ambarsariyaPool.query(
+    `SELECT mp.oauth_access_token, mp.oauth_refresh_token
+     FROM sell.member_profiles mp
+     WHERE mp.member_id = $1 AND mp.user_id = $2`,
+    [member_id, user_id]
+  );
+
+  if (result.rows.length === 0) throw new Error('User tokens not found');
+  return result.rows[0];
+};
+
+
+const getGoogleContacts = async (req, res) => {
+  const { member_id, user_id } = req.params;
+
+  try {
+    const { oauth_access_token, oauth_refresh_token } = await getUserOAuthTokens(member_id, user_id);
+
+    // const oAuth2Client = new google.auth.OAuth2(
+    //   process.env.GOOGLE_CLIENT_ID,
+    //   process.env.GOOGLE_CLIENT_SECRET,
+    //   process.env.GOOGLE_REDIRECT_URI2
+    // );
+
+    oAuth2Client.setCredentials({
+      access_token: oauth_access_token,
+      refresh_token: oauth_refresh_token,
+    });
+
+    const peopleService = google.people({ version: 'v1', auth: oAuth2Client });
+
+    const response = await peopleService.people.connections.list({
+      resourceName: 'people/me',
+      personFields: 'names,emailAddresses,phoneNumbers',
+    });
+
+    const connections = response.data.connections || [];
+
+    const contacts = connections.map((person) => ({
+      name: person.names?.[0]?.displayName || '',
+      email: person.emailAddresses?.[0]?.value || '',
+      phone: person.phoneNumbers?.[0]?.value || '',
+    }));
+
+    res.json({ success: true, contacts });
+  } catch (err) {
+    console.error("Error fetching contacts:", err.message);
+    res.status(500).json({ success: false, message: "Failed to fetch contacts" });
+  }
+};
+
+
 
 module.exports = {
   post_openFile,
@@ -552,6 +674,8 @@ module.exports = {
   get_requestDriveAccess,
   get_requestGoogleAccess,
   get_handleAuthCallback,
+  handleAuthCallback2,
   get_imageLink,
-  get_sheetsData
+  get_sheetsData,
+  getGoogleContacts
 };
