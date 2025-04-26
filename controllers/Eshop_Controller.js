@@ -556,7 +556,7 @@ const get_memberData = async (req, res) => {
                 mp.latitude ,
                 mp.longitude ,
                 mp.profile_img ,
-                mp.bg_img
+                mp.bg_img, mp.oauth_access_token, mp.oauth_refresh_token
             FROM Sell.users u
             JOIN Sell.user_credentials uc ON uc.user_id = u.user_id
             JOIN Sell.member_profiles mp ON mp.user_id = u.user_id

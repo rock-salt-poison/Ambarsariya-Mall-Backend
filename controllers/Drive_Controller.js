@@ -2,6 +2,7 @@ const { google } = require("googleapis");
 const { processDrive, createItemCsv, createSKUCsv, createRKUCsv } = require("./GoogleDriveAccess/Drive");
 const { oAuth2Client, driveService, sheetsService } = require("./GoogleDriveAccess/GoogleAuth");
 const { createDbPool } = require("../db_config/db");
+const { default: axios } = require("axios");
 const ambarsariyaPool = createDbPool();
 require("dotenv").config();
 
@@ -662,6 +663,56 @@ const getGoogleContacts = async (req, res) => {
   }
 };
 
+async function refreshAccessToken(refreshToken) {
+  const res = await axios.post('https://oauth2.googleapis.com/token', null, {
+    params: {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    }
+  });
+  return res.data.access_token;
+}
+
+async function getTokenScopes(accessToken) {
+  const res = await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+  return res.data.scope;
+}
+
+const get_userScopes = async (req, res) => {
+  const { oauth_access_token, oauth_refresh_token } = req.query;
+  console.log(oauth_access_token,oauth_refresh_token);
+  
+  try {
+    const scopes = await getTokenScopes(oauth_access_token);
+    console.log('Scopes:', scopes);
+    return res.json({ scopes, refreshed: false });
+
+  } catch (e) {
+    console.log(e);
+    
+    if (e.response && e.response.data.error_description === 'Invalid Value') {
+      try {
+        console.log('Access token expired, refreshing...');
+        const newAccessToken = await refreshAccessToken(oauth_refresh_token);
+        const scopes = await getTokenScopes(newAccessToken);
+        console.log('Scopes after refresh:', scopes);
+
+        // Optionally: update the newAccessToken in your DB here
+
+        return res.json({ scopes, refreshed: true });
+      } catch (refreshError) {
+        console.error('Error refreshing access token:', refreshError.message);
+        return res.status(500).json({ error: 'Failed to refresh access token' });
+      }
+    } else {
+      console.error('Error fetching scopes:', e.message);
+      return res.status(500).json({ error: 'Failed to fetch scopes' });
+    }
+  }
+};
+
 
 
 module.exports = {
@@ -677,5 +728,6 @@ module.exports = {
   handleAuthCallback2,
   get_imageLink,
   get_sheetsData,
-  getGoogleContacts
+  getGoogleContacts,
+  get_userScopes
 };
