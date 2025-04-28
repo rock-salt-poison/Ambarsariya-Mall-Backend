@@ -7,6 +7,18 @@ const ambarsariyaPool = createDbPool();
 require("dotenv").config();
 
 
+const serviceScopeMapping = {
+  contacts: 'https://www.googleapis.com/auth/contacts.readonly',
+  maps: 'https://www.googleapis.com/auth/mapsengine',
+  calendar: 'https://www.googleapis.com/auth/calendar',
+  meet: 'https://www.googleapis.com/auth/meetings.space.created',
+  photos: 'https://www.googleapis.com/auth/photoslibrary.readonly',
+  chat: 'https://www.googleapis.com/auth/chat.messages',
+  profile: 'https://www.googleapis.com/auth/userinfo.profile',
+  email: 'https://www.googleapis.com/auth/userinfo.email',
+};
+
+
 /**
  * 1️⃣ Open Google Drive File (Check and Refresh Token if Needed)
  */
@@ -413,7 +425,12 @@ const get_requestGoogleAccess = (req, res) => {
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/mapsengine',
     'https://www.googleapis.com/auth/calendar.events',
-    'https://www.googleapis.com/auth/meetings.space.created'
+    'https://www.googleapis.com/auth/meetings.space.created',
+    'https://www.googleapis.com/auth/photoslibrary.readonly',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    // "https://www.googleapis.com/auth/chat.messages.readonly",
+    // "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/chat.messages"
   ];
 
   const url = oAuth2Client.generateAuthUrl({
@@ -425,6 +442,36 @@ const get_requestGoogleAccess = (req, res) => {
   });
 
   res.redirect(url);
+};
+
+const post_requestDynamicGoogleAccess = (req, res) => {
+  const { username, services } = req.body;
+
+  console.log('Services : ', services);
+  
+  
+  if (!username || !services || !Array.isArray(services)) {
+    return res.status(400).json({ success: false, message: "Username and services are required" });
+  }
+
+  // Always include email access
+  const selectedScopes = [serviceScopeMapping.email];
+
+  services.forEach(service => {
+    if (serviceScopeMapping[service]) {
+      selectedScopes.push(serviceScopeMapping[service]);
+    }
+  });
+
+  const url = oAuth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: selectedScopes,
+    prompt: "consent",
+    login_hint: username,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
+  });
+
+  res.json({ success: true, authUrl: url });
 };
 
 
@@ -682,11 +729,9 @@ async function getTokenScopes(accessToken) {
 
 const get_userScopes = async (req, res) => {
   const { oauth_access_token, oauth_refresh_token } = req.query;
-  console.log(oauth_access_token,oauth_refresh_token);
   
   try {
     const scopes = await getTokenScopes(oauth_access_token);
-    console.log('Scopes:', scopes);
     return res.json({ scopes, refreshed: false });
 
   } catch (e) {
@@ -694,10 +739,10 @@ const get_userScopes = async (req, res) => {
     
     if (e.response && e.response.data.error_description === 'Invalid Value') {
       try {
-        console.log('Access token expired, refreshing...');
+        // console.log('Access token expired, refreshing...');
         const newAccessToken = await refreshAccessToken(oauth_refresh_token);
         const scopes = await getTokenScopes(newAccessToken);
-        console.log('Scopes after refresh:', scopes);
+        // console.log('Scopes after refresh:', scopes);
 
         // Optionally: update the newAccessToken in your DB here
 
@@ -724,6 +769,7 @@ module.exports = {
   get_checkGoogleAccess,
   get_requestDriveAccess,
   get_requestGoogleAccess,
+  post_requestDynamicGoogleAccess,
   get_handleAuthCallback,
   handleAuthCallback2,
   get_imageLink,

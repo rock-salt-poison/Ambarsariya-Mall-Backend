@@ -12,6 +12,7 @@ router.get('/check-drive-access/:email', driveController.get_checkDriveAccess);
 router.get('/check-google-access/:email', driveController.get_checkGoogleAccess);
 router.get('/request-drive-access', driveController.get_requestDriveAccess);
 router.get('/request-google-access/:username', driveController.get_requestGoogleAccess);
+router.post('/request-dynamic-google-access', driveController.post_requestDynamicGoogleAccess);
 router.get('/auth/google/callback', driveController.get_handleAuthCallback);
 router.get('/auth/google/callback2', driveController.handleAuthCallback2);
 router.get('/image/:fileId', driveController.get_imageLink);
