@@ -2395,6 +2395,76 @@ const get_member_relations = async (req, res) => {
   }
 };
 
+const put_member_share_level = async (req, res) => {
+  const {memberId, level, isPublic} = req.body;
+
+  if (!memberId || !level || typeof isPublic !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'Invalid parameters' });
+  }
+
+  // Dynamically choose the table to update based on the share level
+  const table = level.toLowerCase();  // Convert the level to lowercase to match table names (emotional, personal, etc.)
+  
+  // Ensure the level corresponds to a valid table
+  const validLevels = ['emotional', 'personal', 'professional', 'relations', 'locations', 'community'];
+  if (!validLevels.includes(table)) {
+    return res.status(400).json({ success: false, message: 'Invalid share level' });
+  }
+
+  try {
+    // Update the public flag in the corresponding share-level table
+    const query = `UPDATE sell.member_${table} SET public = $1 WHERE member_id = $2`;
+    const result = await ambarsariyaPool.query(query, [isPublic, memberId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({ success: true, message: `Share level ${level} updated successfully` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'An error occurred' });
+  }
+} 
+
+const get_member_share_level = async (req, res) => {
+  try {
+    const { member_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT DISTINCT ON (mp.member_id)
+              e.public as "emotional_public",
+              p.public as "personal_public",
+              prof.public as "professional_public",
+              r.public as "relations_public"
+            FROM sell.member_profiles mp 
+            LEFT JOIN sell.member_emotional e 
+            ON e.member_id = mp.member_id
+            LEFT JOIN sell.member_personal p 
+            ON p.member_id = mp.member_id
+            LEFT JOIN sell.member_professional prof 
+            ON prof.member_id = mp.member_id
+            LEFT JOIN sell.member_relations r 
+            ON r.member_id = mp.member_id
+            WHERE mp.member_id = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid member id" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
 module.exports = {
   post_book_eshop,
   update_eshop,
@@ -2427,5 +2497,7 @@ module.exports = {
   post_member_professional,
   get_member_professional, 
   post_member_relations,
-  get_member_relations
+  get_member_relations,
+  put_member_share_level,
+  get_member_share_level
 };

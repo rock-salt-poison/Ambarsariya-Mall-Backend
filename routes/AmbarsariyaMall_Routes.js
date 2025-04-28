@@ -98,9 +98,12 @@ router.get('/sell/personal/:member_id', eshopController.get_member_personal);
 router.get('/sell/relations/:member_id/:user_id/:relation', eshopController.get_member_relations);
 router.get('/sell/professional/:member_id/:user_id', eshopController.get_member_professional);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
+router.get('/sell/member-share-level/:member_id', eshopController.get_member_share_level);
+
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
 router.get('/sale_order_no/:seller_id', saleController.get_sale_order_numbers);
+
 
 router.post('/sell/support', eshopController.post_visitorData);
 router.post('/sell/coupons/:shop_no', eshopController.post_discount_coupons);
@@ -115,6 +118,7 @@ router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
 router.post('/sell/professional/:member_id/:user_id', eshopController.post_member_professional);
 router.post('/sell/relations/:member_id/:user_id', eshopController.post_member_relations);
+router.put('/sell/member-share-level', eshopController.put_member_share_level);
 
 router.post('/sell/personal/:member_id', (req, res, next) => {
   UploadFiles.fields([
