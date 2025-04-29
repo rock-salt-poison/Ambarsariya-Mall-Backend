@@ -120,35 +120,38 @@ router.post('/sell/professional/:member_id/:user_id', eshopController.post_membe
 router.post('/sell/relations/:member_id/:user_id', eshopController.post_member_relations);
 router.put('/sell/member-share-level', eshopController.put_member_share_level);
 
-router.post('/sell/personal/:member_id', (req, res, next) => {
-  UploadFiles.fields([
-    { name: 'personal_traits_file', maxCount: 1 },
-    { name: 'hobby_and_interests_file', maxCount: 1 },
-    { name: 'goals_and_aspirations_file', maxCount: 1 },
-    { name: 'favorite_quotes_or_mottos_file', maxCount: 1 },
-    { name: 'values_and_beliefs_file', maxCount: 1 },
-    { name: 'life_philosophy_file', maxCount: 1 },
-    { name: 'background_information_file', maxCount: 1 },
-    { name: 'unique_personal_facts_file', maxCount: 1 },
-  ])(req, res, (err) => {
-    if (err) {
-      if (err instanceof multer.MulterError) {
-        console.log(err);
+// router.post('/sell/personal/:member_id', (req, res, next) => {
+//   UploadFiles.fields([
+//     { name: 'personal_traits_file', maxCount: 1 },
+//     { name: 'hobby_and_interests_file', maxCount: 1 },
+//     { name: 'goals_and_aspirations_file', maxCount: 1 },
+//     { name: 'favorite_quotes_or_mottos_file', maxCount: 1 },
+//     { name: 'values_and_beliefs_file', maxCount: 1 },
+//     { name: 'life_philosophy_file', maxCount: 1 },
+//     { name: 'background_information_file', maxCount: 1 },
+//     { name: 'unique_personal_facts_file', maxCount: 1 },
+//   ])(req, res, (err) => {
+//     if (err) {
+//       if (err instanceof multer.MulterError) {
+//         console.log(err);
         
-        if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ message: "File size exceeds the 1MB limit." });
-        }
-      } else {
-        console.log(err.message);
-        return res.status(400).json({ message: err.message });
-      }
-    }
-    // If no errors, call the controller function
-    eshopController.post_member_personal(req, res);
-  });
-});
+//         if (err.code === "LIMIT_FILE_SIZE") {
+//           return res.status(400).json({ message: "File size exceeds the 1MB limit." });
+//         }
+//       } else {
+//         console.log(err.message);
+//         return res.status(400).json({ message: err.message });
+//       }
+//     }
+//     // If no errors, call the controller function
+//     eshopController.post_member_personal(req, res);
+//   });
+// });
 
 // router.put('/sell/support', eshopController.put_visitorData);
+router.post('/sell/personal/:member_id', eshopController.post_member_personal);
+
+
 router.put('/sell/forget-password', eshopController.put_forgetPassword);
 
 router.put("/sell/support", (req, res, next) => {

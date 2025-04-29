@@ -1951,158 +1951,261 @@ const get_member_emotional = async (req, res) => {
   }
 };
 
+// const post_member_personal = async (req, resp) => {
+//   console.log("Received files:", req.files["personal_traits_file"]);
+//   const { member_id } = req.params;
+//   const {
+//     personal_traits,
+//     hobby_and_interests,
+//     goals_and_aspirations,
+//     favorite_quotes_or_mottos,
+//     values_and_beliefs,
+//     life_philosophy,
+//     background_information,
+//     unique_personal_facts,
+//   } = req.body;
+
+//   // Map input fields to their GCS folder
+//   const fileTraitMap = {
+//     personal_traits_file: "personal_traits",
+//     hobby_and_interests_file: "hobbies_and_interests",
+//     goals_and_aspirations_file: "goal_and_aspirations",
+//     favorite_quotes_or_mottos_file: "favorite_quotes_and_mottos",
+//     values_and_beliefs_file: "values_and_beliefs",
+//     life_philosophy_file: "life_philosophy",
+//     background_information_file: "background_information",
+//     unique_personal_facts_file: "unique_personal_facts",
+//   };
+
+//   const uploadedFiles = {};
+
+//   try {
+//     await ambarsariyaPool.query("BEGIN");
+
+//     // Check if record exists
+//     const existingRecordRes = await ambarsariyaPool.query(
+//       `SELECT * FROM sell.member_personal WHERE member_id = $1`,
+//       [member_id]
+//     );
+
+//     const recordExists = existingRecordRes.rows.length > 0;
+//     const existingData = recordExists ? existingRecordRes.rows[0] : null;
+
+//     // Handle file upload + deletion
+//     for (const [formKey, folderName] of Object.entries(fileTraitMap)) {
+//       const file = req.files?.[formKey]?.[0];
+
+//       if (file) {
+//         const existingFilePath = existingData?.[`${formKey}`];
+//         if (existingFilePath) {
+//           await deleteFileFromGCS(existingFilePath);
+//         }
+
+//         const newPath = await uploadFileToGCS(file, `member/${folderName}`);
+//         uploadedFiles[`${formKey}`] = newPath;
+//       } else {
+//         uploadedFiles[`${formKey}`] = existingData?.[`${formKey}`] || null;
+//       }
+//     }
+
+//     // Now either insert or update
+//     if (recordExists) {
+//       await ambarsariyaPool.query(
+//         `UPDATE sell.member_personal SET
+//           personal_traits = $1,
+//           personal_traits_file = $2,
+//           hobbies_and_interests = $3,
+//           hobbies_and_interests_file = $4,
+//           goal_and_aspirations = $5,
+//           goal_and_aspirations_file = $6,
+//           favorite_quotes_and_mottos = $7,
+//           favorite_quotes_and_mottos_file = $8,
+//           values_and_beliefs = $9,
+//           values_and_beliefs_file = $10,
+//           life_philosophy = $11,
+//           life_philosophy_file = $12,
+//           background_information = $13,
+//           background_information_file = $14,
+//           unique_personal_facts = $15,
+//           unique_personal_facts_file = $16
+//         WHERE member_id = $17`,
+//         [
+//           personal_traits,
+//           uploadedFiles.personal_traits_file,
+//           hobby_and_interests,
+//           uploadedFiles.hobby_and_interests_file,
+//           goals_and_aspirations,
+//           uploadedFiles.goals_and_aspirations_file,
+//           favorite_quotes_or_mottos,
+//           uploadedFiles.favorite_quotes_or_mottos_file,
+//           values_and_beliefs,
+//           uploadedFiles.values_and_beliefs_file,
+//           life_philosophy,
+//           uploadedFiles.life_philosophy_file,
+//           background_information,
+//           uploadedFiles.background_information_file,
+//           unique_personal_facts,
+//           uploadedFiles.unique_personal_facts_file,
+//           member_id,
+//         ]
+//       );
+//     } else {
+//       await ambarsariyaPool.query(
+//         `INSERT INTO sell.member_personal (
+//           member_id,
+//           personal_traits,
+//           personal_traits_file,
+//           hobbies_and_interests,
+//           hobbies_and_interests_file,
+//           goal_and_aspirations,
+//           goal_and_aspirations_file,
+//           favorite_quotes_and_mottos,
+//           favorite_quotes_and_mottos_file,
+//           values_and_beliefs,
+//           values_and_beliefs_file,
+//           life_philosophy,
+//           life_philosophy_file,
+//           background_information,
+//           background_information_file,
+//           unique_personal_facts,
+//           unique_personal_facts_file
+//         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+//         [
+//           member_id,
+//           personal_traits,
+//           uploadedFiles.personal_traits_file,
+//           hobby_and_interests,
+//           uploadedFiles.hobby_and_interests_file,
+//           goals_and_aspirations,
+//           uploadedFiles.goals_and_aspirations_file,
+//           favorite_quotes_or_mottos,
+//           uploadedFiles.favorite_quotes_or_mottos_file,
+//           values_and_beliefs,
+//           uploadedFiles.values_and_beliefs_file,
+//           life_philosophy,
+//           uploadedFiles.life_philosophy_file,
+//           background_information,
+//           uploadedFiles.background_information_file,
+//           unique_personal_facts,
+//           uploadedFiles.unique_personal_facts_file,
+//         ]
+//       );
+//     }
+
+//     await ambarsariyaPool.query("COMMIT");
+
+//     resp.status(201).json({
+//       message: recordExists ? "Details updated successfully." : "Details stored successfully.",
+//     });
+//   } catch (err) {
+//     await ambarsariyaPool.query("ROLLBACK");
+//     console.error("Error storing data", err);
+//     resp.status(500).json({ message: "Error storing data", error: err.message });
+//   }
+// };
+
+
 const post_member_personal = async (req, resp) => {
-  console.log("Received files:", req.files["personal_traits_file"]);
   const { member_id } = req.params;
   const {
     personal_traits,
-    hobby_and_interests,
-    goals_and_aspirations,
-    favorite_quotes_or_mottos,
+    personal_traits_file,
+    hobbies_and_interests,
+    hobbies_and_interests_file,
+    goal_and_aspirations,
+    goal_and_aspirations_file,
+    favorite_quotes_and_mottos,
+    favorite_quotes_and_mottos_file,
     values_and_beliefs,
+    values_and_beliefs_file,
     life_philosophy,
+    life_philosophy_file,
     background_information,
+    background_information_file,
     unique_personal_facts,
+    unique_personal_facts_file,
   } = req.body;
 
-  // Map input fields to their GCS folder
-  const fileTraitMap = {
-    personal_traits_file: "personal_traits",
-    hobby_and_interests_file: "hobbies_and_interests",
-    goals_and_aspirations_file: "goal_and_aspirations",
-    favorite_quotes_or_mottos_file: "favorite_quotes_and_mottos",
-    values_and_beliefs_file: "values_and_beliefs",
-    life_philosophy_file: "life_philosophy",
-    background_information_file: "background_information",
-    unique_personal_facts_file: "unique_personal_facts",
-  };
-
-  const uploadedFiles = {};
+  if (!member_id) {
+    return resp.status(400).json({ message: "member_id is required." });
+  }
 
   try {
     await ambarsariyaPool.query("BEGIN");
 
-    // Check if record exists
-    const existingRecordRes = await ambarsariyaPool.query(
-      `SELECT * FROM sell.member_personal WHERE member_id = $1`,
-      [member_id]
+    await ambarsariyaPool.query(
+      `
+      INSERT INTO sell.member_personal (
+        member_id,
+        personal_traits,
+        personal_traits_file,
+        hobbies_and_interests,
+        hobbies_and_interests_file,
+        goal_and_aspirations,
+        goal_and_aspirations_file,
+        favorite_quotes_and_mottos,
+        favorite_quotes_and_mottos_file,
+        values_and_beliefs,
+        values_and_beliefs_file,
+        life_philosophy,
+        life_philosophy_file,
+        background_information,
+        background_information_file,
+        unique_personal_facts,
+        unique_personal_facts_file
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ON CONFLICT (member_id)
+      DO UPDATE SET
+        personal_traits = EXCLUDED.personal_traits,
+        personal_traits_file = EXCLUDED.personal_traits_file,
+        hobbies_and_interests = EXCLUDED.hobbies_and_interests,
+        hobbies_and_interests_file = EXCLUDED.hobbies_and_interests_file,
+        goal_and_aspirations = EXCLUDED.goal_and_aspirations,
+        goal_and_aspirations_file = EXCLUDED.goal_and_aspirations_file,
+        favorite_quotes_and_mottos = EXCLUDED.favorite_quotes_and_mottos,
+        favorite_quotes_and_mottos_file = EXCLUDED.favorite_quotes_and_mottos_file,
+        values_and_beliefs = EXCLUDED.values_and_beliefs,
+        values_and_beliefs_file = EXCLUDED.values_and_beliefs_file,
+        life_philosophy = EXCLUDED.life_philosophy,
+        life_philosophy_file = EXCLUDED.life_philosophy_file,
+        background_information = EXCLUDED.background_information,
+        background_information_file = EXCLUDED.background_information_file,
+        unique_personal_facts = EXCLUDED.unique_personal_facts,
+        unique_personal_facts_file = EXCLUDED.unique_personal_facts_file
+      `
+      ,
+      [
+        member_id,
+        personal_traits,
+        personal_traits_file,
+        hobbies_and_interests,
+        hobbies_and_interests_file,
+        goal_and_aspirations,
+        goal_and_aspirations_file,
+        favorite_quotes_and_mottos,
+        favorite_quotes_and_mottos_file,
+        values_and_beliefs,
+        values_and_beliefs_file,
+        life_philosophy,
+        life_philosophy_file,
+        background_information,
+        background_information_file,
+        unique_personal_facts,
+        unique_personal_facts_file,
+      ]
     );
-
-    const recordExists = existingRecordRes.rows.length > 0;
-    const existingData = recordExists ? existingRecordRes.rows[0] : null;
-
-    // Handle file upload + deletion
-    for (const [formKey, folderName] of Object.entries(fileTraitMap)) {
-      const file = req.files?.[formKey]?.[0];
-
-      if (file) {
-        const existingFilePath = existingData?.[`${formKey}`];
-        if (existingFilePath) {
-          await deleteFileFromGCS(existingFilePath);
-        }
-
-        const newPath = await uploadFileToGCS(file, `member/${folderName}`);
-        uploadedFiles[`${formKey}`] = newPath;
-      } else {
-        uploadedFiles[`${formKey}`] = existingData?.[`${formKey}`] || null;
-      }
-    }
-
-    // Now either insert or update
-    if (recordExists) {
-      await ambarsariyaPool.query(
-        `UPDATE sell.member_personal SET
-          personal_traits = $1,
-          personal_traits_file = $2,
-          hobbies_and_interests = $3,
-          hobbies_and_interests_file = $4,
-          goal_and_aspirations = $5,
-          goal_and_aspirations_file = $6,
-          favorite_quotes_and_mottos = $7,
-          favorite_quotes_and_mottos_file = $8,
-          values_and_beliefs = $9,
-          values_and_beliefs_file = $10,
-          life_philosophy = $11,
-          life_philosophy_file = $12,
-          background_information = $13,
-          background_information_file = $14,
-          unique_personal_facts = $15,
-          unique_personal_facts_file = $16
-        WHERE member_id = $17`,
-        [
-          personal_traits,
-          uploadedFiles.personal_traits_file,
-          hobby_and_interests,
-          uploadedFiles.hobby_and_interests_file,
-          goals_and_aspirations,
-          uploadedFiles.goals_and_aspirations_file,
-          favorite_quotes_or_mottos,
-          uploadedFiles.favorite_quotes_or_mottos_file,
-          values_and_beliefs,
-          uploadedFiles.values_and_beliefs_file,
-          life_philosophy,
-          uploadedFiles.life_philosophy_file,
-          background_information,
-          uploadedFiles.background_information_file,
-          unique_personal_facts,
-          uploadedFiles.unique_personal_facts_file,
-          member_id,
-        ]
-      );
-    } else {
-      await ambarsariyaPool.query(
-        `INSERT INTO sell.member_personal (
-          member_id,
-          personal_traits,
-          personal_traits_file,
-          hobbies_and_interests,
-          hobbies_and_interests_file,
-          goal_and_aspirations,
-          goal_and_aspirations_file,
-          favorite_quotes_and_mottos,
-          favorite_quotes_and_mottos_file,
-          values_and_beliefs,
-          values_and_beliefs_file,
-          life_philosophy,
-          life_philosophy_file,
-          background_information,
-          background_information_file,
-          unique_personal_facts,
-          unique_personal_facts_file
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-        [
-          member_id,
-          personal_traits,
-          uploadedFiles.personal_traits_file,
-          hobby_and_interests,
-          uploadedFiles.hobby_and_interests_file,
-          goals_and_aspirations,
-          uploadedFiles.goals_and_aspirations_file,
-          favorite_quotes_or_mottos,
-          uploadedFiles.favorite_quotes_or_mottos_file,
-          values_and_beliefs,
-          uploadedFiles.values_and_beliefs_file,
-          life_philosophy,
-          uploadedFiles.life_philosophy_file,
-          background_information,
-          uploadedFiles.background_information_file,
-          unique_personal_facts,
-          uploadedFiles.unique_personal_facts_file,
-        ]
-      );
-    }
 
     await ambarsariyaPool.query("COMMIT");
 
-    resp.status(201).json({
-      message: recordExists ? "Details updated successfully." : "Details stored successfully.",
-    });
+    resp.status(201).json({ message: "Details stored or updated successfully." });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
     resp.status(500).json({ message: "Error storing data", error: err.message });
   }
 };
+
 
 const get_member_personal = async (req, res) => {
   try {
