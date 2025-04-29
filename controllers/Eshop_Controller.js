@@ -2173,8 +2173,7 @@ const post_member_personal = async (req, resp) => {
         background_information_file = EXCLUDED.background_information_file,
         unique_personal_facts = EXCLUDED.unique_personal_facts,
         unique_personal_facts_file = EXCLUDED.unique_personal_facts_file
-      `
-      ,
+      `,
       [
         member_id,
         personal_traits,
