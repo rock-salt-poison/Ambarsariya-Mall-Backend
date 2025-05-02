@@ -2567,6 +2567,59 @@ const get_member_share_level = async (req, res) => {
   }
 };
 
+const get_member_event_purpose = async (req, res) => {
+  try {
+    const { event_type } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT * FROM event_purpose where event_type = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [event_type]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid event type" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const get_member_event_purpose_engagement = async (req, res) => {
+  try {
+    const { event_type, event_purpose_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            select epe.id, ep.purpose, ee.engagement from event_purpose_engagement epe
+            join event_purpose ep
+            on ep.id = epe.event_purpose_id
+            join event_engagement ee
+            on ee.id = epe.engagement_id
+            where ep.event_type = $1 and ep.id=$2
+        `;
+    const result = await ambarsariyaPool.query(query, [event_type, event_purpose_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "Invalid event type or purpose" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
 module.exports = {
   post_book_eshop,
   update_eshop,
@@ -2601,5 +2654,7 @@ module.exports = {
   post_member_relations,
   get_member_relations,
   put_member_share_level,
-  get_member_share_level
+  get_member_share_level,
+  get_member_event_purpose, 
+  get_member_event_purpose_engagement
 };

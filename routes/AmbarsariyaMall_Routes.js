@@ -99,6 +99,8 @@ router.get('/sell/relations/:member_id/:user_id/:relation', eshopController.get_
 router.get('/sell/professional/:member_id/:user_id', eshopController.get_member_professional);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 router.get('/sell/member-share-level/:member_id', eshopController.get_member_share_level);
+router.get('/event-purpose/:event_type', eshopController.get_member_event_purpose);
+router.get('/event-purpose-engagement/:event_type/:event_purpose_id', eshopController.get_member_event_purpose_engagement);
 
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
