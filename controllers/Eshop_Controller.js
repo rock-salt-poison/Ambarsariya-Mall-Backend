@@ -2597,12 +2597,18 @@ const get_member_event_purpose_engagement = async (req, res) => {
 
     // Query for full visitor data
     const query = `
-            select epe.id, ep.purpose, ee.engagement from event_purpose_engagement epe
-            join event_purpose ep
-            on ep.id = epe.event_purpose_id
-            join event_engagement ee
-            on ee.id = epe.engagement_id
-            where ep.event_type = $1 and ep.id=$2
+            SELECT 
+              epe.id, 
+              ep.id AS event_purpose_id, 
+              ep.purpose, 
+              ee.id AS event_engagement_id, 
+              ee.engagement, 
+              ep.event_type
+            JOIN event_purpose ep
+            ON ep.id = epe.event_purpose_id
+            JOIN event_engagement ee
+            ON ee.id = epe.engagement_id
+            WHERE ep.event_type = $1 and ep.id=$2
         `;
     const result = await ambarsariyaPool.query(query, [event_type, event_purpose_id]);
 
