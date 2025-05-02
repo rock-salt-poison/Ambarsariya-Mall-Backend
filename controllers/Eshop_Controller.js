@@ -2569,6 +2569,35 @@ const post_member_events = async (req, res) => {
   }
 };
 
+const get_member_events = async (req, res) => {
+  try {
+    const { member_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT me.*, ep.purpose, ee.engagement FROM sell.member_events me
+join event_purpose ep 
+on ep.id = me.event_purpose_id
+join event_engagement ee 
+on ee.id = me.event_engagement_id
+            WHERE member_id = $1 
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No Event exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
 
 const get_member_relations = async (req, res) => {
   try {
@@ -2773,5 +2802,6 @@ module.exports = {
   get_member_share_level,
   get_member_event_purpose, 
   get_member_event_purpose_engagement,
-  post_member_events
+  post_member_events,
+  get_member_events
 };
