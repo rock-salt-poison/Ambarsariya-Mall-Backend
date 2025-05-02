@@ -2472,30 +2472,139 @@ const post_member_relations = async (req, res) => {
   }
 };
 
+const post_member_events = async (req, res) => {
+  const { member_id } = req.params;
+  const {
+    event_type,
+    event_purpose_id,
+    event_engagement_id,
+    event_name,
+    mentor_name,
+    relations,
+    groups,
+    location,
+    latitude,
+    longitude,
+    date,
+    time,
+    rules_or_description
+  } = req.body;
+
+  console.log("Received file:", req.file);
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    // First, insert without uploaded_file_link
+    const insertQuery = `
+      INSERT INTO sell.member_events (
+        member_id,
+        event_type,
+        event_purpose_id,
+        event_engagement_id,
+        event_name,
+        mentor_name,
+        relations,
+        groups,
+        location,
+        latitude,
+        longitude,
+        date,
+        time,
+        rules_or_description
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14
+      )
+      RETURNING id
+    `;
+
+    const insertValues = [
+      member_id,
+      event_type,
+      event_purpose_id,
+      event_engagement_id,
+      event_name,
+      mentor_name,
+      relations,
+      groups,
+      location,
+      latitude,
+      longitude,
+      date,
+      time,
+      rules_or_description
+    ];
+
+    const result = await ambarsariyaPool.query(insertQuery, insertValues);
+    const eventId = result.rows[0].id;
+
+    await ambarsariyaPool.query("COMMIT");
+
+    // Upload file only after successful DB insert
+    if (req.file) {
+      const targetFolder = "member/events";
+
+      try {
+        const uploadedFileLink = await uploadFileToGCS(req.file, targetFolder);
+
+        // Update the event with the uploaded file link
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_events SET uploaded_file_link = $1 WHERE id = $2`,
+          [uploadedFileLink, eventId]
+        );
+      } catch (uploadErr) {
+        console.error("File upload failed:", uploadErr);
+        // Optional: decide whether to delete DB entry or just skip file update
+      }
+    }
+
+    res.status(200).json({ message: "Event created successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error creating event:", error);
+    res.status(500).json({ error: "Internal server error", message:error.detail });
+  }
+};
+
+
 const get_member_relations = async (req, res) => {
   try {
-    const { member_id, user_id, relation } = req.params; // Extract the shop_no from the request
+    const { member_id, user_id } = req.params;
+    const { relation } = req.query;
 
-    // Query for full visitor data
-    const query = `
-            SELECT * FROM sell.member_relations 
-            WHERE member_id = $1 and user_id = $2 and relation = $3
-        `;
-    const result = await ambarsariyaPool.query(query, [member_id, user_id, relation]);
+    let query;
+    let params;
+
+    if (relation) {
+      query = `
+        SELECT * FROM sell.member_relations 
+        WHERE member_id = $1 AND user_id = $2 AND relation = $3
+      `;
+      params = [member_id, user_id, relation];
+    } else {
+      query = `
+        SELECT * FROM sell.member_relations 
+        WHERE member_id = $1 AND user_id = $2
+      `;
+      params = [member_id, user_id];
+    }
+
+    const result = await ambarsariyaPool.query(query, params);
 
     if (result.rowCount === 0) {
-      // If no rows are found, assume the token is invalid
       res.status(404).json({ valid: false, message: "No relation found" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
   } catch (err) {
     console.error("Error processing request:", err);
-    res
-      .status(500)
-      .json({ message: "Error processing request.", error: err.message });
+    res.status(500).json({ message: "Error processing request.", error: err.message });
   }
 };
+
 
 const put_member_share_level = async (req, res) => {
   const {memberId, level, isPublic} = req.body;
@@ -2604,6 +2713,7 @@ const get_member_event_purpose_engagement = async (req, res) => {
               ee.id AS event_engagement_id, 
               ee.engagement, 
               ep.event_type
+            FROM event_purpose_engagement epe
             JOIN event_purpose ep
             ON ep.id = epe.event_purpose_id
             JOIN event_engagement ee
@@ -2662,5 +2772,6 @@ module.exports = {
   put_member_share_level,
   get_member_share_level,
   get_member_event_purpose, 
-  get_member_event_purpose_engagement
+  get_member_event_purpose_engagement,
+  post_member_events
 };

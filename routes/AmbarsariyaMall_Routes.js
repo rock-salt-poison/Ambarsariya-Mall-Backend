@@ -95,7 +95,7 @@ router.get('/sell/support-chat-notifications/:shop_no', eshopController.get_supp
 router.get('/sell/support-chat-messages/:support_id/:notification_id', eshopController.get_supportChatMessages);
 router.get('/sell/emotional/:member_id', eshopController.get_member_emotional);
 router.get('/sell/personal/:member_id', eshopController.get_member_personal);
-router.get('/sell/relations/:member_id/:user_id/:relation', eshopController.get_member_relations);
+router.get('/sell/relations/:member_id/:user_id', eshopController.get_member_relations);
 router.get('/sell/professional/:member_id/:user_id', eshopController.get_member_professional);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 router.get('/sell/member-share-level/:member_id', eshopController.get_member_share_level);
@@ -121,6 +121,26 @@ router.post('/sell/emotional/:member_id', eshopController.post_member_emotional)
 router.post('/sell/professional/:member_id/:user_id', eshopController.post_member_professional);
 router.post('/sell/relations/:member_id/:user_id', eshopController.post_member_relations);
 router.put('/sell/member-share-level', eshopController.put_member_share_level);
+
+router.post("/sell/events/:member_id", (req, res, next) => {
+  UploadFiles.single("file")(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        // Handle Multer errors
+        console.log(err);
+        
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File size exceeds the 1MB limit." });
+        }
+      } else if (err) {
+        // Handle other errors
+        return res.status(400).json({ error: err.message });
+      }
+    }
+    // If no errors, call the controller function
+    eshopController.post_member_events(req, res);
+  });
+});
 
 // router.post('/sell/personal/:member_id', (req, res, next) => {
 //   UploadFiles.fields([
