@@ -2635,6 +2635,43 @@ const get_member_relations = async (req, res) => {
 };
 
 
+const get_member_relation_detail = async (req, res) => {
+  try {
+    const { member_id, access_token } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT * FROM sell.member_relations 
+            WHERE member_id = $1 AND access_token = $2 
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id, access_token]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No Relation exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const delete_memberRelation = async (req, res) => {
+  const { access_token, id } = req.params;
+
+  try {
+    await ambarsariyaPool.query("DELETE FROM sell.member_relations WHERE id = $1 AND access_token = $2", [id, access_token]);
+    res.json({ message: "Relation deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting relation:", err);
+    res.status(500).json({ error: "Failed to delete relation" });
+  }
+}
+
 const put_member_share_level = async (req, res) => {
   const {memberId, level, isPublic} = req.body;
 
@@ -2798,6 +2835,8 @@ module.exports = {
   get_member_professional, 
   post_member_relations,
   get_member_relations,
+  get_member_relation_detail,
+  delete_memberRelation,
   put_member_share_level,
   get_member_share_level,
   get_member_event_purpose, 
