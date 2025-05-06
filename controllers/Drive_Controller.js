@@ -677,12 +677,6 @@ const getGoogleContacts = async (req, res) => {
   try {
     const { oauth_access_token, oauth_refresh_token } = await getUserOAuthTokens(member_id, user_id);
 
-    // const oAuth2Client = new google.auth.OAuth2(
-    //   process.env.GOOGLE_CLIENT_ID,
-    //   process.env.GOOGLE_CLIENT_SECRET,
-    //   process.env.GOOGLE_REDIRECT_URI2
-    // );
-
     oAuth2Client.setCredentials({
       access_token: oauth_access_token,
       refresh_token: oauth_refresh_token,
@@ -690,18 +684,32 @@ const getGoogleContacts = async (req, res) => {
 
     const peopleService = google.people({ version: 'v1', auth: oAuth2Client });
 
-    const response = await peopleService.people.connections.list({
-      resourceName: 'people/me',
-      personFields: 'names,emailAddresses,phoneNumbers',
-    });
+    let contacts = [];
+    let nextPageToken = null;
 
-    const connections = response.data.connections || [];
+    do {
+      const response = await peopleService.people.connections.list({
+        resourceName: 'people/me',
+        pageSize: 1000,
+        pageToken: nextPageToken,
+        personFields: 'names,phoneNumbers,emailAddresses',
+      });
 
-    const contacts = connections.map((person) => ({
-      name: person.names?.[0]?.displayName || '',
-      email: person.emailAddresses?.[0]?.value || '',
-      phone: person.phoneNumbers?.[0]?.value || '',
-    }));
+      const connections = response.data.connections || [];
+
+      const pageContacts = connections.map((person) => ({
+        name: person.names?.[0]?.displayName || '',
+        email: person.emailAddresses?.[0]?.value || '',
+        phone: person.phoneNumbers?.[0]?.value || '',
+      }));
+
+      contacts.push(...pageContacts);
+
+      nextPageToken = response.data.nextPageToken;
+    } while (nextPageToken);
+
+    // Optionally sort by name
+    contacts.sort((a, b) => a.name.localeCompare(b.name));
 
     res.json({ success: true, contacts });
   } catch (err) {
@@ -709,6 +717,7 @@ const getGoogleContacts = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to fetch contacts" });
   }
 };
+
 
 async function refreshAccessToken(refreshToken) {
   const res = await axios.post('https://oauth2.googleapis.com/token', null, {

@@ -2468,7 +2468,7 @@ const post_member_relations = async (req, res) => {
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving relations data:", error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error", message:error.error});
   }
 };
 
