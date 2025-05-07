@@ -2477,6 +2477,7 @@ const post_member_community = async (req, res) => {
   const {
     member_id, 
     user_id,
+    member_relation_id,
     community,
     journal,
     relation,
@@ -2503,6 +2504,7 @@ const post_member_community = async (req, res) => {
       INSERT INTO sell.member_community (
         member_id, 
         user_id,
+        member_relation_id,
         community,
         journal,
         relation,
@@ -2512,13 +2514,14 @@ const post_member_community = async (req, res) => {
       )
       VALUES (
         $1, $2, $3, $4, $5,
-        $6, $7, $8
+        $6, $7, $8, $9
       )
     `;
 
     const values = [
       member_id,
       user_id, 
+      member_relation_id,
       community,
       journal,
       relation,
@@ -2764,7 +2767,7 @@ const get_member_relation_specific_groups = async (req, res) => {
 
     // Query for full visitor data
     const query = `
-            SELECT name_group
+            SELECT name_group, id
             FROM sell.member_relations
             WHERE member_id = $1 AND (
                 (relation = $2 AND relation != 'Other')
