@@ -2472,6 +2472,74 @@ const post_member_relations = async (req, res) => {
   }
 };
 
+
+const post_member_community = async (req, res) => {
+  const {
+    member_id, 
+    user_id,
+    community,
+    journal,
+    relation,
+    group_name,
+    media
+  } = req.body;
+
+  console.log("Received file:", req.file);
+
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    let uploadedUSPLink ;
+
+    if (req.file) {
+      const targetFolder = "member/community_file";
+
+      // Upload the new file
+      uploadedUSPLink = await uploadFileToGCS(req.file, targetFolder);
+    }
+
+    const upsertQuery = `
+      INSERT INTO sell.member_community (
+        member_id, 
+        user_id,
+        community,
+        journal,
+        relation,
+        group_name,
+        media,
+        uploaded_file
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8
+      )
+    `;
+
+    const values = [
+      member_id,
+      user_id, 
+      community,
+      journal,
+      relation,
+      group_name,
+      media,
+      uploadedUSPLink
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Community saved successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving community data:", error);
+    res.status(500).json({ error: "Internal server error", message:error.error});
+  }
+};
+
+
 const post_member_events = async (req, res) => {
   const { member_id } = req.params;
   const {
@@ -2649,6 +2717,64 @@ const get_member_relation_detail = async (req, res) => {
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
       res.status(404).json({ valid: false, message: "No Relation exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+
+const get_member_relation_types = async (req, res) => {
+  try {
+    const { member_id } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT distinct
+            CASE 
+                WHEN relation = 'Other' THEN other_relation 
+                ELSE relation 
+            END AS relation_name
+            FROM sell.member_relations where member_id = $1; 
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No Relation exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const get_member_relation_specific_groups = async (req, res) => {
+  try {
+    const { member_id, selectedRelation } = req.params; // Extract the member_id from the request
+
+    // Query for full visitor data
+    const query = `
+            SELECT name_group
+            FROM sell.member_relations
+            WHERE member_id = $1 AND (
+                (relation = $2 AND relation != 'Other')
+                OR (relation = 'Other' AND other_relation = $2));
+        `;
+    const result = await ambarsariyaPool.query(query, [member_id, selectedRelation]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No group exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2842,5 +2968,8 @@ module.exports = {
   get_member_event_purpose, 
   get_member_event_purpose_engagement,
   post_member_events,
-  get_member_events
+  get_member_events,
+  get_member_relation_types,
+  get_member_relation_specific_groups,
+  post_member_community
 };
