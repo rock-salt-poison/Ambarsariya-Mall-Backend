@@ -96,7 +96,7 @@ router.get('/sell/support-chat-messages/:support_id/:notification_id', eshopCont
 router.get('/sell/emotional/:member_id', eshopController.get_member_emotional);
 router.get('/sell/personal/:member_id', eshopController.get_member_personal);
 router.get('/sell/relations/:member_id/:user_id', eshopController.get_member_relations);
-router.get('/sell/relations/:member_id/:access_token', eshopController.get_member_relation_detail);
+router.get('/sell/relation/:member_id/:access_token', eshopController.get_member_relation_detail);
 router.get('/sell/professional/:member_id/:user_id', eshopController.get_member_professional);
 router.patch('/sell/support/:support_id/response', eshopController.patch_supportChatResponse);
 router.get('/sell/member-share-level/:member_id', eshopController.get_member_share_level);
