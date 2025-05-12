@@ -5,7 +5,7 @@ const { uploadFileToGCS } = require("../utils/storageBucket");
 const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
 const { encryptData, decryptData } = require("../utils/cryptoUtils");
 const nodemailer = require('nodemailer');
-const {broadcastMessage} = require("../webSocket");
+const {broadcastMessage, emitChatMessage} = require("../webSocket");
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -1093,8 +1093,8 @@ const put_visitorData = async (req, resp) => {
       support_id = result.rows[0].support_id;
     }
 
-    if (purpose.toLowerCase() === 'buy') {
-      console.log('Purpose is "buy". Notifying merchants...');
+    if (purpose) {
+      console.log(`Purpose is ${purpose}. Notifying merchants...`);
       broadcastMessage('Notifying merchants...');
 
       const usersQuery = await ambarsariyaPool.query(
@@ -1199,10 +1199,11 @@ Your Support Team`,
         console.log('No merchants found with the same domain and sector.');
         broadcastMessage('No merchants found with the same domain and sector.');
       }
-    } else {
-      console.log('Purpose is not "buy". No email will be sent.');
-      broadcastMessage('Purpose is not "buy". No email will be sent.');
-    }
+    } 
+    // else {
+    //   console.log('No email will be sent.');
+    //   broadcastMessage('Purpose is not "buy". No email will be sent.');
+    // }
 
     resp.status(200).json({
       message: existingRecord.rows.length > 0
@@ -1296,6 +1297,12 @@ const post_supportChatMessage = async (req, res) => {
     }
 
     await ambarsariyaPool.query("COMMIT");
+
+    emitChatMessage(support_id, {
+      ...data,
+      chat_id: chatRequest.rows[0].id,
+      sent_at: new Date().toISOString(),
+    });
 
     res.status(201).json({
       message: "Chat created successfully",

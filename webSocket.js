@@ -1,26 +1,24 @@
-// /webSocket.js
 const socketIo = require('socket.io');
 
 let io;
 
 const initializeWebSocket = (server) => {
-  // Initialize socket.io with the server
-  io = socketIo(server,{
+  io = socketIo(server, {
     cors: {
-      origin: '*', // Or restrict to specific domain
+      origin: '*', // Adjust for production
       methods: ['GET', 'POST'],
     },
   });
 
-  // When a client connects
   io.on('connection', (socket) => {
     console.log('A client connected');
-    
-    // Send a welcome message to the newly connected client
-    // socket.emit('message', 'Welcome to the dashboard!');
-    // socket.emit();
-    
-    // Handle when a client disconnects
+
+    // Listen for room join
+    socket.on('join_room', (roomId) => {
+      socket.join(roomId);
+      console.log(`Client joined room: ${roomId}`);
+    });
+
     socket.on('disconnect', () => {
       console.log('A client disconnected');
     });
@@ -29,10 +27,23 @@ const initializeWebSocket = (server) => {
 
 const broadcastMessage = (message) => {
   if (io) {
-    io.emit('message', message); // Broadcast message to all connected clients
+    io.emit('message', message); // still useful for general dashboard messages
   } else {
     console.log('Socket.io not initialized');
   }
 };
 
-module.exports = { initializeWebSocket, broadcastMessage };
+// ADD this for chat messages
+const emitChatMessage = (roomId, message) => {
+  if (io) {
+    io.to(roomId).emit('chat_message', message); // send only to specific room
+  } else {
+    console.log('Socket.io not initialized');
+  }
+};
+
+module.exports = {
+  initializeWebSocket,
+  broadcastMessage,
+  emitChatMessage,
+};
