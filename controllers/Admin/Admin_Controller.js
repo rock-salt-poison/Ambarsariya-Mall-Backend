@@ -905,6 +905,44 @@ const delete_support_page_famous_area = async (req, res) => {
   }
 };
 
+const delete_user = async (req, res) => {
+  const { user_id } = req.params;
+
+  try {
+    // Start a transaction
+    await ambarsariyaPool.query('BEGIN');
+
+    // Step 1: Update user_type to 'visitor' in sell.support if access_token matches
+    await ambarsariyaPool.query(
+      `
+      UPDATE sell.support s
+      SET user_type = 'visitor'
+      FROM sell.user_credentials uc
+      WHERE s.access_token = uc.access_token
+        AND uc.user_id = $1
+      `,
+      [user_id]
+    );
+
+    // Step 2: Delete the user from sell.users
+    await ambarsariyaPool.query(
+      `DELETE FROM sell.users WHERE user_id = $1`,
+      [user_id]
+    );
+
+    // Commit the transaction
+    await ambarsariyaPool.query('COMMIT');
+
+    res.json({ message: "User updated and removed successfully" });
+  } catch (err) {
+    // Rollback in case of error
+    await ambarsariyaPool.query('ROLLBACK');
+    console.error("Error removing user:", err);
+    res.status(500).json({ error: "Failed to update and remove user" });
+  }
+};
+
+
 
 // Export the functions for use in routes
 module.exports = {
@@ -923,5 +961,6 @@ module.exports = {
   delete_advt,
   post_support_page_famous_areas,
   get_support_page_famous_areas,
-  delete_support_page_famous_area
+  delete_support_page_famous_area,
+  delete_user
 };
