@@ -414,6 +414,33 @@ const update_eshop_location = async (req, resp) => {
   }
 };
 
+const update_shop_is_open_status = async (req, resp) => {
+  const { isOpen, shop_access_token } = req.body;
+
+  try {
+    const updateResult = await ambarsariyaPool.query(
+      `UPDATE Sell.eshop_form
+       SET is_open = $1
+       WHERE shop_access_token = $2`,
+      [isOpen, shop_access_token]
+    );
+
+    // Optional: check if row was actually updated
+    if (updateResult.rowCount === 0) {
+      return resp.status(404).json({ message: "No matching shop found to update." });
+    }
+
+    return resp.status(200).json({
+      message: "E-shop open status updated successfully.",
+      updated: isOpen
+    });
+
+  } catch (err) {
+    console.error("Error updating e-shop open status:", err);
+    return resp.status(500).json({ message: "Server error updating open status.", error: err.message });
+  }
+};
+
 
 const get_shopUserData = async (req, res) => {
   try {
@@ -487,6 +514,7 @@ const get_shopUserData = async (req, res) => {
     ef.advertisement_video_url,
     ef.latitude AS "latitude",
     ef.longitude AS "longitude",
+    ef.is_open AS "is_open",
     ef.shop_access_token AS "shop_access_token",
     ef.oauth_access_token AS "oauth_access_token",
     ef.oauth_refresh_token AS "oauth_refresh_token"
@@ -2981,5 +3009,6 @@ module.exports = {
   get_member_events,
   get_member_relation_types,
   get_member_relation_specific_groups,
-  post_member_community
+  post_member_community,
+  update_shop_is_open_status
 };

@@ -47,6 +47,7 @@ router.put("/sell/buyeshop/:shopAccessToken", (req, res, next) => {
   });
 
 router.put('/sell/eshop/update-location', eshopController.update_eshop_location);
+router.put('/sell/eshop/update-status', eshopController.update_shop_is_open_status);
 
 router.get('/sell/shop-user-data', eshopController.get_shopUserData);
 router.get('/sell/shops', eshopController.get_allShops);
