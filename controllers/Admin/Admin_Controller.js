@@ -635,25 +635,22 @@ const post_support_page_famous_areas = async (req, res) => {
             area_address,
             latitude,
             longitude,
-            shop_no,
             length_in_km,
             image_src
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (area_title) 
         DO UPDATE SET 
             area_address = $2,
             latitude = $3,
             longitude = $4,
-            shop_no = $5,
-            length_in_km = $6,
-            image_src = COALESCE($7, admin.famous_areas.image_src), -- Keep old image if no new provided
+            length_in_km = $5,
+            image_src = COALESCE($6, admin.famous_areas.image_src), -- Keep old image if no new provided
             updated_at = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'::text);`,
         [
           lowerCaseTitle,
           lowerCaseAddress,
           area.latitude,
           area.longitude,
-          area.shop_no,
           area.length,
           uploadedBgImg || existingImageSrc, // Use new image if uploaded, else keep existing one
         ]

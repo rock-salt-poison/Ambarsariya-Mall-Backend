@@ -1848,41 +1848,118 @@ const get_discountCoupons = async (req, res) => {
 
 const get_nearby_shops = async (req, res) => {
   const { token } = req.params;
-  
+
   try {
-      // Fetch the area details using the token
-      const areaResult = await ambarsariyaPool.query(
-          `SELECT * FROM admin.famous_areas WHERE access_token = $1`, 
-          [token]
+    // 1. Get the area
+    const areaResult = await ambarsariyaPool.query(
+      `SELECT * FROM admin.famous_areas WHERE access_token = $1`,
+      [token]
+    );
+
+    if (areaResult.rows.length === 0) {
+      return res.status(404).json({ error: "Area not found" });
+    }
+
+    const area = areaResult.rows[0];
+    const { latitude, longitude, length_in_km, near_by_shops } = area;
+
+    // 2. Shops from formula (distance)
+    const formulaShopsRes = await ambarsariyaPool.query(
+      `SELECT shop_no, shop_access_token
+       FROM sell.eshop_form
+       WHERE 
+         (6371 * acos(
+           cos(radians($1)) * cos(radians(latitude)) * 
+           cos(radians(longitude) - radians($2)) + 
+           sin(radians($1)) * sin(radians(latitude))
+         )) <= $3
+       ORDER BY shop_no`,
+      [latitude, longitude, length_in_km]
+    );
+
+    const formulaShops = formulaShopsRes.rows;
+
+    // 3. Shops from near_by_shops JSONB array
+    let jsonbShops = [];
+
+    if (Array.isArray(near_by_shops) && near_by_shops.length > 0) {
+      const jsonbShopsRes = await ambarsariyaPool.query(
+        `SELECT shop_no, shop_access_token
+         FROM sell.eshop_form
+         WHERE shop_no = ANY($1::text[])`,
+        [near_by_shops]
       );
+      jsonbShops = jsonbShopsRes.rows;
+    }
 
-      if (areaResult.rows.length === 0) {
-          return res.status(404).json({ error: "Area not found" });
-      }
+    // 4. Merge both lists without duplicates
+    const combinedMap = new Map();
+    [...formulaShops, ...jsonbShops].forEach((shop) => {
+      combinedMap.set(shop.shop_no, shop); // use shop_no to avoid duplicates
+    });
 
-      const { latitude, longitude, length_in_km } = areaResult.rows[0];
+    const allShops = Array.from(combinedMap.values());
 
-      // Fetch nearby shops
-      const shopResult = await ambarsariyaPool.query(
-          `SELECT 
-              shop_access_token
-          FROM sell.eshop_form
-          WHERE 
-              (6371 * acos(
-                  cos(radians($1)) * cos(radians(latitude)) * 
-                  cos(radians(longitude) - radians($2)) + 
-                  sin(radians($1)) * sin(radians(latitude))
-              )) <= $3
-          ORDER BY shop_no`,
-          [latitude, longitude, length_in_km]
-      );
-
-      res.json({...areaResult.rows[0], shops:  shopResult.rows});
+    // 5. Return
+    res.json({ ...area, shops: allShops });
   } catch (err) {
-      console.error("Error fetching nearby shops:", err);
-      res.status(500).json({ error: "Server error" });
+    console.error("Error fetching nearby shops:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
+
+
+const get_nearby_areas_for_shop = async (req, res) => {
+  const { shopToken, shop_no } = req.params;
+
+  try {
+    // 1. Get shop location
+    const shopRes = await ambarsariyaPool.query(
+      `SELECT latitude, longitude FROM sell.eshop_form WHERE shop_access_token = $1`,
+      [shopToken]
+    );
+
+    if (shopRes.rows.length === 0) {
+      return res.status(404).json({ error: "Shop not found" });
+    }
+
+    const { latitude, longitude } = shopRes.rows[0];
+
+    // 2. Try finding areas by formula (within radius)
+    const areaRes = await ambarsariyaPool.query(
+      `SELECT * FROM admin.famous_areas
+       WHERE (6371 * acos(
+          cos(radians($1)) * cos(radians(latitude)) * 
+          cos(radians(longitude) - radians($2)) + 
+          sin(radians($1)) * sin(radians(latitude))
+       )) <= length_in_km`,
+      [latitude, longitude]
+    );
+
+    // 3. If areas found by formula, return them
+    if (areaRes.rows.length > 0) {
+      return res.json(areaRes.rows);
+    }
+
+    // 4. If not, check near_by_shops JSONB array manually
+    const nearbyByJsonRes = await ambarsariyaPool.query(
+      `SELECT * FROM admin.famous_areas 
+       WHERE near_by_shops @> $1::jsonb`,
+      [`["${shop_no}"]`]
+    );
+
+    if (nearbyByJsonRes.rows.length > 0) {
+      return res.json(nearbyByJsonRes.rows);
+    }
+
+    // 5. Nothing found — return empty array
+    res.json([]);
+  } catch (err) {
+    console.error("Error in get_nearby_areas_for_shop:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 
 const post_member_emotional = async (req, res) => {
   const { member_id } = req.params;
@@ -2966,6 +3043,53 @@ const get_member_event_purpose_engagement = async (req, res) => {
   }
 };
 
+const put_near_by_shops = async (req, res) => {
+  const { shop_no, famous_area } = req.body;
+
+  try {
+    // 1. Fetch area ID and current near_by_shops
+    const fetchQuery = `
+      SELECT id, near_by_shops
+      FROM admin.famous_areas
+      WHERE area_title = $1
+    `;
+    const result = await ambarsariyaPool.query(fetchQuery, [famous_area]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Famous area not found' });
+    }
+
+    const { id, near_by_shops } = result.rows[0];
+
+    // 2. Check if shop_no is already in the array
+    const existing = (near_by_shops || []).map(item => item);
+    if (existing.includes(shop_no)) {
+      return res.status(400).json({ success: false, message: 'shop already exists' });
+    }
+
+    // 3. Append shop_no to the JSONB array using PostgreSQL operators
+    const updateQuery = `
+      UPDATE admin.famous_areas
+      SET near_by_shops = 
+        CASE
+          WHEN near_by_shops IS NULL THEN to_jsonb(ARRAY[$1])
+          ELSE near_by_shops || to_jsonb($1)
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+    `;
+
+    await ambarsariyaPool.query(updateQuery, [shop_no, id]);
+
+    res.json({ success: true, message: 'shop_no added successfully' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
 module.exports = {
   post_book_eshop,
   update_eshop,
@@ -3010,5 +3134,7 @@ module.exports = {
   get_member_relation_types,
   get_member_relation_specific_groups,
   post_member_community,
-  update_shop_is_open_status
+  update_shop_is_open_status,
+  put_near_by_shops,
+  get_nearby_areas_for_shop
 };
