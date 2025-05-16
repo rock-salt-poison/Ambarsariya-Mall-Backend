@@ -98,22 +98,23 @@ const get_purchase_orders = async (req, res) => {
     (product->>'unit_price')::numeric AS unit_price, 
     product->>'description' AS description, 
     (product->>'total_price')::numeric AS total_price,
-    pr.inventory_or_stock_quantity AS quantity,  -- Available product quantity
+    pr.inventory_or_stock_quantity AS quantity,  
     pr.product_name,  
     pr.variant_group,
     pr.quantity_in_stock,
     po.subtotal, 
     po.shipping_address, 
     po.shipping_method, 
+    ts.service,
     po.payment_method, 
     po.special_offers, 
     po.discount_applied, 
     po.taxes, 
     po.co_helper, 
-    -- Distribute discount_amount equally across products and round to 2 decimal places
+    -- Distribute discount_amount equally across products
     ROUND((po.discount_amount / NULLIF(
         (SELECT COUNT(*) 
-         FROM jsonb_array_elements(po.products::jsonb) AS p), 0
+         FROM jsonb_array_elements(po.products::jsonb)), 0
     )), 2) AS discount_amount,
     po.pre_post_paid, 
     po.extra_charges, 
@@ -123,7 +124,7 @@ const get_purchase_orders = async (req, res) => {
     po.additional_instructions, 
     po.po_access_token,
     ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
-    so_product->>'accept_or_deny' AS status,
+    COALESCE(so_product->>'accept_or_deny', 'Pending') AS status,
     so.so_no
 FROM sell.purchase_order po
 CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
@@ -137,7 +138,10 @@ LEFT JOIN LATERAL (
     FROM jsonb_array_elements(so.products::jsonb) AS so_product
     WHERE so_product->>'no' = product->>'no'
 ) so_product ON TRUE
-WHERE po.po_no = $1`;
+LEFT JOIN type_of_services ts
+    ON ts.id = po.shipping_method 
+WHERE po.po_no = $1;
+`;
       let result = await ambarsariyaPool.query(query, [po_no]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
@@ -206,8 +210,12 @@ const get_all_purchased_orders = async (req, res) => {
   try {
     if (buyer_id) {
       let query = `SELECT 
-          po_no, total_amount, shipping_method, payment_method  
+        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount  
       FROM sell.purchase_order po
+      LEFT JOIN sell.sale_order so
+      ON so.buyer_id = po.buyer_id AND so.po_no = po.po_no
+      LEFT JOIN type_of_services ts
+      ON ts.id = po.shipping_method
       WHERE po.buyer_id = $1 `;
       let result = await ambarsariyaPool.query(query, [buyer_id]);
       if (result.rowCount === 0) {
