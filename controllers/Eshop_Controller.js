@@ -2935,10 +2935,10 @@ const put_member_share_level = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [isPublic, memberId]);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'Data not found' });
     }
 
-    res.json({ success: true, message: `Share level ${level} updated successfully` });
+    res.json({ success: true, message: `${level} Share level updated successfully` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'An error occurred' });
