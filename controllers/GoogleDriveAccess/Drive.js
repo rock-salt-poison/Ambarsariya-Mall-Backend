@@ -528,11 +528,12 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
     const adminSheetName = adminSheet.properties.title;
 
     // Find the last non-empty row dynamically
-    let lastRow = 0;
+    let lastRow = queryData?.length ? queryData.length + 1 : 1;
     let lastColumn = 0;
     let headerRow = []; // To store header names
 
     console.log(adminSheet);
+    
     
     adminSheet.data[0].rowData.forEach((row, rowIndex) => {
       if (queryData && queryData?.length>0) {
@@ -602,8 +603,8 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
         },
       });
     }
-
-    if (lastRow > userSheet.properties.gridProperties.rowCount) {
+    console.log(lastRow, adminSheet.properties.gridProperties.rowCount)
+    if (lastRow > adminSheet.properties.gridProperties.rowCount) {
       console.log(
         `Expanding rows from ${userSheet.properties.gridProperties.rowCount} to ${lastRow}...`
       );
@@ -613,7 +614,6 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
         updateSheetProperties: {
           properties: {
             sheetId: userSheet.properties.sheetId,
-            title: "Items",
             gridProperties: { rowCount: lastRow },
           },
           fields: "gridProperties.rowCount",

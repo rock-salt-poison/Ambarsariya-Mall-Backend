@@ -25,11 +25,12 @@ const post_products = async (req, res) => {
 
       const productNameAbbreviation = product.product_name
         .split(" ")
-        .map(word => word[0])
+        .map((word) => word[0])
         .join("_")
         .toLowerCase();
 
-      const product_id = `prod_${product.product_no}_${product.shop_no}_${product.category}_${productNameAbbreviation}_${product.product_type.toLowerCase()}`;
+      const product_id = `prod_${product.product_no}_${product.shop_no}_${product.category
+        }_${productNameAbbreviation}_${product.product_type.toLowerCase()}`;
 
       // Insert the product data
       const productQuery = `INSERT INTO Sell.products (
@@ -127,7 +128,7 @@ const post_products = async (req, res) => {
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
     console.error("Error inserting products or variants:", err);
-    res.status(500).json({ error: "Error inserting products", message:err });
+    res.status(500).json({ error: "Error inserting products", message: err });
   }
 };
 
@@ -201,7 +202,6 @@ const get_product_names = async (req, res) => {
 //   }
 // };
 
-
 const get_product_variants = async (req, res) => {
   const { product_id } = req.params;
 
@@ -226,6 +226,9 @@ where i.product_id = $1;`;
   }
 };
 
-
-
-module.exports = { post_products, get_products, get_product_names, get_product_variants };
+module.exports = {
+  post_products,
+  get_products,
+  get_product_names,
+  get_product_variants,
+};

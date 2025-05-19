@@ -20,9 +20,8 @@ const uploadFileToGCS = (file, folderName = "default-folder") => {
   return new Promise((resolve, reject) => {
     if (!file) return resolve(null);
 
-    const sanitizeFileName = (fileName) => {
-      return fileName.replace(/\s+/g, "_"); // Replaces spaces with underscores
-    };
+    const sanitizeFileName = (fileName) => encodeURIComponent(fileName.replace(/\s+/g, "_"));
+
 
     const gcsFileName = `${folderName}/${Date.now()}-${sanitizeFileName(file.originalname)}`;
     const blob = storage.bucket(bucketName).file(gcsFileName);
