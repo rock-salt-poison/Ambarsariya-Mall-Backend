@@ -16,10 +16,10 @@ const post_purchaseOrder = async (req, res) => {
         WHERE product_id = $1
       `;
 
-      const stockResult = await ambarsariyaPool.query(stockCheckQuery, [product.no]);
+      const stockResult = await ambarsariyaPool.query(stockCheckQuery, [product.id]);
 
       if (stockResult.rows.length === 0 || stockResult.rows[0].quantity_in_stock <= 0) {
-        throw new Error(`Product ID ${product.no} is out of stock`);
+        throw new Error(`Product ID ${product.id} is out of stock`);
       }
     }
 
@@ -52,19 +52,34 @@ const post_purchaseOrder = async (req, res) => {
 
     // Update product quantity in Sell.products
     for (const product of data.products) {
-      const updateQuery = `
+      // Update stock in Sell.products
+      const updateProductStockQuery = `
         UPDATE Sell.products
-        SET quantity_in_stock = GREATEST(quantity_in_stock - $1, 0) -- Prevent negative stock
+        SET quantity_in_stock = GREATEST(quantity_in_stock - $1, 0)
         WHERE product_id = $2
         RETURNING quantity_in_stock
       `;
 
-      const result = await ambarsariyaPool.query(updateQuery, [product.quantity, product.no]);
+      const productResult = await ambarsariyaPool.query(updateProductStockQuery, [product.quantity, product.id]);
 
-      // Double-check if stock is now zero or less
-      if (result.rows.length === 0 || result.rows[0].quantity_in_stock < 0) {
-        throw new Error(`Not enough stock for product ID: ${product.no}`);
+      if (productResult.rows.length === 0 || productResult.rows[0].quantity_in_stock < 0) {
+        throw new Error(`Not enough product stock for product ID: ${product.id}`);
       }
+
+      // Update stock in Sell.items (for the specific item)
+      const updateItemStockQuery = `
+        UPDATE Sell.items
+        SET quantity_in_stock = GREATEST(quantity_in_stock - $1, 0)
+        WHERE item_id = $2 AND product_id = $3
+        RETURNING quantity_in_stock
+      `;
+
+      const itemResult = await ambarsariyaPool.query(updateItemStockQuery, [product.quantity,product.selectedVariant, product.id]);
+
+      if (itemResult.rows.length === 0 || itemResult.rows[0].quantity_in_stock < 0) {
+        throw new Error(`Not enough item stock for product ID: ${product.id}`);
+      }
+
     }
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
@@ -87,60 +102,74 @@ const get_purchase_orders = async (req, res) => {
   try {
     if (po_no) {
       let query = `SELECT 
-    po.po_no, 
-    po.buyer_id, 
-    po.buyer_type, 
-    po.seller_id, 
-    po.buyer_gst_number, 
-    po.seller_gst_number, 
-    product->>'no' AS product_no, 
-    (product->>'quantity')::int AS quantity_ordered, 
-    (product->>'unit_price')::numeric AS unit_price, 
-    product->>'description' AS description, 
-    (product->>'total_price')::numeric AS total_price,
-    pr.inventory_or_stock_quantity AS quantity,  
-    pr.product_name,  
-    pr.variant_group,
-    pr.quantity_in_stock,
-    po.subtotal, 
-    po.shipping_address, 
-    po.shipping_method, 
-    ts.service,
-    po.payment_method, 
-    po.special_offers, 
-    po.discount_applied, 
-    po.taxes, 
-    po.co_helper, 
-    -- Distribute discount_amount equally across products
-    ROUND((po.discount_amount / NULLIF(
-        (SELECT COUNT(*) 
-         FROM jsonb_array_elements(po.products::jsonb)), 0
-    )), 2) AS discount_amount,
-    po.pre_post_paid, 
-    po.extra_charges, 
-    po.total_amount, 
-    po.date_of_issue, 
-    po.delivery_terms, 
-    po.additional_instructions, 
-    po.po_access_token,
-    ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
-    COALESCE(so_product->>'accept_or_deny', 'Pending') AS status,
-    so.so_no
-FROM sell.purchase_order po
-CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
-LEFT JOIN sell.products pr 
-    ON po.seller_id = pr.shop_no  
-    AND product->>'no' = pr.product_id
-LEFT JOIN sell.sale_order so
-    ON po.po_no = so.po_no
-LEFT JOIN LATERAL (
-    SELECT so_product
-    FROM jsonb_array_elements(so.products::jsonb) AS so_product
-    WHERE so_product->>'no' = product->>'no'
-) so_product ON TRUE
-LEFT JOIN type_of_services ts
-    ON ts.id = po.shipping_method 
-WHERE po.po_no = $1;
+        po.po_no, 
+        po.buyer_id, 
+        po.buyer_type, 
+        po.seller_id, 
+        po.buyer_gst_number, 
+        po.seller_gst_number, 
+        product->>'id' AS product_id, 
+        (product->>'quantity')::int AS quantity_ordered, 
+        (product->>'unit_price')::numeric AS unit_price, 
+        product->>'description' AS description, 
+        (product->>'total_price')::numeric AS total_price,
+        (product->>'selectedVariant') AS selected_variant,
+        pr.inventory_or_stock_quantity AS quantity,  
+        pr.product_name,  
+        pr.variant_group,
+        pr.quantity_in_stock,
+        pr.iku_id,
+        po.subtotal, 
+        po.shipping_address, 
+        po.shipping_method, 
+        ts.service,
+        po.payment_method, 
+        po.special_offers, 
+        po.discount_applied, 
+        po.taxes, 
+        po.co_helper, 
+        -- Distribute discount_amount equally across products
+        ROUND((po.discount_amount / NULLIF(
+            (SELECT COUNT(*) 
+            FROM jsonb_array_elements(po.products::jsonb)), 0
+        )), 2) AS discount_amount,
+        po.pre_post_paid, 
+        po.extra_charges, 
+        po.total_amount, 
+        po.date_of_issue, 
+        po.delivery_terms, 
+        po.additional_instructions, 
+        po.po_access_token,
+        ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
+        COALESCE(so_product->>'accept_or_deny', 'Pending') AS status,
+        so.so_no,
+
+        -- Grouped items per product as array of JSON objects
+        (
+            SELECT jsonb_agg(jsonb_build_object(
+                'item_id', i.item_id,
+                'item_quantity', i.quantity_in_stock,
+                'item_selling_price', i.selling_price
+            ))
+            FROM sell.items i
+            WHERE i.product_id = product->>'id'
+        ) AS items
+
+    FROM sell.purchase_order po
+    CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
+    LEFT JOIN sell.products pr 
+        ON po.seller_id = pr.shop_no  
+        AND product->>'id' = pr.product_id
+    LEFT JOIN sell.sale_order so
+        ON po.po_no = so.po_no
+    LEFT JOIN LATERAL (
+        SELECT so_product
+        FROM jsonb_array_elements(so.products::jsonb) AS so_product
+        WHERE so_product->>'id' = product->>'id'
+    ) so_product ON TRUE
+    LEFT JOIN type_of_services ts
+        ON ts.id = po.shipping_method 
+    WHERE po.po_no = $1;
 `;
       let result = await ambarsariyaPool.query(query, [po_no]);
       if (result.rowCount === 0) {

@@ -139,10 +139,43 @@ const get_products = async (req, res) => {
 
     // Check if 'title' exists and set the query accordingly
     if (shop_no && product_id) {
-      query = `SELECT * FROM sell.products WHERE shop_no = $1 AND product_id = $2`;
+      query = `SELECT 
+                p.*, 
+                (
+                    SELECT i2.selling_price
+                    FROM sell.items i2
+                    WHERE i2.item_id = (
+                        SELECT item_id
+                        FROM sell.items
+                        WHERE product_id = p.product_id
+                          AND item_id LIKE '%' || p.iku_id[1]
+                        LIMIT 1
+                    )
+                ) AS first_iku_price
+            FROM sell.products p
+            LEFT JOIN sell.items i ON i.product_id = p.product_id
+            WHERE p.shop_no = $1 and p.product_id = $2
+            GROUP BY p.product_id;`;
       result = await ambarsariyaPool.query(query, [shop_no, product_id]);
     } else if (shop_no) {
-      query = `SELECT * FROM sell.products WHERE shop_no = $1`;
+      query = `SELECT 
+                p.*, 
+                array_agg(i.item_id) AS item_ids,
+                (
+                    SELECT i2.selling_price
+                    FROM sell.items i2
+                    WHERE i2.item_id = (
+                        SELECT item_id
+                        FROM sell.items
+                        WHERE product_id = p.product_id
+                          AND item_id LIKE '%' || p.iku_id[1]
+                        LIMIT 1
+                    )
+                ) AS first_iku_price
+            FROM sell.products p
+            LEFT JOIN sell.items i ON i.product_id = p.product_id
+            WHERE p.shop_no = $1
+            GROUP BY p.product_id;`;
       result = await ambarsariyaPool.query(query, [shop_no]);
     }
 
@@ -207,9 +240,21 @@ const get_product_variants = async (req, res) => {
 
   try {
     if (product_id) {
-      let query = `select i.*, p.product_name, p.product_images, p.product_type, p.product_description, p.brand, p.product_style, p.promotion_information from sell.items i 
-join sell.products p on p.product_id = i.product_id 
-where i.product_id = $1;`;
+      let query = `select 
+                    i.*, 
+                    p.product_name, 
+                    p.product_images, 
+                    p.product_type, 
+                    p.product_description, 
+                    p.brand, 
+                    p.product_style, 
+                    p.promotion_information, 
+                    p.selling_price AS product_selling_price,
+                    p.shop_no,
+                    p.product_id
+                  from sell.products p 
+left join sell.items i on i.product_id = p.product_id 
+where p.product_id = $1;`;
       let result = await ambarsariyaPool.query(query, [product_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
