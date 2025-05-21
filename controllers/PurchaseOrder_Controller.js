@@ -143,6 +143,7 @@ const get_purchase_orders = async (req, res) => {
         ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
         COALESCE(so_product->>'accept_or_deny', 'Pending') AS status,
         so.so_no,
+        so.status AS sale_order_status,
 
         -- Grouped items per product as array of JSON objects
         (
@@ -165,7 +166,7 @@ const get_purchase_orders = async (req, res) => {
     LEFT JOIN LATERAL (
         SELECT so_product
         FROM jsonb_array_elements(so.products::jsonb) AS so_product
-        WHERE so_product->>'id' = product->>'id'
+        WHERE so_product->>'product_id' = product->>'id'
     ) so_product ON TRUE
     LEFT JOIN type_of_services ts
         ON ts.id = po.shipping_method 
@@ -239,7 +240,7 @@ const get_all_purchased_orders = async (req, res) => {
   try {
     if (buyer_id) {
       let query = `SELECT 
-        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount  
+        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount , so.status 
       FROM sell.purchase_order po
       LEFT JOIN sell.sale_order so
       ON so.buyer_id = po.buyer_id AND so.po_no = po.po_no

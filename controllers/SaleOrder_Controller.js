@@ -6,42 +6,21 @@ const post_saleOrder = async (req, res) => {
   console.log(data);
 
   try {
-    await ambarsariyaPool.query("BEGIN"); // Start a transaction
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
 
-    // Insert or update the product data
+    // Step 1: Insert or update into Sell.sale_order
     const productQuery = `
       INSERT INTO Sell.sale_order (
-        po_no,
-        buyer_id,
-        buyer_type,
-        order_date,
-        products,
-        subtotal,
-        taxes,
-        discounts,
-        shipping_method,
-        shipping_charges,
-        expected_delivery_date,
-        co_helper,
-        subscription_type,
-        payment_terms,
-        total_payment_with_all_services,
-        payment_method,
-        payment_due_date,
-        prepaid,
-        postpaid,
-        balance_credit,
-        balance_credit_due_date,
-        after_due_date_surcharges_per_day,
-        status,
-        send_qr_upi_bank_details,
-        seller_id
+        po_no, buyer_id, buyer_type, order_date, products, subtotal, taxes, discounts,
+        shipping_method, shipping_charges, expected_delivery_date, co_helper, subscription_type,
+        payment_terms, total_payment_with_all_services, payment_method, payment_due_date,
+        prepaid, postpaid, balance_credit, balance_credit_due_date, after_due_date_surcharges_per_day,
+        status, send_qr_upi_bank_details, seller_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
         $19, $20, $21, $22, $23, $24, $25
       )
-      ON CONFLICT (po_no) 
-      DO UPDATE SET 
+      ON CONFLICT (po_no) DO UPDATE SET
         products = EXCLUDED.products,
         subtotal = EXCLUDED.subtotal,
         taxes = EXCLUDED.taxes,
@@ -62,7 +41,7 @@ const post_saleOrder = async (req, res) => {
         after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
         status = EXCLUDED.status,
         send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
-        updated_at = CURRENT_TIMESTAMP 
+        updated_at = CURRENT_TIMESTAMP
       RETURNING so_access_token
     `;
 
@@ -91,22 +70,73 @@ const post_saleOrder = async (req, res) => {
       data.after_due_date_surcharges_per_day,
       data.status,
       data.send_qr_upi_bank_details,
-      data.seller_id
+      data.seller_id,
     ]);
+
+    // Step 2: Update stock in Sell.items
+    const stockUpdates = data.stockUpdates || [];
+    
+
+    for (const update of stockUpdates) {
+      const { item_id, quantity_change } = update;
+
+      await ambarsariyaPool.query(
+        `
+        UPDATE sell.items
+        SET quantity_in_stock = quantity_in_stock - $1
+        WHERE item_id = $2
+        `,
+        [quantity_change, item_id]
+      );
+    }
+
+
+    // Step 3: Aggregate quantity changes by product_id
+    const productStockMap = {};
+
+    for (const update of stockUpdates) {
+      const { product_id, quantity_change } = update;
+
+      if (!productStockMap[product_id]) {
+        productStockMap[product_id] = 0;
+      }
+
+      productStockMap[product_id] += quantity_change;
+    }
+
+    console.log(productStockMap)
+
+    // Step 4: Update quantity_in_stock in sell.products
+    for (const [productId, totalChange] of Object.entries(productStockMap)) {
+      if (totalChange !== 0) {
+        await ambarsariyaPool.query(
+          `UPDATE sell.products
+          SET quantity_in_stock = quantity_in_stock - $1
+          WHERE product_id = $2`,
+          [totalChange, productId]
+        );
+      }
+    }
+
+
+    await ambarsariyaPool.query("COMMIT"); // Commit transaction
 
     const so_access_token = purchase_order.rows[0].so_access_token;
 
-    await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
     res.status(201).json({
       message: "Sale order processed successfully",
       so_access_token,
     });
   } catch (err) {
-    await ambarsariyaPool.query("ROLLBACK"); // Rollback transaction in case of error
+    await ambarsariyaPool.query("ROLLBACK"); // Rollback on error
     console.error("Error processing sale order:", err);
-    res.status(500).json({ error: "Error processing sale order", message: err.message });
+    res.status(500).json({
+      error: "Error processing sale order",
+      message: err.message,
+    });
   }
 };
+
 
 
 const get_sale_order_numbers = async (req, res) => {
