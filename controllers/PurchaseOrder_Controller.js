@@ -143,7 +143,7 @@ const get_purchase_orders = async (req, res) => {
         po.additional_instructions, 
         po.po_access_token,
         ARRAY[pr.variation_1, pr.variation_2, pr.variation_3, pr.variation_4] AS variations,
-        COALESCE(so_product->>'accept_or_deny', 'Pending') AS status,
+        COALESCE(so_product->>'accept_or_deny', 'Hold') AS status,
         so.so_no,
         so.status AS sale_order_status,
 
