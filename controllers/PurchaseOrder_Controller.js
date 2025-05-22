@@ -270,10 +270,72 @@ const get_all_purchased_orders = async (req, res) => {
   }
 };
 
+
+const get_purchased_order = async (req, res) => {
+  const { po_no } = req.params;
+
+  try {
+    if (po_no) {
+      let query = `SELECT 
+        po.po_no,
+		po.buyer_id,
+		po.buyer_type,
+		po.seller_id,
+		po.buyer_gst_number,
+		po.seller_gst_number,
+        product->>'id' AS product_id, 
+        product->>'name' AS product_name, 
+        product->>'quantity' AS quantity, 
+        product->>'unit_price' AS unit_price, 
+        product->>'total_price' AS total_price, 
+        product->>'selectedVariant' AS selectedVariant,  
+        pr.brand,
+        po.subtotal,  
+        po.discount_applied,  
+        po.taxes,  
+        po.total_amount,  
+        po.date_of_issue,  
+        po.po_access_token,  
+        pr.product_images,
+        -- Distribute discount_amount equally across products
+        ROUND((po.discount_amount / NULLIF(
+            (SELECT COUNT(*) 
+            FROM jsonb_array_elements(po.products::jsonb)), 0
+        )), 2) AS discount_amount,
+        ef.shop_access_token
+
+    FROM sell.purchase_order po
+    CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
+    LEFT JOIN sell.products pr 
+        ON po.seller_id = pr.shop_no  
+        AND product->>'id' = pr.product_id
+    LEFT JOIN sell.eshop_form ef
+    ON ef.shop_no = po.seller_id 
+    WHERE po.po_no = $1 `;
+      let result = await ambarsariyaPool.query(query, [po_no]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .status(404)
+          .json({ valid: false, message: "No order exists." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch data" });
+  }
+};
+
+
+
+
 module.exports = {
   post_purchaseOrder,
   get_purchase_orders,
   get_purchase_order_details,
   get_purchase_order_numbers,
-  get_all_purchased_orders
+  get_all_purchased_orders,
+  get_purchased_order
 };

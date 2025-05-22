@@ -90,6 +90,7 @@ router.get('/sell/products/:shop_no/:product_id', productController.get_products
 router.get('/sell/product-variants/:product_id', productController.get_product_variants);
 router.get('/purchase_order/:po_access_token', purchaseController.get_purchase_order_details);
 router.get('/purchase_orders/:po_no', purchaseController.get_purchase_orders);
+router.get('/purchased-order/:po_no', purchaseController.get_purchased_order);
 router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchase_order_numbers);
 router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_orders);
 router.get('/sell/items/:shop_no', itemController.get_items);
