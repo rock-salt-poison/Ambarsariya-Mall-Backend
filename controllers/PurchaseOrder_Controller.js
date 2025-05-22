@@ -114,7 +114,6 @@ const get_purchase_orders = async (req, res) => {
         COALESCE(so_product->>'selected_variant', product->>'selectedVariant') AS selected_variant,
         product->>'description' AS description, 
         COALESCE((product->>'total_price')::numeric, 0) AS total_price,
-        (product->>'selectedVariant') AS selected_variant,
         pr.inventory_or_stock_quantity AS quantity,  
         pr.product_name,  
         pr.variant_group,
@@ -130,6 +129,8 @@ const get_purchase_orders = async (req, res) => {
         po.discount_applied, 
         po.taxes, 
         po.co_helper, 
+        po.products as po_products,
+        so.products as so_products,
         -- Distribute discount_amount equally across products
         ROUND((po.discount_amount / NULLIF(
             (SELECT COUNT(*) 
@@ -146,6 +147,8 @@ const get_purchase_orders = async (req, res) => {
         COALESCE(so_product->>'accept_or_deny', 'Hold') AS status,
         so.so_no,
         so.status AS sale_order_status,
+        po.seller_id,
+        ef.shop_access_token,
 
         -- Grouped items per product as array of JSON objects
         (
@@ -171,7 +174,9 @@ const get_purchase_orders = async (req, res) => {
         WHERE so_product->>'product_id' = product->>'id'
     ) so_product ON TRUE
     LEFT JOIN type_of_services ts
-        ON ts.id = po.shipping_method 
+        ON ts.id = po.shipping_method
+    LEFT JOIN sell.eshop_form ef
+    ON ef.shop_no = po.seller_id 
     WHERE po.po_no = $1;
 `;
       let result = await ambarsariyaPool.query(query, [po_no]);
