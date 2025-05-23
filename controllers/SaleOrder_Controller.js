@@ -15,10 +15,10 @@ const post_saleOrder = async (req, res) => {
         shipping_method, shipping_charges, expected_delivery_date, co_helper, subscription_type,
         payment_terms, total_payment_with_all_services, payment_method, payment_due_date,
         prepaid, postpaid, balance_credit, balance_credit_due_date, after_due_date_surcharges_per_day,
-        status, send_qr_upi_bank_details, seller_id
+        status, send_qr_upi_bank_details, seller_id, coupon_cost
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24, $25
+        $19, $20, $21, $22, $23, $24, $25, $26
       )
       ON CONFLICT (po_no) DO UPDATE SET
         products = EXCLUDED.products,
@@ -41,6 +41,7 @@ const post_saleOrder = async (req, res) => {
         after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
         status = EXCLUDED.status,
         send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
+        coupon_cost = EXCLUDED.coupon_cost,
         updated_at = CURRENT_TIMESTAMP
       RETURNING so_access_token
     `;
@@ -71,6 +72,7 @@ const post_saleOrder = async (req, res) => {
       data.status,
       data.send_qr_upi_bank_details,
       data.seller_id,
+      data.coupon_cost
     ]);
 
     // Step 2: Update stock in Sell.items

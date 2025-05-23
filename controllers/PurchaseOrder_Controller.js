@@ -30,10 +30,10 @@ const post_purchaseOrder = async (req, res) => {
         products, subtotal, shipping_address, shipping_method, payment_method, 
         special_offers, discount_applied, taxes, co_helper, discount_amount, 
         pre_post_paid, extra_charges, total_amount, date_of_issue, 
-        delivery_terms, additional_instructions
+        delivery_terms, additional_instructions, coupon_cost
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 
-        $17, $18, $19, $20, $21
+        $17, $18, $19, $20, $21, $22
       ) 
       RETURNING po_access_token
     `;
@@ -45,7 +45,7 @@ const post_purchaseOrder = async (req, res) => {
       JSON.stringify(data.special_offers), JSON.stringify(data.discount_applied), 
       data.taxes, data.co_helper, data.discount_amount, data.pre_post_paid, 
       data.extra_charges, data.total_amount, data.date_of_issue, 
-      data.delivery_terms, data.additional_instructions,
+      data.delivery_terms, data.additional_instructions, data.coupon_cost
     ]);
 
     const po_access_token = purchase_order.rows[0].po_access_token;
@@ -113,7 +113,7 @@ const get_purchase_orders = async (req, res) => {
         COALESCE((so_product->>'unit_price')::numeric, (product->>'unit_price')::numeric) AS unit_price,
         COALESCE(so_product->>'selected_variant', product->>'selectedVariant') AS selected_variant,
         product->>'description' AS description, 
-        COALESCE((product->>'total_price')::numeric, 0) AS total_price,
+        COALESCE((so_product->>'total_price')::numeric, (product->>'total_price')::numeric) AS total_price,
         pr.inventory_or_stock_quantity AS quantity,  
         pr.product_name,  
         pr.variant_group,
@@ -136,6 +136,8 @@ const get_purchase_orders = async (req, res) => {
             (SELECT COUNT(*) 
             FROM jsonb_array_elements(po.products::jsonb)), 0
         )), 2) AS discount_amount,
+
+        po.discount_amount as total_discount_amount,
         po.pre_post_paid, 
         po.extra_charges, 
         po.total_amount, 
@@ -149,6 +151,7 @@ const get_purchase_orders = async (req, res) => {
         so.status AS sale_order_status,
         po.seller_id,
         ef.shop_access_token,
+        po.coupon_cost,
 
         -- Grouped items per product as array of JSON objects
         (
