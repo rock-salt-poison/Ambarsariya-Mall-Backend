@@ -10,6 +10,7 @@ const itemController = require('../controllers/Item_Controller');
 const skuController = require('../controllers/SKU_Controller');
 const rkuController = require('../controllers/RKU_Controller');
 const saleController = require('../controllers/SaleOrder_Controller');
+const invoiceController = require('../controllers/Invoice_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
 
@@ -91,6 +92,7 @@ router.get('/sell/product-variants/:product_id', productController.get_product_v
 router.get('/purchase_order/:po_access_token', purchaseController.get_purchase_order_details);
 router.get('/purchase_orders/:po_no', purchaseController.get_purchase_orders);
 router.get('/purchased-order/:po_no', purchaseController.get_purchased_order);
+router.get('/buyer-details/:po_no', purchaseController.get_buyer_details);
 router.get('/purchase_order_no/:seller_id/:date', purchaseController.get_purchase_order_numbers);
 router.get('/purchased_orders/:buyer_id', purchaseController.get_all_purchased_orders);
 router.get('/sell/items/:shop_no', itemController.get_items);
@@ -113,6 +115,10 @@ router.get('/sell/events/:member_id', eshopController.get_member_events);
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
 router.get('/sale_order_no/:seller_id', saleController.get_sale_order_numbers);
+router.get('/invoice/:invoice_no', invoiceController.get_invoice_orders);
+router.get('/buyer-data/:user_id', invoiceController.get_buyer_details);
+router.get('/seller-data/:shop_no', invoiceController.get_seller_details);
+router.get('/purchased-products-data/:product_id/:item_id', invoiceController.get_purchased_products_details);
 
 
 router.post('/sell/support', eshopController.post_visitorData);
@@ -128,6 +134,7 @@ router.post('/sell/support/chat', eshopController.post_supportChatMessage);
 router.post('/sell/emotional/:member_id', eshopController.post_member_emotional);
 router.post('/sell/professional/:member_id/:user_id', eshopController.post_member_professional);
 router.post('/sell/relations/:member_id/:user_id', eshopController.post_member_relations);
+router.post('/create-invoice', invoiceController.post_invoiceOrder);
 router.put('/sell/member-share-level', eshopController.put_member_share_level);
 
 router.post("/sell/events/:member_id", (req, res, next) => {

@@ -32,8 +32,8 @@ const get_category_name = async(req, res) => {
       res.json(result.rows);
   }
   catch(err){
-      console.log('Error fetching sectors : ' + err);
-      res.status(500).json({message : 'Error fetching sectors.', error: err.message});
+      console.log('Error fetching category : ' + err);
+      res.status(500).json({message : 'Error fetching category.', error: err.message});
   }
 }
 

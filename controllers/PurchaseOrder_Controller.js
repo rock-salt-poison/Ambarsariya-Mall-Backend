@@ -305,6 +305,7 @@ const get_purchased_order = async (req, res) => {
             (SELECT COUNT(*) 
             FROM jsonb_array_elements(po.products::jsonb)), 0
         )), 2) AS discount_amount,
+        po.discount_amount as total_discount_amount,
         ef.shop_access_token
 
     FROM sell.purchase_order po
@@ -331,7 +332,33 @@ const get_purchased_order = async (req, res) => {
   }
 };
 
+const get_buyer_details = async (req, res) => {
+  const { po_no } = req.params;
 
+  try {
+    if (po_no) {
+      let query = `select mp.member_id, u.full_name from 
+                      sell.purchase_order po
+                      left join sell.users u
+                      ON u.user_id = po.buyer_id
+                      left join sell.member_profiles mp
+                      ON mp.user_id = po.buyer_id
+                      where po.po_no = $1 `;
+      let result = await ambarsariyaPool.query(query, [po_no]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .status(404)
+          .json({ valid: false, message: "No order exists." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch data" });
+  }
+};
 
 
 module.exports = {
@@ -340,5 +367,6 @@ module.exports = {
   get_purchase_order_details,
   get_purchase_order_numbers,
   get_all_purchased_orders,
-  get_purchased_order
+  get_purchased_order,
+  get_buyer_details
 };
