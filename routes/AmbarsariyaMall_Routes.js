@@ -111,6 +111,9 @@ router.get('/sell/member-share-level/:member_id', eshopController.get_member_sha
 router.get('/event-purpose/:event_type', eshopController.get_member_event_purpose);
 router.get('/event-purpose-engagement/:event_type/:event_purpose_id', eshopController.get_member_event_purpose_engagement);
 router.get('/sell/events/:member_id', eshopController.get_member_events);
+router.get('/sell/product-search/domains', eshopController.get_existing_domains);
+router.get('/sell/product-search/sectors', eshopController.get_existing_sectors);
+router.get('/sell/product-search/product', eshopController.get_searched_products);
 
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);

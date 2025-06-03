@@ -3089,6 +3089,112 @@ const put_near_by_shops = async (req, res) => {
   }
 };
 
+const get_existing_domains = async (req, res) => {
+  try {
+    // Query for full visitor data
+    const query = `
+            SELECT DISTINCT d.* 
+            FROM domains d
+            JOIN sell.eshop_form ef 
+            ON d.domain_id = ef.domain;
+        `;
+    const result = await ambarsariyaPool.query(query);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No domain exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+
+const get_existing_sectors = async (req, res) => {
+  try {
+    const { domain_id } = req.query; // Extract the member_id from the request
+
+
+    // Query for full visitor data
+    const query = `
+           SELECT DISTINCT s.* 
+            FROM sectors s
+            JOIN sell.eshop_form ef 
+            ON ef.domain = $1
+            AND ef.sector = s.sector_id
+        `;
+    const result = await ambarsariyaPool.query(query, [domain_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No domain exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const get_searched_products = async (req, res) => {
+  try {
+    const { domain_id, sector_id, product } = req.query;
+
+    if (!domain_id) {
+      return res.status(400).json({ valid: false, message: "Domain ID is required" });
+    }
+
+    let query = `
+      SELECT c.category_name, e.business_name, e.shop_access_token, p.*
+      FROM sell.products p
+      JOIN sell.eshop_form e ON p.shop_no = e.shop_no
+      JOIN categories c ON c.category_id = p.category
+      WHERE e.domain = $1
+    `;
+    
+    const params = [domain_id];
+    let idx = 2;
+
+    if (sector_id) {
+      query += ` AND e.sector = $${idx}`;
+      params.push(sector_id);
+      idx++;
+    }
+
+    if (product) {
+      query += ` AND (
+        LOWER(p.product_name) ILIKE '%' || LOWER($${idx}) || '%' OR
+        LOWER(p.product_type) ILIKE '%' || LOWER($${idx}) || '%' OR
+        LOWER(p.category::text) ILIKE '%' || LOWER($${idx}) || '%' OR
+        LOWER(p.brand) ILIKE '%' || LOWER($${idx}) || '%'
+      )`;
+      params.push(product);
+    }
+
+    const result = await ambarsariyaPool.query(query, params);
+
+    if (result.rowCount === 0) {
+      res.status(404).json({ valid: false, message: "No product exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res.status(500).json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+
+
 
 module.exports = {
   post_book_eshop,
@@ -3136,5 +3242,8 @@ module.exports = {
   post_member_community,
   update_shop_is_open_status,
   put_near_by_shops,
-  get_nearby_areas_for_shop
+  get_nearby_areas_for_shop,
+  get_existing_sectors,
+  get_existing_domains,
+  get_searched_products
 };
