@@ -3193,7 +3193,83 @@ const get_searched_products = async (req, res) => {
   }
 };
 
+const get_shop_categories = async (req, res) => {
+  try {
+    const { shop_no } = req.query; // Extract the member_id from the request
 
+
+    // Query for full visitor data
+    const query = `
+          select c.category_id, c.category_name from sell.eshop_form ef
+          join categories c on c.category_id = ANY(ef.category)
+          where ef.shop_no = $1
+        `;
+    const result = await ambarsariyaPool.query(query, [shop_no]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No category exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+const get_shop_products = async (req, res) => {
+  try {
+    const { shop_no, category } = req.query; // Extract the member_id from the request
+
+
+    // Query for full visitor data
+    const query = `
+          select product_id, product_name, brand from sell.products where category = $2 and shop_no = $1;
+        `;
+    const result = await ambarsariyaPool.query(query, [shop_no, category]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No product exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
+
+const get_shop_product_items = async (req, res) => {
+  try {
+    const { product_id } = req.query; // Extract the member_id from the request
+
+
+    // Query for full visitor data
+    const query = `
+          select item_id, selling_price, quantity_in_stock, updated_at, created_at from sell.items where product_id = $1;
+        `;
+    const result = await ambarsariyaPool.query(query, [product_id]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.status(404).json({ valid: false, message: "No items exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
 
 
 module.exports = {
@@ -3245,5 +3321,8 @@ module.exports = {
   get_nearby_areas_for_shop,
   get_existing_sectors,
   get_existing_domains,
-  get_searched_products
+  get_searched_products,
+  get_shop_categories,
+  get_shop_products,
+  get_shop_product_items
 };

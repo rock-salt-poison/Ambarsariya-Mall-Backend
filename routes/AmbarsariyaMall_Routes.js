@@ -114,6 +114,9 @@ router.get('/sell/events/:member_id', eshopController.get_member_events);
 router.get('/sell/product-search/domains', eshopController.get_existing_domains);
 router.get('/sell/product-search/sectors', eshopController.get_existing_sectors);
 router.get('/sell/product-search/product', eshopController.get_searched_products);
+router.get('/shop/categories', eshopController.get_shop_categories);
+router.get('/shop/products', eshopController.get_shop_products);
+router.get('/shop/product-items', eshopController.get_shop_product_items);
 
 
 router.get('/sale_orders/:seller_id', saleController.get_sale_orders);
