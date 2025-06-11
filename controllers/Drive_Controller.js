@@ -25,7 +25,7 @@ const serviceScopeMapping = {
 const post_openFile = async (req, res) => {
   const { email } = req.params;
   const channel = `drive-channel-${email}`;  // A unique channel per user, for example
-
+  
   try {
     if (!email)
       return res
@@ -89,7 +89,7 @@ const post_openFile = async (req, res) => {
       }
     }
 
-    const response = await processDrive(email, channel);
+    const response = await processDrive(email, user_id);
     return res.json(response);
   } catch (e) {
     console.error("Error opening file:", e);

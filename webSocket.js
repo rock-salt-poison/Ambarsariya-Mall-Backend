@@ -25,9 +25,9 @@ const initializeWebSocket = (server) => {
   });
 };
 
-const broadcastMessage = (message) => {
+const broadcastMessage = (roomId, message) => {
   if (io) {
-    io.emit('message', message); // still useful for general dashboard messages
+    io.to(roomId).emit('message', message); // Broadcast to all clients in the room
   } else {
     console.log('Socket.io not initialized');
   }
