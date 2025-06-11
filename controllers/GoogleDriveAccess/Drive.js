@@ -852,7 +852,7 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
           }
         
           if (sellingPriceIndex !== -1) {
-            const sellingPrice = parseFloat((String(data.selling_price).split("$")[1] || "0").replace(/,/g, ""));
+            const sellingPrice = parseFloat(data.selling_price);
             rowRequests.push(
               createUpdateRequest(
                 userSheet.properties.sheetId,
