@@ -7,6 +7,48 @@ const { encryptData, decryptData } = require("../utils/cryptoUtils");
 const nodemailer = require('nodemailer');
 const {broadcastMessage, emitChatMessage} = require("../webSocket");
 
+
+const get_checkIfMemberExists = async (req, res) => {
+  const { username, phone1, phone2 } = req.query;
+  console.log(username, phone1, phone2);
+
+  const normalizedPhone1 = phone1.replace(/\D/g, '').slice(-10);
+  const normalizedPhone2 = phone2.replace(/\D/g, '').slice(-10);
+
+
+  try {
+    const query = `
+      SELECT u.user_id, uc.username, u.phone_no_1
+      FROM Sell.users u
+      JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
+      WHERE u.user_type = 'member'
+        AND (
+          LOWER(uc.username) = LOWER($1)
+          OR RIGHT(REGEXP_REPLACE(u.phone_no_1, '[^0-9]', '', 'g'), 10) IN ($2, $3)
+          OR RIGHT(REGEXP_REPLACE(u.phone_no_2, '[^0-9]', '', 'g'), 10) IN ($2, $3)
+        );
+    `;
+
+    const result = await ambarsariyaPool.query(query, [username.toLowerCase(), normalizedPhone1, normalizedPhone2,]);
+
+    if (result.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        message: "A member with this username or phone number already exists.",
+        member: result.rows[0]
+      });
+    } else {
+      return res.status(200).json({
+        exists: false,
+        message: "No existing member found with this username or phone number."
+      });
+    }
+  } catch (error) {
+    console.error('Error checking member existence:', error);
+    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+  }
+};
+
 const post_book_eshop = async (req, resp) => {
   const {
     title,
@@ -38,7 +80,6 @@ const post_book_eshop = async (req, resp) => {
     user_type,
   } = req.body;
 
-  // Validate that required fields are provided
   if (!fullName || !username || !password) {
     return resp
       .status(400)
@@ -52,7 +93,23 @@ const post_book_eshop = async (req, resp) => {
   if (delivery) typeOfService.push(3);
 
   try {
-    // Start a transaction
+    // Check for existing member with same username or phone1
+    const existingMemberCheck = await ambarsariyaPool.query(
+      `SELECT u.user_id, uc.username, u.phone_no_1 
+      FROM Sell.users u
+      JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
+      WHERE u.user_type = 'member' AND (uc.username = $1 OR u.phone_no_1 = $2)`,
+      [username.toLowerCase(), phone1]
+    );
+
+    if (existingMemberCheck.rows.length > 0) {
+      return resp.status(409).json({
+        message: "A member with the same username or phone number already exists.",
+      });
+    }
+
+
+    // Begin transaction
     await ambarsariyaPool.query("BEGIN");
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -60,9 +117,9 @@ const post_book_eshop = async (req, resp) => {
     // Insert into users table
     const userResult = await ambarsariyaPool.query(
       `INSERT INTO Sell.users 
-            (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING user_id`,
+       (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING user_id`,
       [fullName, title, phone1, phone2, user_type, pan_no, cin_no]
     );
     const newUserId = userResult.rows[0].user_id;
@@ -70,9 +127,10 @@ const post_book_eshop = async (req, resp) => {
     // Insert into eshop_form table
     const eshopResult = await ambarsariyaPool.query(
       `INSERT INTO Sell.eshop_form
-            (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector,created_sector, ontime, offtime, type_of_service, gst,msme, paid_version, is_merchant,member_username_or_phone_no, premium_service)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,$13, $14, $15, $16, $17, $18)
-            RETURNING shop_no, shop_access_token`,
+       (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector, created_sector,
+        ontime, offtime, type_of_service, gst, msme, paid_version, is_merchant, member_username_or_phone_no, premium_service)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       RETURNING shop_no, shop_access_token`,
       [
         newUserId,
         fullName,
@@ -94,44 +152,44 @@ const post_book_eshop = async (req, resp) => {
         premiumVersion,
       ]
     );
+
     const newShopNo = eshopResult.rows[0].shop_no;
     const shop_access_token = eshopResult.rows[0].shop_access_token;
 
-    // Insert into user_credentials table
-    const user_credentials = await ambarsariyaPool.query(
+    // Insert into user_credentials
+    const userCredentials = await ambarsariyaPool.query(
       `INSERT INTO Sell.user_credentials 
-            (user_id, username, password)
-            VALUES ($1, $2, $3)
-            RETURNING access_token`,
-      [newUserId, username, hashedPassword]
+       (user_id, username, password)
+       VALUES ($1, $2, $3)
+       RETURNING access_token`,
+      [newUserId, username.toLowerCase(), hashedPassword]
     );
 
-    const user_access_token = user_credentials.rows[0].access_token;
+    const user_access_token = userCredentials.rows[0].access_token;
 
     // Insert into user_shops table
     await ambarsariyaPool.query(
-      `INSERT INTO Sell.user_shops
-            (user_id, shop_no)
-            VALUES ($1, $2)`,
+      `INSERT INTO Sell.user_shops (user_id, shop_no) VALUES ($1, $2)`,
       [newUserId, newShopNo]
     );
 
-    // Commit the transaction
     await ambarsariyaPool.query("COMMIT");
+
     resp.status(201).json({
       message: "E-shop data successfully created.",
-      shop_access_token: shop_access_token,
+      shop_access_token,
       user_access_token,
     });
   } catch (err) {
-    // Rollback the transaction in case of error
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
-    resp
-      .status(500)
-      .json({ message: "Error storing data", error: err.message });
+    resp.status(500).json({
+      message: "Error storing data",
+      error: err.message,
+    });
   }
 };
+
 
 
 const post_member_data = async (req, resp) => {
@@ -3273,6 +3331,7 @@ const get_shop_product_items = async (req, res) => {
 
 
 module.exports = {
+  get_checkIfMemberExists,
   post_book_eshop,
   update_eshop,
   update_eshop_location,

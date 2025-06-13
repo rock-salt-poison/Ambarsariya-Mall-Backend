@@ -25,6 +25,8 @@ router.get('/service/:id', ambarsariyaController.get_typeOfService);
 router.get('/category/:category_id', ambarsariyaController.get_category_name);
 router.get('/category/name/:category_name', ambarsariyaController.get_category_id);
 router.get('/categories', ambarsariyaController.get_categoriesList);
+router.get('/sell/check-member-exists', eshopController.get_checkIfMemberExists);
+
 router.post('/sell/eshop', eshopController.post_book_eshop);
 // router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
 router.put("/sell/buyeshop/:shopAccessToken", (req, res, next) => {
