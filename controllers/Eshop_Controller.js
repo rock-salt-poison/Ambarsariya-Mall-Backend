@@ -12,12 +12,15 @@ const get_checkIfMemberExists = async (req, res) => {
   const { username, phone1, phone2 } = req.query;
   console.log(username, phone1, phone2);
 
+  if (!username || !phone1 || !phone2) {
+    return res.status(400).json({ message: 'Username, phone1, and phone2 are required' });
+  }
+
   const normalizedPhone1 = phone1.replace(/\D/g, '').slice(-10);
   const normalizedPhone2 = phone2.replace(/\D/g, '').slice(-10);
 
-
   try {
-    const query = `
+    const memberQuery = `
       SELECT u.user_id, uc.username, u.phone_no_1
       FROM Sell.users u
       JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
@@ -29,25 +32,87 @@ const get_checkIfMemberExists = async (req, res) => {
         );
     `;
 
-    const result = await ambarsariyaPool.query(query, [username.toLowerCase(), normalizedPhone1, normalizedPhone2,]);
+    const result = await ambarsariyaPool.query(memberQuery, [
+      username.toLowerCase(),
+      normalizedPhone1,
+      normalizedPhone2,
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({
+        exists: false,
+        message: "No existing member found with this username or phone number.",
+      });
+    }
+
+    const member = result.rows[0];
+
+    // Now check if this member has a shop created
+    const shopQuery = `
+      SELECT shop_no, is_merchant
+      FROM Sell.eshop_form
+      WHERE user_id = $1
+    `;
+    const shopResult = await ambarsariyaPool.query(shopQuery, [member.user_id]);
+
+    if (shopResult.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        shopExists: true,
+        message: "Member and shop already exist.",
+        member,
+        shop: shopResult.rows[0],
+      });
+    } else {
+      return res.status(200).json({
+        exists: true,
+        shopExists: false,
+        message: "Member exists, but shop is not yet created.",
+        member,
+      });
+    }
+  } catch (error) {
+    console.error('Error checking member/shop existence:', error);
+    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+  }
+};
+
+const get_checkIfShopExists = async (req, res) => {
+  const { username } = req.query;
+
+  if (!username) {
+    return res.status(400).json({ message: "Username is required." });
+  }
+
+  try {
+    const query = `
+      SELECT ef.shop_no
+      FROM Sell.eshop_form ef
+      JOIN Sell.user_credentials uc ON ef.user_id = uc.user_id
+      WHERE LOWER(uc.username) = LOWER($1)
+      LIMIT 1;
+    `;
+
+    const result = await ambarsariyaPool.query(query, [username.toLowerCase()]);
 
     if (result.rows.length > 0) {
       return res.status(200).json({
         exists: true,
-        message: "A member with this username or phone number already exists.",
-        member: result.rows[0]
+        message: "Shop already exists for this username.",
+        shop_no: result.rows[0].shop_no,
       });
     } else {
       return res.status(200).json({
         exists: false,
-        message: "No existing member found with this username or phone number."
+        message: "No shop found for this username.",
       });
     }
   } catch (error) {
-    console.error('Error checking member existence:', error);
+    console.error('Error checking shop existence:', error);
     return res.status(500).json({ message: 'Internal server error.', error: error.message });
   }
 };
+
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -3332,6 +3397,7 @@ const get_shop_product_items = async (req, res) => {
 
 module.exports = {
   get_checkIfMemberExists,
+  get_checkIfShopExists,
   post_book_eshop,
   update_eshop,
   update_eshop_location,
