@@ -12,10 +12,6 @@ const get_checkIfMemberExists = async (req, res) => {
   const { username, phone1, phone2 } = req.query;
   console.log(username, phone1, phone2);
 
-  if (!username || !phone1 || !phone2) {
-    return res.status(400).json({ message: 'Username, phone1, and phone2 are required' });
-  }
-
   const normalizedPhone1 = phone1.replace(/\D/g, '').slice(-10);
   const normalizedPhone2 = phone2.replace(/\D/g, '').slice(-10);
 
