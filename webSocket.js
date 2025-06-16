@@ -4,6 +4,7 @@ let io;
 
 const initializeWebSocket = (server) => {
   io = socketIo(server, {
+    path: "/socket.io",
     cors: {
       origin: '*', // Adjust for production
       methods: ['GET', 'POST'],
