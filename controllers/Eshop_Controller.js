@@ -681,7 +681,8 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
 const get_memberData = async (req, res) => {
   try {
     const { memberAccessToken } = req.query;
-
+    console.log(memberAccessToken);
+    
     // Validate that the member_access_token is provided
     if (!memberAccessToken) {
       return res
@@ -1101,11 +1102,14 @@ const post_visitorData = async (req, resp) => {
 
 const get_visitorData = async (req, res) => {
   try {
-    const { token, sender_id } = req.params; // Extract the token from the request
+    const { token, sender_id } = req.params;
+    let query, params;
 
-    // Query for full visitor data
-    const query = `
-           SELECT  
+    console.log(token, sender_id)
+    if (sender_id) {
+      // If sender_id exists, include response subquery
+      query = `
+        SELECT  
               v.support_id,
               v.visitor_id,
               v.name,
@@ -1140,20 +1144,42 @@ const get_visitorData = async (req, res) => {
             LEFT JOIN domains d ON d.domain_id = v.domain_id
             LEFT JOIN sectors s ON s.sector_id = v.sector_id
             WHERE v.access_token = $1;
-        `;
-    const result = await ambarsariyaPool.query(query, [token, sender_id]);
+      `;
+      params = [token, sender_id];
+    } else {
+      // If no sender_id, use simpler query
+      query = `
+        SELECT  
+          v.support_id,
+          v.visitor_id,
+          v.name,
+          v.phone_no,
+          v.purpose,
+          v.message,
+          v.file_attached,
+          v.user_type,
+          v.response,
+          v.access_token,
+          d.domain_name,
+          s.sector_name
+        FROM sell.support v
+        LEFT JOIN domains d ON d.domain_id = v.domain_id
+        LEFT JOIN sectors s ON s.sector_id = v.sector_id
+        WHERE v.access_token = $1;
+      `;
+      params = [token];
+    }
+
+    const result = await ambarsariyaPool.query(query, params);
 
     if (result.rowCount === 0) {
-      // If no rows are found, assume the token is invalid
       res.status(404).json({ valid: false, message: "Invalid token" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
   } catch (err) {
     console.error("Error processing request:", err);
-    res
-      .status(500)
-      .json({ message: "Error processing request.", error: err.message });
+    res.status(500).json({ message: "Error processing request.", error: err.message });
   }
 };
 
