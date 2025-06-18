@@ -138,7 +138,7 @@ const post_book_eshop = async (req, resp) => {
     pickup,
     homeVisit,
     delivery,
-    user_type,
+    user_type    
   } = req.body;
 
   if (!fullName || !username || !password) {
@@ -178,10 +178,10 @@ const post_book_eshop = async (req, resp) => {
     // Insert into users table
     const userResult = await ambarsariyaPool.query(
       `INSERT INTO Sell.users 
-       (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no, is_merchant)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING user_id`,
-      [fullName, title, phone1, phone2, user_type, pan_no, cin_no]
+      [fullName, title, phone1, phone2, user_type, pan_no, cin_no, merchant]
     );
     const newUserId = userResult.rows[0].user_id;
 
@@ -256,7 +256,7 @@ const post_book_eshop = async (req, resp) => {
 const post_member_data = async (req, resp) => {
   console.log("Received files:", req.files["profile_img"]); // Log the file
 
-  const { name, username, password, address, latitude, longitude, phone, gender, dob, access_token } = req.body;
+  const { name, username, password, address, latitude, longitude, phone, gender, dob, access_token, is_merchant, merchant_access_token } = req.body;
 
   if (!name || !username ) {
     return resp
@@ -295,7 +295,8 @@ const post_member_data = async (req, resp) => {
         `SELECT uc.user_id, mp.profile_img, mp.bg_img 
           FROM sell.user_credentials uc 
           JOIN sell.member_profiles mp ON mp.user_id = uc.user_id 
-          WHERE uc.access_token = $1 AND uc.username = $2`,
+          JOIN sell.users u ON u.user_id = uc.user_id 
+          WHERE uc.access_token = $1 AND uc.username = $2 AND u.user_type = "member"`,
         [access_token, username]
       );
 
@@ -343,19 +344,19 @@ const post_member_data = async (req, resp) => {
       // **Insert new user record**
       const userResult = await ambarsariyaPool.query(
         `INSERT INTO sell.users 
-              (full_name, title, phone_no_1, user_type, gender)
-              VALUES ($1, $2, $3, $4, $5)
+              (full_name, title, phone_no_1, user_type, gender, is_merchant)
+              VALUES ($1, $2, $3, $4, $5, $6)
               RETURNING user_id`,
-        [name, title, phone, "member", gender]
+        [name, title, phone, "member", gender, is_merchant]
       );
       newUserId = userResult.rows[0].user_id;
 
       const userCredentials = await ambarsariyaPool.query(
         `INSERT INTO sell.user_credentials 
-              (user_id, username, password)
-              VALUES ($1, $2, $3)
+              (user_id, username, password, access_token)
+              VALUES ($1, $2, $3, COALESCE($4, gen_random_uuid()))
               RETURNING access_token`,
-        [newUserId, username, hashedPassword]
+        [newUserId, username, hashedPassword, merchant_access_token || null]
       );
 
       userAccessToken = userCredentials.rows[0].access_token;
@@ -751,7 +752,10 @@ const get_userData = async (req, res) => {
     // First check in the users table (for member, merchant, shop)
     const userResult = await ambarsariyaPool.query(
       `SELECT 
-        u.user_type, 
+        CASE 
+          WHEN u.is_merchant THEN 'merchant'
+          ELSE u.user_type
+        END AS user_type, 
         u.user_id, 
         ef.shop_no AS "shop_no",
         ef.shop_access_token AS "shop_access_token",
@@ -763,17 +767,19 @@ const get_userData = async (req, res) => {
           WHEN u.user_type = 'member' THEN u.full_name
           ELSE ef.business_name
         END AS "name"
-      FROM sell.users u
-      JOIN sell.user_credentials uc 
-        ON u.user_id = uc.user_id
-      LEFT join sell.member_profiles mp
+    FROM sell.users u
+    JOIN sell.user_credentials uc 
+      ON u.user_id = uc.user_id
+    LEFT JOIN sell.member_profiles mp
       ON mp.user_id = u.user_id
-      LEFT JOIN sell.eshop_form ef
-        ON u.user_id = ef.user_id
-      LEFT JOIN sell.support s
-        ON s.access_token = uc.access_token
-      WHERE uc.access_token = $1
-      AND u.user_type IN ('member', 'merchant', 'shop')`,
+    LEFT JOIN sell.eshop_form ef
+      ON u.user_id = ef.user_id
+    LEFT JOIN sell.support s
+      ON s.access_token = uc.access_token
+    WHERE uc.access_token = $1
+      AND (
+        u.user_type IN ('member', 'shop') OR u.is_merchant = true
+      );`,
       [userAccessToken]
     );
 
