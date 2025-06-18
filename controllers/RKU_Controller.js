@@ -76,7 +76,6 @@ const get_sku = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "No sku's are there." });
       } else {
         res.json({ valid: true, data: result.rows });

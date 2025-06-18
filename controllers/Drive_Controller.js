@@ -503,7 +503,6 @@ const get_handleAuthCallback = async (req, res) => {
 
     if (!shopResult.rows.length) {
       return res
-        .status(404)
         .json({ success: false, message: "Shop not found" });
     }
 
@@ -565,7 +564,6 @@ const handleAuthCallback2 = async (req, res) => {
 
     if (!memberResult.rows.length) {
       return res
-        .status(404)
         .json({ success: false, message: "Member not found" });
     }
 

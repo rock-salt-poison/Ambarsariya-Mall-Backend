@@ -521,7 +521,7 @@ const update_eshop_location = async (req, resp) => {
 
     // If no rows were affected, return an error
     if (eshopResult.rows.length === 0) {
-      return resp.status(404).json({ message: "No e-shop found with the provided access token." });
+      return resp.json({ message: "No e-shop found with the provided access token." });
     }
 
     resp.status(200).json({
@@ -547,7 +547,7 @@ const update_shop_is_open_status = async (req, resp) => {
 
     // Optional: check if row was actually updated
     if (updateResult.rowCount === 0) {
-      return resp.status(404).json({ message: "No matching shop found to update." });
+      return resp.json({ message: "No matching shop found to update." });
     }
 
     return resp.status(200).json({
@@ -687,7 +687,6 @@ const get_memberData = async (req, res) => {
     // Validate that the member_access_token is provided
     if (!memberAccessToken) {
       return res
-        .status(400)
         .json({ message: "Member access token is required." });
     }
 
@@ -714,7 +713,7 @@ const get_memberData = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [memberAccessToken]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
+      return res.json({
         message: "No data found for the provided member access token.",
       });
     }
@@ -800,7 +799,7 @@ const get_userData = async (req, res) => {
       if (supportResult.rows.length > 0) {
         res.json(supportResult.rows);
       } else {
-        res.status(404).json({ message: "User not found." });
+        res.json({ message: "User not found." });
       }
     } else {
       res.json(userResult.rows);
@@ -819,7 +818,6 @@ const post_authLogin = async (req, res) => {
   // Input validation
   if (!username || !password || !type) {
     return res
-      .status(400)
       .json({ message: "Username, password, and type are required." });
   }
 
@@ -832,7 +830,7 @@ const post_authLogin = async (req, res) => {
 
     // If no user found with the given username
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Username not found." });
+      return res.json({ message: "Username not found." });
     }
 
     // Iterate through all users with that username
@@ -871,7 +869,7 @@ const post_authLogin = async (req, res) => {
     }
 
     // If no matching credentials were found
-    return res.status(401).json({ message: "Incorrect password." });
+    return res.json({ message: "Incorrect password." });
   } catch (error) {
     console.error("Error logging in:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -1029,7 +1027,7 @@ const get_allUsers = async (req, res) => {
     }
   } catch (e) {
     console.error("Error fetching users", e);
-    res.status(500).json({ message: "Error fetching users", error: e.message });
+    res.json({ message: "Error fetching users", error: e.message });
   }
 };
 
@@ -1179,7 +1177,7 @@ const get_visitorData = async (req, res) => {
     const result = await ambarsariyaPool.query(query, params);
 
     if (result.rowCount === 0) {
-      res.status(404).json({ valid: false, message: "Invalid token" });
+      res.json({ valid: false, message: "Invalid token" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -1209,7 +1207,7 @@ const put_visitorData = async (req, resp) => {
       const errorMessage = 'No merchants found with the same domain and sector.';
       console.error(errorMessage);
       broadcastMessage(errorMessage);
-      return resp.status(400).json({ message: errorMessage });
+      return resp.json({ message: errorMessage });
     }
 
     let uploadedFile = null;
@@ -1545,7 +1543,7 @@ const get_supportChatMessages = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid support id or notificaiton id" });
+      res.json({ valid: false, message: "Invalid support id or notificaiton id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -1583,7 +1581,7 @@ const get_supportChatNotifications = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid shop number" });
+      res.json({ valid: false, message: "Invalid shop number" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -1619,7 +1617,7 @@ console.log(user_type);
     } else if (user_type === "buy") {
       allowedUserTypes = ["member", "visitor"];
     } else {
-      return resp.status(400).json({ message: "Invalid user_type provided." });
+      return resp.json({ message: "Invalid user_type provided." });
     }
 
     // Hash the new password
@@ -1642,7 +1640,7 @@ console.log(user_type);
     );
 
     if (result.rows.length === 0) {
-      return resp.status(404).json({ message: "No user found." });
+      return resp.json({ message: "No user found." });
     }
 
     const user_access_token = result.rows[0].access_token;
@@ -1953,7 +1951,7 @@ const get_discountCoupons = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, return an invalid response
-      res.status(404).json({ valid: false, message: "Invalid shop" });
+      res.json({ valid: false, message: "Invalid shop" });
       return;
     }
 
@@ -2008,7 +2006,7 @@ const get_nearby_shops = async (req, res) => {
     );
 
     if (areaResult.rows.length === 0) {
-      return res.status(404).json({ error: "Area not found" });
+      return res.json({ error: "Area not found" });
     }
 
     const area = areaResult.rows[0];
@@ -2071,7 +2069,7 @@ const get_nearby_areas_for_shop = async (req, res) => {
     );
 
     if (shopRes.rows.length === 0) {
-      return res.status(404).json({ error: "Shop not found" });
+      return res.json({ error: "Shop not found" });
     }
 
     const { latitude, longitude } = shopRes.rows[0];
@@ -2202,7 +2200,7 @@ const get_member_emotional = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid member id" });
+      res.json({ valid: false, message: "Invalid member id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2483,7 +2481,7 @@ const get_member_personal = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid member id" });
+      res.json({ valid: false, message: "Invalid member id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2516,7 +2514,7 @@ const get_member_professional = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid member or user id" });
+      res.json({ valid: false, message: "Invalid member or user id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2920,7 +2918,7 @@ on ee.id = me.event_engagement_id
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No Event exists" });
+      res.json({ valid: false, message: "No Event exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2958,7 +2956,7 @@ const get_member_relations = async (req, res) => {
     const result = await ambarsariyaPool.query(query, params);
 
     if (result.rowCount === 0) {
-      res.status(404).json({ valid: false, message: "No relation found" });
+      res.json({ valid: false, message: "No relation found" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -2982,7 +2980,7 @@ const get_member_relation_detail = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No Relation exists" });
+      res.json({ valid: false, message: "No Relation exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3012,7 +3010,7 @@ const get_member_relation_types = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No Relation exists" });
+      res.json({ valid: false, message: "No Relation exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3040,7 +3038,7 @@ const get_member_relation_specific_groups = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No group exists" });
+      res.json({ valid: false, message: "No group exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3086,7 +3084,7 @@ const put_member_share_level = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [isPublic, memberId]);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ success: false, message: 'Data not found' });
+      return res.json({ success: false, message: 'Data not found' });
     }
 
     res.json({ success: true, message: `${level} Share level updated successfully` });
@@ -3122,7 +3120,7 @@ const get_member_share_level = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid member id" });
+      res.json({ valid: false, message: "Invalid member id" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3146,7 +3144,7 @@ const get_member_event_purpose = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid event type" });
+      res.json({ valid: false, message: "Invalid event type" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3182,7 +3180,7 @@ const get_member_event_purpose_engagement = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "Invalid event type or purpose" });
+      res.json({ valid: false, message: "Invalid event type or purpose" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3207,7 +3205,7 @@ const put_near_by_shops = async (req, res) => {
     const result = await ambarsariyaPool.query(fetchQuery, [famous_area]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Famous area not found' });
+      return res.json({ success: false, message: 'Famous area not found' });
     }
 
     const { id, near_by_shops } = result.rows[0];
@@ -3253,7 +3251,7 @@ const get_existing_domains = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No domain exists" });
+      res.json({ valid: false, message: "No domain exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3283,7 +3281,7 @@ const get_existing_sectors = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No domain exists" });
+      res.json({ valid: false, message: "No domain exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3333,7 +3331,7 @@ const get_searched_products = async (req, res) => {
     const result = await ambarsariyaPool.query(query, params);
 
     if (result.rowCount === 0) {
-      res.status(404).json({ valid: false, message: "No product exists" });
+      res.json({ valid: false, message: "No product exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3359,7 +3357,7 @@ const get_shop_categories = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No category exists" });
+      res.json({ valid: false, message: "No category exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3384,7 +3382,7 @@ const get_shop_products = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No product exists" });
+      res.json({ valid: false, message: "No product exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3410,7 +3408,7 @@ const get_shop_product_items = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.status(404).json({ valid: false, message: "No items exists" });
+      res.json({ valid: false, message: "No items exists" });
     } else {
       res.json({ valid: true, data: result.rows });
     }

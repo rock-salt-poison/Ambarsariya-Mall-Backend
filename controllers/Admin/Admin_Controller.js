@@ -684,7 +684,7 @@ const get_notice = async (req, res) => {
 
     // Handle no results found
     if (result.rowCount === 0) {
-      res.status(404).json({ message: "No records found" });
+      res.json({ message: "No records found" });
     } else {
       // Return the result rows
       res.json({ data: result.rows, message: "Valid" });
@@ -713,7 +713,7 @@ const get_travel_time = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [mode, travel_type]);
 
     if (result.rowCount === 0) {
-      res.status(404).json({ message: "Invalid" });
+      res.json({ message: "Invalid" });
     } else {
       res.json({ data: result.rows, message: "Valid" });
     }
@@ -734,7 +734,7 @@ const get_countries = async (req, res) => {
     const result = await ambarsariyaPool.query(query);
 
     if (result.rowCount === 0) {
-      res.status(404).json({ message: "Invalid" });
+      res.json({ message: "Invalid" });
     } else {
       res.json({ data: result.rows, message: "Valid" });
     }
@@ -775,7 +775,7 @@ const get_advt = async (req, res) => {
 
     // Handle no results found
     if (result.rowCount === 0) {
-      res.status(404).json({ message: "No records found" });
+      res.json({ message: "No records found" });
     } else {
       // Return the result rows
       res.json({ data: result.rows, message: "Valid" });
@@ -826,7 +826,7 @@ const delete_notice = async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ error: "Notice not found" });
+      return res.json({ error: "Notice not found" });
     }
 
     const imageUrl = rows[0].image_src;
@@ -874,7 +874,7 @@ const delete_support_page_famous_area = async (req, res) => {
     const selectResult = await ambarsariyaPool.query(selectQuery, [area_name, area_address, latitude, longitude]);
 
     if (selectResult.rowCount === 0) {
-      return res.status(404).json({ message: "No matching area found" });
+      return res.json({ message: "No matching area found" });
     }
 
     const imageUrl = selectResult.rows[0].image_src;

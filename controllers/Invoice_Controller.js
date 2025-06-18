@@ -195,7 +195,6 @@ const get_seller_details = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "Invalid shop number." });
       } else {
         res.json({ valid: true, data: result.rows });
@@ -230,7 +229,6 @@ const get_buyer_details = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the user_id is invalid
         res
-          .status(404)
           .json({ valid: false, message: "Invalid buyer data." });
       } else {
         res.json({ valid: true, data: result.rows });
@@ -272,7 +270,6 @@ const get_purchased_products_details = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the params is invalid
         res
-          .status(404)
           .json({ valid: false, message: "Invalid products data." });
       } else {
         res.json({ valid: true, data: result.rows });
@@ -302,7 +299,6 @@ const get_invoice_orders = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the invoice_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "No invoice exists." });
       } else {
         res.json({ valid: true, data: result.rows });

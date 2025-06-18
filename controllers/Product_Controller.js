@@ -181,7 +181,7 @@ const get_products = async (req, res) => {
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the shop_no is invalid
-      res.status(404).json({ valid: false, message: "No products are there." });
+      res.json({ valid: false, message: "No products are there." });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -201,7 +201,6 @@ const get_product_names = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "No products are there." });
       } else {
         res.json({ valid: true, data: result.rows });
@@ -259,7 +258,6 @@ where p.product_id = $1;`;
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "No variants are there." });
       } else {
         res.json({ valid: true, data: result.rows });

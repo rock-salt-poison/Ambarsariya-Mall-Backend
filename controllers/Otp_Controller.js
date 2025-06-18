@@ -43,7 +43,7 @@ const sendOTP = async (req, res) => {
     const userResult = await ambarsariyaPool.query(userQuery, [username, allowedUserTypes]);
 
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Username not found for the specified context' });
+      return res.json({ message: 'Username not found for the specified context' });
     }
 
     const user = userResult.rows[0];

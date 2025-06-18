@@ -193,7 +193,7 @@ const get_purchase_orders = async (req, res) => {
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
@@ -215,7 +215,7 @@ const get_purchase_order_details = async (req, res) => {
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
@@ -231,14 +231,13 @@ const get_purchase_order_numbers = async (req, res) => {
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
-          .status(404)
           .json({ valid: false, message: "No purchase order exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
@@ -268,7 +267,7 @@ const get_all_purchased_orders = async (req, res) => {
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
@@ -327,7 +326,7 @@ const get_purchased_order = async (req, res) => {
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
@@ -355,7 +354,7 @@ const get_buyer_details = async (req, res) => {
       }
     }
   } catch (e) {
-    console.error(e);
+    // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
