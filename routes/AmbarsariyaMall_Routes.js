@@ -27,6 +27,7 @@ router.get('/category/name/:category_name', ambarsariyaController.get_category_i
 router.get('/categories', ambarsariyaController.get_categoriesList);
 router.get('/sell/check-member-exists', eshopController.get_checkIfMemberExists);
 router.get('/sell/check-shop-exists', eshopController.get_checkIfShopExists);
+router.get('/sell/check-paid-shop-exists', eshopController.get_checkIfPaidShopExists);
 
 router.post('/sell/eshop', eshopController.post_book_eshop);
 // router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
@@ -50,6 +51,7 @@ router.put("/sell/buyeshop/:shopAccessToken", (req, res, next) => {
     });
   });
 
+router.put('/sell/update-merchant', eshopController.update_shop_user_to_merchant);
 router.put('/sell/eshop/update-location', eshopController.update_eshop_location);
 router.put('/sell/eshop/update-status', eshopController.update_shop_is_open_status);
 router.put('/sell/near-by-shop', eshopController.put_near_by_shops);

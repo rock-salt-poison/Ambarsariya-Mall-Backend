@@ -582,7 +582,7 @@ const handleAuthCallback2 = async (req, res) => {
 
     const FRONTEND_BASE_URL =
     process.env.FRONTEND_BASE_URL || "http://localhost:3000";
-    const redirectUrl = `${FRONTEND_BASE_URL}/AmbarsariyaMall/sell/esale`;
+    const redirectUrl = `${FRONTEND_BASE_URL}/sell/esale`;
 
     console.log("Redirecting to:", redirectUrl);
     return res.redirect(redirectUrl);

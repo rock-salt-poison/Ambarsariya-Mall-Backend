@@ -82,7 +82,7 @@ const get_checkIfShopExists = async (req, res) => {
 
   try {
     const query = `
-      SELECT ef.shop_no
+      SELECT ef.shop_no, uc.access_token
       FROM Sell.eshop_form ef
       JOIN Sell.user_credentials uc ON ef.user_id = uc.user_id
       WHERE LOWER(uc.username) = LOWER($1)
@@ -96,6 +96,7 @@ const get_checkIfShopExists = async (req, res) => {
         exists: true,
         message: "Shop already exists for this username.",
         shop_no: result.rows[0].shop_no,
+        access_token: result.rows[0].access_token
       });
     } else {
       return res.status(200).json({
@@ -106,6 +107,118 @@ const get_checkIfShopExists = async (req, res) => {
   } catch (error) {
     console.error('Error checking shop existence:', error);
     return res.status(500).json({ message: 'Internal server error.', error: error.message });
+  }
+};
+
+const get_checkIfMemberIsMerchant = async (req, res) => {
+  const { username } = req.query;
+  console.log(username);
+
+  try {
+    const memberQuery = `
+      SELECT u.user_id, uc.username, u.phone_no_1
+      FROM Sell.users u
+      JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
+      WHERE u.user_type = 'member' AND u.is_merchant = TRUE
+      AND LOWER(uc.username) = LOWER($1);
+    `;
+
+    const result = await ambarsariyaPool.query(memberQuery, [
+      username.toLowerCase(),
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({
+        exists: false,
+        message: "Member is not a merchant.",
+      });
+    }
+
+    const member = result.rows[0];
+
+    // Now check if this member has a shop created
+    const shopQuery = `
+      SELECT shop_no, is_merchant
+      FROM Sell.eshop_form
+      WHERE user_id = $1
+    `;
+    const shopResult = await ambarsariyaPool.query(shopQuery, [member.user_id]);
+
+    if (shopResult.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        shopExists: true,
+        message: "Member and shop already exist.",
+        member,
+        shop: shopResult.rows[0],
+      });
+    } else {
+      return res.status(200).json({
+        exists: true,
+        shopExists: false,
+        message: "Member exists, but shop is not yet created.",
+        member,
+      });
+    }
+  } catch (error) {
+    console.error('Error checking member/shop existence:', error);
+    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+  }
+};
+
+const get_checkIfPaidShopExists = async (req, res) => {
+  const { username } = req.query;
+
+  try {
+    // 1. Check for paid shop
+    const paidShopQuery = `
+      SELECT ef.shop_no, uc.access_token
+      FROM sell.eshop_form ef
+      JOIN sell.user_credentials uc ON ef.user_id = uc.user_id
+      WHERE LOWER(uc.username) = LOWER($1) AND ef.paid_version = true;
+    `;
+    const paidResult = await ambarsariyaPool.query(paidShopQuery, [username.toLowerCase()]);
+
+    if (paidResult.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        isPaid: true,
+        message: "Paid shop exists for this username.",
+        shop_no: paidResult.rows[0].shop_no,
+        access_token: paidResult.rows[0].access_token
+      });
+    }
+
+    // 2. If no paid shop found, check for any shop
+    const anyShopQuery = `
+      SELECT ef.shop_no, uc.access_token
+      FROM sell.eshop_form ef
+      JOIN sell.user_credentials uc ON ef.user_id = uc.user_id
+      WHERE LOWER(uc.username) = LOWER($1)
+      LIMIT 1;
+    `;
+    const anyResult = await ambarsariyaPool.query(anyShopQuery, [username.toLowerCase()]);
+
+    if (anyResult.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        isPaid: false,
+        message: "Shop exists, but not using paid version.",
+        shop_no: anyResult.rows[0].shop_no,
+        access_token: anyResult.rows[0].access_token
+      });
+    }
+
+    // 3. No shop found at all
+    return res.status(200).json({
+      exists: false,
+      isPaid: false,
+      message: "No shop found for this username."
+    });
+
+  } catch (error) {
+    console.error("Error checking shop existence:", error);
+    return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
 
@@ -143,7 +256,6 @@ const post_book_eshop = async (req, resp) => {
 
   if (!fullName || !username || !password) {
     return resp
-      .status(400)
       .json({ message: "Full name, username, and password are required." });
   }
 
@@ -254,15 +366,13 @@ const post_book_eshop = async (req, resp) => {
 
 
 const post_member_data = async (req, resp) => {
-  console.log("Received files:", req.files["profile_img"]); // Log the file
+  console.log("Received files:", req.files["profile_img"]);
 
-  const { name, username, password, address, latitude, longitude, phone, gender, dob, access_token, is_merchant, merchant_access_token } = req.body;
-
-  if (!name || !username ) {
-    return resp
-      .status(400)
-      .json({ message: "Full name and username are required." });
-  }
+  const {
+    name, username, password, address,
+    latitude, longitude, phone, gender, dob,
+    access_token, is_merchant, merchant_access_token
+  } = req.body;
 
   let uploadedProfileUrl = null;
   let uploadedBgImgUrl = null;
@@ -277,34 +387,35 @@ const post_member_data = async (req, resp) => {
     uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member/background_picture");
   }
 
-  // Determine title based on gender
-  let title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
+  const title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
 
   try {
-    await ambarsariyaPool.query("BEGIN"); // Start transaction
+    await ambarsariyaPool.query("BEGIN");
 
     const hashedPassword = await bcrypt.hash(password, 10);
     let newUserId;
     let existingProfileImg;
     let existingBgImg;
-    let userAccessToken = access_token; // Use the provided access_token if available
+    let userAccessToken = access_token;
+    let member_id;
+    let isMerchant;
+    let userExists = false;
 
     if (access_token) {
-      // **Check if the access token exists in user_credentials**
       const userCheck = await ambarsariyaPool.query(
-        `SELECT uc.user_id, mp.profile_img, mp.bg_img 
-          FROM sell.user_credentials uc 
-          JOIN sell.member_profiles mp ON mp.user_id = uc.user_id 
-          JOIN sell.users u ON u.user_id = uc.user_id 
-          WHERE uc.access_token = $1 AND uc.username = $2 AND u.user_type = "member"`,
+        `SELECT uc.user_id, mp.profile_img, mp.bg_img, u.is_merchant
+         FROM sell.user_credentials uc 
+         JOIN sell.member_profiles mp ON mp.user_id = uc.user_id 
+         JOIN sell.users u ON u.user_id = uc.user_id 
+         WHERE uc.access_token = $1 AND uc.username = $2 AND u.user_type = 'member'`,
         [access_token, username]
       );
 
       if (userCheck.rows.length > 0) {
+        userExists = true;
         newUserId = userCheck.rows[0].user_id;
         existingProfileImg = userCheck.rows[0].profile_img;
         existingBgImg = userCheck.rows[0].bg_img;
-        console.log(existingProfileImg, existingBgImg);
 
         if (uploadedProfileUrl && existingProfileImg) {
           try {
@@ -313,7 +424,7 @@ const post_member_data = async (req, resp) => {
             console.error("Error deleting old profile image:", error);
           }
         }
-        
+
         if (uploadedBgImgUrl && existingBgImg) {
           try {
             await deleteFileFromGCS(existingBgImg);
@@ -321,66 +432,141 @@ const post_member_data = async (req, resp) => {
             console.error("Error deleting old background image:", error);
           }
         }
-        
 
-        // **Update existing user details**
-        await ambarsariyaPool.query(
+        const updateUserData = await ambarsariyaPool.query(
           `UPDATE sell.users 
            SET full_name = $1, title = $2, phone_no_1 = $3, gender = $4
-           WHERE user_id = $5`,
+           WHERE user_id = $5
+           RETURNING is_merchant`,
           [name, title, phone, gender, newUserId]
         );
 
-        await ambarsariyaPool.query(
+        isMerchant = updateUserData?.rows[0]?.is_merchant;
+
+        const updateMemberData = await ambarsariyaPool.query(
           `UPDATE sell.member_profiles 
            SET address = $1, latitude = $2, longitude = $3, dob = $4, profile_img = $5, bg_img = $6
-           WHERE user_id = $7`,
-          [address, latitude, longitude, dob, uploadedProfileUrl || existingProfileImg, uploadedBgImgUrl || existingBgImg, newUserId]
+           WHERE user_id = $7
+           RETURNING member_id`,
+          [
+            address,
+            latitude,
+            longitude,
+            dob,
+            uploadedProfileUrl || existingProfileImg,
+            uploadedBgImgUrl || existingBgImg,
+            newUserId
+          ]
         );
-      } else {
-        return resp.status(400).json({ message: "Invalid access token." });
+
+        member_id = updateMemberData?.rows[0]?.member_id;
       }
-    } else {
-      // **Insert new user record**
+    }
+
+    if (!userExists) {
       const userResult = await ambarsariyaPool.query(
         `INSERT INTO sell.users 
-              (full_name, title, phone_no_1, user_type, gender, is_merchant)
-              VALUES ($1, $2, $3, $4, $5, $6)
-              RETURNING user_id`,
+         (full_name, title, phone_no_1, user_type, gender, is_merchant)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING user_id, is_merchant`,
         [name, title, phone, "member", gender, is_merchant]
       );
       newUserId = userResult.rows[0].user_id;
+      isMerchant = userResult.rows[0].is_merchant;
 
       const userCredentials = await ambarsariyaPool.query(
         `INSERT INTO sell.user_credentials 
-              (user_id, username, password, access_token)
-              VALUES ($1, $2, $3, COALESCE($4, gen_random_uuid()))
-              RETURNING access_token`,
+         (user_id, username, password, access_token)
+         VALUES ($1, $2, $3, COALESCE($4, gen_random_uuid()))
+         RETURNING access_token`,
         [newUserId, username, hashedPassword, merchant_access_token || null]
       );
 
       userAccessToken = userCredentials.rows[0].access_token;
 
-      await ambarsariyaPool.query(
+      const memberProfilesData = await ambarsariyaPool.query(
         `INSERT INTO sell.member_profiles 
-              (user_id, address, latitude, longitude, dob, profile_img, bg_img)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         (user_id, address, latitude, longitude, dob, profile_img, bg_img)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING member_id`,
         [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
       );
+
+      member_id = memberProfilesData.rows[0].member_id;
     }
 
-    await ambarsariyaPool.query("COMMIT"); // Commit transaction
+    await ambarsariyaPool.query("COMMIT");
 
     resp.status(201).json({
       message: "Form submitted successfully.",
       user_access_token: userAccessToken,
+      member_id: member_id,
+      isMerchant: isMerchant
     });
   } catch (err) {
-    await ambarsariyaPool.query("ROLLBACK"); // Rollback in case of error
+    await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
     resp.status(500).json({ message: "Error storing data", error: err.message });
   }
 };
+
+
+
+const update_shop_user_to_merchant = async (req, resp) => {
+  const { user_access_token, member_id, is_merchant } = req.body;
+
+  try {
+    // Step 1: Get user_id from user_credentials using access_token
+    const userResult = await ambarsariyaPool.query(
+      `SELECT u.user_id FROM sell.user_credentials uc 
+        JOIN sell.users u ON u.user_id = uc.user_id
+        WHERE uc.access_token = $1 AND u.user_type = 'shop'`,
+      [user_access_token]
+    );
+
+    if (userResult.rows.length === 0) {
+      return resp.json({ message: "Invalid user access token." });
+    }
+
+    const user_id = userResult.rows[0].user_id;
+
+    // Step 2: Update eshop_form using user_id
+    const eshopResult = await ambarsariyaPool.query(
+      `UPDATE sell.eshop_form
+       SET is_merchant = $1,
+           member_id = $2
+       WHERE user_id = $3
+       RETURNING shop_access_token`,
+      [is_merchant, member_id, user_id]
+    );
+
+    if (eshopResult.rows.length === 0) {
+      return resp
+        .json({ message: "No e-shop found for this user." });
+    }
+
+    // Step 3: Update users table to set is_merchant = true
+    await ambarsariyaPool.query(
+      `UPDATE sell.users
+       SET is_merchant = $1
+       WHERE user_id = $2`,
+      [is_merchant, user_id]
+    );
+
+    return resp.status(200).json({
+      message: "Merchant status updated successfully.",
+      shop_access_token: eshopResult.rows[0].shop_access_token,
+    });
+
+  } catch (err) {
+    console.error("Error updating merchant status:", err);
+    return resp.status(500).json({
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
 
 
 const update_eshop = async (req, resp) => {
@@ -3424,6 +3610,7 @@ const get_shop_product_items = async (req, res) => {
 module.exports = {
   get_checkIfMemberExists,
   get_checkIfShopExists,
+  get_checkIfPaidShopExists,
   post_book_eshop,
   update_eshop,
   update_eshop_location,
@@ -3475,5 +3662,6 @@ module.exports = {
   get_searched_products,
   get_shop_categories,
   get_shop_products,
-  get_shop_product_items
+  get_shop_product_items,
+  update_shop_user_to_merchant
 };
