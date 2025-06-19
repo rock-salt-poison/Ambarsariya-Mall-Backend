@@ -301,7 +301,7 @@ const post_book_eshop = async (req, resp) => {
     const eshopResult = await ambarsariyaPool.query(
       `INSERT INTO Sell.eshop_form
        (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector, created_sector,
-        ontime, offtime, type_of_service, gst, msme, paid_version, is_merchant, member_username_or_phone_no, premium_service)
+        ontime, offtime, type_of_service, gst, msme, paid_version, is_merchant, member_id, premium_service)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING shop_no, shop_access_token`,
       [
@@ -785,7 +785,7 @@ const get_shopUserData = async (req, res) => {
     u.pan_no AS "pan_no",
     u.cin_no AS "cin_no",
     ef.is_merchant AS "is_merchant",
-    ef.member_username_or_phone_no AS "member_username_or_phone_no",
+    ef.member_id AS "member_id",
     ef.premium_service AS "premium_service",
     ef.business_name AS "business_name",
     ef.establishment_date AS "establishment_date", 
@@ -836,7 +836,7 @@ WHERE ef.shop_access_token = $1
 GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title, 
          u.full_name, ef.address, u.phone_no_1, u.phone_no_2, d.domain_name, ef.created_domain, 
          s.sector_name, ef.created_sector, ef.ontime, ef.offtime, ef.paid_version, ef.gst, ef.msme, 
-         u.pan_no, u.cin_no, ef.is_merchant, ef.member_username_or_phone_no, 
+         u.pan_no, u.cin_no, ef.is_merchant, ef.member_id, 
          ef.premium_service, ef.business_name, ef.establishment_date, ef.usp_values_url, 
          ef.product_sample_url, ef.upi_id, ef.similar_options, ef.key_players, ef.cost_sensitivity, 
          ef.daily_walkin, ef.parking_availability, ef.category, ef.advertisement_video_url, ef.latitude, ef.longitude, ef.shop_access_token, ef.oauth_access_token, ef.oauth_refresh_token;
@@ -1090,7 +1090,7 @@ const get_allShops = async (req, res) => {
     u.pan_no AS "pan_no",
     u.cin_no AS "cin_no",
     ef.is_merchant AS "is_merchant",
-    ef.member_username_or_phone_no AS "member_username_or_phone_no",
+    ef.member_id AS "member_id",
     ef.premium_service AS "premium_service",
     ef.business_name AS "business_name",
     ef.establishment_date AS "establishment_date", 
@@ -1154,7 +1154,7 @@ const get_allShops = async (req, res) => {
                 u.pan_no,
                 u.cin_no,
                 ef.is_merchant,
-                ef.member_username_or_phone_no,
+                ef.member_id,
                 ef.premium_service,
                 ef.business_name,
                 ef.establishment_date,
