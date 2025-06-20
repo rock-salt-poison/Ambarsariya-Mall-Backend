@@ -130,6 +130,7 @@ router.get('/invoice/:invoice_no', invoiceController.get_invoice_orders);
 router.get('/buyer-data/:user_id', invoiceController.get_buyer_details);
 router.get('/seller-data/:shop_no', invoiceController.get_seller_details);
 router.get('/purchased-products-data/:product_id/:item_id', invoiceController.get_purchased_products_details);
+router.get('/merchants', eshopController.get_merchant_users);
 
 
 router.post('/sell/support', eshopController.post_visitorData);

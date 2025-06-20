@@ -251,114 +251,154 @@ const post_book_eshop = async (req, resp) => {
     pickup,
     homeVisit,
     delivery,
-    user_type    
+    user_type,
+    shop_access_token
   } = req.body;
 
-  if (!fullName || !username || !password) {
-    return resp
-      .json({ message: "Full name, username, and password are required." });
-  }
-
-  // Create `type_of_service` array based on user selection
+  // Create `type_of_service` array
   const typeOfService = [];
-  if (pickup) typeOfService.push(1);
+  if (delivery) typeOfService.push(1);
   if (homeVisit) typeOfService.push(2);
-  if (delivery) typeOfService.push(3);
+  if (pickup) typeOfService.push(3);
 
   try {
-    // Check for existing member with same username or phone1
-    const existingMemberCheck = await ambarsariyaPool.query(
-      `SELECT u.user_id, uc.username, u.phone_no_1 
-      FROM Sell.users u
-      JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
-      WHERE u.user_type = 'member' AND (uc.username = $1 OR u.phone_no_1 = $2)`,
-      [username.toLowerCase(), phone1]
-    );
+    await ambarsariyaPool.query("BEGIN");
+    console.log(shop_access_token);
+    
+    if (shop_access_token) {
+      // -----------------------
+      // UPDATE Existing Eshop
+      // -----------------------
+      const result = await ambarsariyaPool.query(
+        `UPDATE Sell.eshop_form 
+         SET poc_name = $1,
+             ontime = $2,
+             offtime = $3,
+             type_of_service = $4,
+             gst = $5,
+             msme = $6,
+             paid_version = $7,
+             is_merchant = $8,
+             premium_service = $9
+         WHERE shop_access_token = $10
+         RETURNING shop_no`,
+        [
+          fullName,
+          onTime,
+          offTime,
+          typeOfService,
+          gst,
+          msme,
+          paidVersion,
+          merchant,
+          premiumVersion,
+          shop_access_token
+        ]
+      );
 
-    if (existingMemberCheck.rows.length > 0) {
-      return resp.status(409).json({
-        message: "A member with the same username or phone number already exists.",
+      await ambarsariyaPool.query("COMMIT");
+
+      return resp.status(200).json({
+        message: "E-shop data successfully updated.",
+        shop_no: result.rows[0]?.shop_no,
+        shop_access_token
+      });
+    } else {
+      // -----------------------
+      // CREATE New Eshop
+      // -----------------------
+
+      // Check for existing member with same username or phone1
+      const existingMemberCheck = await ambarsariyaPool.query(
+        `SELECT u.user_id, uc.username, u.phone_no_1 
+         FROM Sell.users u
+         JOIN Sell.user_credentials uc ON u.user_id = uc.user_id
+         WHERE u.user_type = 'member' AND (uc.username = $1 OR u.phone_no_1 = $2)`,
+        [username.toLowerCase(), phone1]
+      );
+
+      if (existingMemberCheck.rows.length > 0) {
+        await ambarsariyaPool.query("ROLLBACK");
+        return resp.status(409).json({
+          message: "A member with the same username or phone number already exists.",
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert into users
+      const userResult = await ambarsariyaPool.query(
+        `INSERT INTO Sell.users 
+         (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no, is_merchant)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING user_id`,
+        [fullName, title, phone1, phone2, user_type, pan_no, cin_no, merchant]
+      );
+      const newUserId = userResult.rows[0].user_id;
+
+      // Insert into eshop_form
+      const eshopResult = await ambarsariyaPool.query(
+        `INSERT INTO Sell.eshop_form
+         (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector, created_sector,
+          ontime, offtime, type_of_service, gst, msme, paid_version, is_merchant, member_id, premium_service)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+         RETURNING shop_no, shop_access_token`,
+        [
+          newUserId,
+          fullName,
+          address,
+          latitude,
+          longitude,
+          domain,
+          domain_create,
+          sector,
+          sector_create,
+          onTime,
+          offTime,
+          typeOfService,
+          gst,
+          msme,
+          paidVersion,
+          merchant,
+          member_detail,
+          premiumVersion
+        ]
+      );
+
+      const newShopNo = eshopResult.rows[0].shop_no;
+      const newShopAccessToken = eshopResult.rows[0].shop_access_token;
+
+      // Insert into credentials
+      const userCredentials = await ambarsariyaPool.query(
+        `INSERT INTO Sell.user_credentials 
+         (user_id, username, password)
+         VALUES ($1, $2, $3)
+         RETURNING access_token`,
+        [newUserId, username.toLowerCase(), hashedPassword]
+      );
+
+      const user_access_token = userCredentials.rows[0].access_token;
+
+      // Insert into user_shops
+      await ambarsariyaPool.query(
+        `INSERT INTO Sell.user_shops (user_id, shop_no) VALUES ($1, $2)`,
+        [newUserId, newShopNo]
+      );
+
+      await ambarsariyaPool.query("COMMIT");
+
+      return resp.status(201).json({
+        message: "E-shop data successfully created.",
+        shop_access_token: newShopAccessToken,
+        user_access_token
       });
     }
-
-
-    // Begin transaction
-    await ambarsariyaPool.query("BEGIN");
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert into users table
-    const userResult = await ambarsariyaPool.query(
-      `INSERT INTO Sell.users 
-       (full_name, title, phone_no_1, phone_no_2, user_type, pan_no, cin_no, is_merchant)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING user_id`,
-      [fullName, title, phone1, phone2, user_type, pan_no, cin_no, merchant]
-    );
-    const newUserId = userResult.rows[0].user_id;
-
-    // Insert into eshop_form table
-    const eshopResult = await ambarsariyaPool.query(
-      `INSERT INTO Sell.eshop_form
-       (user_id, poc_name, address, latitude, longitude, domain, created_domain, sector, created_sector,
-        ontime, offtime, type_of_service, gst, msme, paid_version, is_merchant, member_id, premium_service)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-       RETURNING shop_no, shop_access_token`,
-      [
-        newUserId,
-        fullName,
-        address,
-        latitude,
-        longitude,
-        domain,
-        domain_create,
-        sector,
-        sector_create,
-        onTime,
-        offTime,
-        typeOfService,
-        gst,
-        msme,
-        paidVersion,
-        merchant,
-        member_detail,
-        premiumVersion,
-      ]
-    );
-
-    const newShopNo = eshopResult.rows[0].shop_no;
-    const shop_access_token = eshopResult.rows[0].shop_access_token;
-
-    // Insert into user_credentials
-    const userCredentials = await ambarsariyaPool.query(
-      `INSERT INTO Sell.user_credentials 
-       (user_id, username, password)
-       VALUES ($1, $2, $3)
-       RETURNING access_token`,
-      [newUserId, username.toLowerCase(), hashedPassword]
-    );
-
-    const user_access_token = userCredentials.rows[0].access_token;
-
-    // Insert into user_shops table
-    await ambarsariyaPool.query(
-      `INSERT INTO Sell.user_shops (user_id, shop_no) VALUES ($1, $2)`,
-      [newUserId, newShopNo]
-    );
-
-    await ambarsariyaPool.query("COMMIT");
-
-    resp.status(201).json({
-      message: "E-shop data successfully created.",
-      shop_access_token,
-      user_access_token,
-    });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
-    resp.status(500).json({
+    return resp.status(500).json({
       message: "Error storing data",
-      error: err.message,
+      error: err.message
     });
   }
 };
@@ -1199,6 +1239,39 @@ const get_allUsers = async (req, res) => {
             JOIN sectors s ON ef.sector = s.sector_id
             WHERE u.user_type = $1 AND business_name IS NOT NULL`,
         [user_type]
+      );
+      res.json(result.rows);
+    } else if (user_type === "merchant") {
+      const result = await ambarsariyaPool.query(
+        `SELECT 
+  shop.user_id AS shop_user_id,
+  member.user_id AS member_user_id,
+  shop.full_name AS shop_full_name,
+  member.full_name AS member_full_name,
+  shop.phone_no_1 AS shop_phone_no,
+  member.phone_no_1 AS member_phone_no,
+  shop_uc.username AS shop_username,
+  member_uc.username AS member_username,
+  ef.business_name AS business_name,
+  mp.member_id,
+  ef.shop_no
+FROM sell.users shop
+JOIN sell.users member 
+  ON shop.phone_no_1 = member.phone_no_1
+JOIN sell.user_credentials shop_uc 
+  ON shop_uc.user_id = shop.user_id
+JOIN sell.user_credentials member_uc 
+  ON member_uc.user_id = member.user_id
+JOIN sell.eshop_form ef 
+  ON ef.user_id = shop.user_id
+JOIN sell.member_profiles mp 
+  ON mp.user_id = member.user_id
+WHERE shop.user_type = 'shop'
+  AND member.user_type = 'member'
+  AND shop.is_merchant = true
+  AND member.is_merchant = true
+  AND shop.user_id <> member.user_id;`,
+        
       );
       res.json(result.rows);
     } else {
@@ -3606,6 +3679,56 @@ const get_shop_product_items = async (req, res) => {
   }
 };
 
+const get_merchant_users = async (req, res) => {
+  try {
+
+    // Query for full visitor data
+    const query = `
+          SELECT 
+  shop.user_id AS shop_user_id,
+  member.user_id AS member_user_id,
+  shop.full_name AS shop_full_name,
+  member.full_name AS member_full_name,
+  shop.phone_no_1 AS shop_phone_no,
+  member.phone_no_1 AS member_phone_no,
+  shop_uc.username AS shop_username,
+  member_uc.username AS member_username,
+  ef.business_name AS business_name,
+  mp.member_id,
+  ef.shop_no
+FROM sell.users shop
+JOIN sell.users member 
+  ON shop.phone_no_1 = member.phone_no_1
+JOIN sell.user_credentials shop_uc 
+  ON shop_uc.user_id = shop.user_id
+JOIN sell.user_credentials member_uc 
+  ON member_uc.user_id = member.user_id
+JOIN sell.eshop_form ef 
+  ON ef.user_id = shop.user_id
+JOIN sell.member_profiles mp 
+  ON mp.user_id = member.user_id
+WHERE shop.user_type = 'shop'
+  AND member.user_type = 'member'
+  AND shop.is_merchant = true
+  AND member.is_merchant = true
+  AND shop.user_id <> member.user_id;
+
+        `;
+    const result = await ambarsariyaPool.query(query);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.json({ valid: false, message: "No merchants exists" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
 
 module.exports = {
   get_checkIfMemberExists,
@@ -3663,5 +3786,6 @@ module.exports = {
   get_shop_categories,
   get_shop_products,
   get_shop_product_items,
-  update_shop_user_to_merchant
+  update_shop_user_to_merchant,
+  get_merchant_users
 };
