@@ -519,7 +519,7 @@ const get_handleAuthCallback = async (req, res) => {
     // **Dynamically Construct Frontend Redirect URL**
     const FRONTEND_BASE_URL =
       process.env.FRONTEND_BASE_URL || "http://localhost:3000";
-    const redirectUrl = `${FRONTEND_BASE_URL}/AmbarsariyaMall/sell/support/shop/${shop_access_token}/dashboard/edit?email=${email}`;
+    const redirectUrl = `${FRONTEND_BASE_URL}/sell/support/shop/${shop_access_token}/dashboard/edit?email=${email}`;
 
     console.log("Redirecting to:", redirectUrl);
     return res.redirect(redirectUrl);
