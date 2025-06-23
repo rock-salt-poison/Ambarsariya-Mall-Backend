@@ -926,6 +926,7 @@ const get_memberData = async (req, res) => {
                 u.phone_no_1 AS "phone_no_1",
                 u.gender AS "gender",
                 mp.dob AS "dob",
+                mp.member_id,
                 mp.address AS "address",
                 mp.latitude ,
                 mp.longitude ,
@@ -3730,6 +3731,33 @@ WHERE shop.user_type = 'shop'
   }
 };
 
+const get_category_wise_shops = async (req, res) => {
+  try {
+
+    const category = req.query.category?.split(',').map(Number);
+    console.log(category);
+    
+        const query = `
+          SELECT *
+          FROM sell.eshop_form
+          WHERE category && $1::int[];
+        `;
+    const result = await ambarsariyaPool.query(query, [category]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.json({ valid: false, message: "No such category exists." });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
+
 module.exports = {
   get_checkIfMemberExists,
   get_checkIfShopExists,
@@ -3787,5 +3815,6 @@ module.exports = {
   get_shop_products,
   get_shop_product_items,
   update_shop_user_to_merchant,
-  get_merchant_users
+  get_merchant_users,
+  get_category_wise_shops
 };

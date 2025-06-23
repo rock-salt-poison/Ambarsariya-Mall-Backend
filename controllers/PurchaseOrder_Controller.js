@@ -338,10 +338,10 @@ const get_buyer_details = async (req, res) => {
     if (po_no) {
       let query = `select mp.member_id, u.full_name from 
                       sell.purchase_order po
-                      left join sell.users u
-                      ON u.user_id = po.buyer_id
                       left join sell.member_profiles mp
-                      ON mp.user_id = po.buyer_id
+                      ON mp.member_id = po.buyer_id
+                      left join sell.users u
+                      ON u.user_id = mp.user_id
                       where po.po_no = $1 `;
       let result = await ambarsariyaPool.query(query, [po_no]);
       if (result.rowCount === 0) {

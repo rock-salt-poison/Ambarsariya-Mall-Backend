@@ -11,14 +11,43 @@ const post_saleOrder = async (req, res) => {
     // Step 1: Insert or update into Sell.sale_order
     const productQuery = `
       INSERT INTO Sell.sale_order (
-        po_no, buyer_id, buyer_type, order_date, products, subtotal, taxes, discounts,
-        shipping_method, shipping_charges, expected_delivery_date, co_helper, subscription_type,
-        payment_terms, total_payment_with_all_services, payment_method, payment_due_date,
-        prepaid, postpaid, balance_credit, balance_credit_due_date, after_due_date_surcharges_per_day,
-        status, send_qr_upi_bank_details, seller_id, coupon_cost
+        po_no, 
+        buyer_id, 
+        buyer_type, 
+        order_date, 
+        products, 
+        subtotal, 
+        taxes, 
+        discounts,
+        shipping_method, 
+        shipping_charges, 
+        expected_delivery_date, 
+        co_helper, 
+        subscription_type,
+        payment_terms, 
+        total_payment_with_all_services, 
+        payment_method, 
+        payment_due_date,
+        prepaid, postpaid, 
+        balance_credit, 
+        balance_credit_due_date, 
+        after_due_date_surcharges_per_day,
+        status, 
+        send_qr_upi_bank_details, 
+        seller_id, 
+        coupon_cost,
+        buyer_shop_no,
+        buyer_merchant_id,
+        seller_member_id,
+        seller_merchant_id,
+        payment_status,
+        buyer_name,
+        buyer_phone_no,
+        sector,
+        category
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24, $25, $26
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
       )
       ON CONFLICT (po_no) DO UPDATE SET
         products = EXCLUDED.products,
@@ -42,7 +71,16 @@ const post_saleOrder = async (req, res) => {
         status = EXCLUDED.status,
         send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
         coupon_cost = EXCLUDED.coupon_cost,
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = CURRENT_TIMESTAMP,
+        buyer_shop_no = EXCLUDED.buyer_shop_no,
+        buyer_merchant_id = EXCLUDED.buyer_merchant_id,
+        seller_member_id = EXCLUDED.seller_member_id,
+        seller_merchant_id = EXCLUDED.seller_merchant_id,
+        payment_status = EXCLUDED.payment_status,
+        buyer_name = EXCLUDED.buyer_name,
+        buyer_phone_no = EXCLUDED.buyer_phone_no,
+        sector = EXCLUDED.sector,
+        category = EXCLUDED.category
       RETURNING so_access_token
     `;
 
@@ -72,12 +110,20 @@ const post_saleOrder = async (req, res) => {
       data.status,
       data.send_qr_upi_bank_details,
       data.seller_id,
-      data.coupon_cost
+      data.coupon_cost,
+      data.buyer_shop_no,
+      data.buyer_merchant_id,
+      data.seller_member_id,
+      data.seller_merchant_id,
+      data.payment_status,
+      data.buyer_name,
+      data.buyer_phone_no,
+      data.sector,
+      data.category
     ]);
 
     // Step 2: Update stock in Sell.items
     const stockUpdates = data.stockUpdates || [];
-    
 
     for (const update of stockUpdates) {
       const { item_id, quantity_change } = update;
@@ -92,7 +138,6 @@ const post_saleOrder = async (req, res) => {
       );
     }
 
-
     // Step 3: Aggregate quantity changes by product_id
     const productStockMap = {};
 
@@ -106,7 +151,7 @@ const post_saleOrder = async (req, res) => {
       productStockMap[product_id] += quantity_change;
     }
 
-    console.log(productStockMap)
+    console.log(productStockMap);
 
     // Step 4: Update quantity_in_stock in sell.products
     for (const [productId, totalChange] of Object.entries(productStockMap)) {
@@ -119,7 +164,6 @@ const post_saleOrder = async (req, res) => {
         );
       }
     }
-
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction
 
@@ -139,19 +183,16 @@ const post_saleOrder = async (req, res) => {
   }
 };
 
-
-
 const get_sale_order_numbers = async (req, res) => {
   const { seller_id } = req.params;
 
   try {
-    if (seller_id ) {
+    if (seller_id) {
       let query = `SELECT so_no FROM sell.sale_order WHERE seller_id = $1 `;
       let result = await ambarsariyaPool.query(query, [seller_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
-        res
-          .json({ valid: false, message: "No sale order exists." });
+        res.json({ valid: false, message: "No sale order exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
@@ -162,12 +203,11 @@ const get_sale_order_numbers = async (req, res) => {
   }
 };
 
-
 const get_sale_orders = async (req, res) => {
   const { seller_id } = req.params;
 
   try {
-    if (seller_id ) {
+    if (seller_id) {
       let query = `SELECT so.*, s.service 
 FROM sell.sale_order so  
 LEFT JOIN type_of_services s ON s.id = so.shipping_method  
@@ -175,8 +215,7 @@ WHERE so.seller_id = $1 `;
       let result = await ambarsariyaPool.query(query, [seller_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
-        res
-          .json({ valid: false, message: "No sale order exists." });
+        res.json({ valid: false, message: "No sale order exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
