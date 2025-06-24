@@ -18,6 +18,11 @@ const initializeWebSocket = (server) => {
     },
   });
 
+  io.use((socket, next) => {
+    console.log('WebSocket origin:', socket.handshake.headers.origin);
+    next();
+  });
+
   io.on('connection', (socket) => {
     console.log('A client connected');
 
