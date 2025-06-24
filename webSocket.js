@@ -6,8 +6,13 @@ const initializeWebSocket = (server) => {
   io = socketIo(server, {
     path: "/socket.io",
     cors: {
-      origin: '*', 
-      // origin: ['https://ambarsariyamall.shop', 'https://ambarsariyamall.com', 'http://localhost:3000', 'http://localhost:3006' ], // Adjust for production
+      // origin: '*', 
+      origin: ['https://ambarsariyamall.shop', 
+        'https://ambarsariyamall.com', 
+        
+        'http://localhost:3000', 
+        // 'http://localhost:4000', 
+        'http://localhost:3006' ], // Adjust for production
       methods: ['GET', 'POST'],
       credentials: true,
     },
