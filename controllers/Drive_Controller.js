@@ -165,7 +165,7 @@ const post_openItemsCSVFile = async (req, res) => {
       }
     }
 
-    const response = await createItemCsv(email, shop_no, rackData);
+    const response = await createItemCsv(email, shop_no, rackData, user_id);
     return res.json(response);
   } catch (e) {
     console.error("Error opening items file:", e);
@@ -241,7 +241,7 @@ const post_openSKUCSVFile = async (req, res) => {
       }
     }
 
-    const response = await createSKUCsv(email, shop_no, rackWallData);
+    const response = await createSKUCsv(email, shop_no, rackWallData, user_id);
     return res.json(response);
   } catch (e) {
     console.error("Error opening sku file:", e);
@@ -317,7 +317,7 @@ const post_openRKUCSVFile = async (req, res) => {
       }
     }
 
-    const response = await createRKUCsv(email, shop_no);
+    const response = await createRKUCsv(email, shop_no, user_id);
     return res.json(response);
   } catch (e) {
     console.error("Error opening rku file:", e);
