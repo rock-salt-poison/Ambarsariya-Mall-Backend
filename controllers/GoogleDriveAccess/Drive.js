@@ -810,16 +810,17 @@ async function createItemsSheet(drive, sheets, folderId, email, queryData, rackD
           }
         
           if (storageOccupiedIndex !== -1) {
-            const itemPackageDimensionsCell = `${getColumnLetter(itemPackageDimensionsIndex)}${rowIndex + 1}`;
+            // const itemPackageDimensionsCell = `${getColumnLetter(itemPackageDimensionsIndex)}${rowIndex + 1}`;
             const noOfItemsCell = `${getColumnLetter(noOfItemsIndex)}${rowIndex + 1}`;
-        
+            const itemAreaCell = `${getColumnLetter(itemAreaIndex)}${rowIndex + 1}`;
+
             rowRequests.push(
               createUpdateRequest(
                 userSheet.properties.sheetId,
                 rowIndex,
                 storageOccupiedIndex,
                 storageOccupiedIndex + 1,
-                `=${itemPackageDimensionsCell} * ${noOfItemsCell}`,
+                `=${itemAreaCell} * ${noOfItemsCell}`,
                 "formula"
               )
             );
@@ -1299,17 +1300,19 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
     const highStockIndex = headers.indexOf("High Stock");
     const numberOfRacksIndex = headers.indexOf("Number of Racks");
     const numberOfShelvesIndex = headers.indexOf("Number of Shelves");
+    const totalNumberOfShelfIndex = headers.indexOf("Total no of Shelf");
     const lengthOfShelfIndex = headers.indexOf("Length of Shelf");
     const breadthOfShelfIndex = headers.indexOf("Breadth of Shelf");
     const heightOfShelfIndex = headers.indexOf("Height of Shelf");
-    const totalAreaOfShelfIndex = headers.indexOf("Total Area of Shelf");
-    const totalShelfAreaInRackIndex = headers.indexOf("Total Shelf Area in Rack");
-    const maxAreaOfStockIndex = headers.indexOf("Max Area of Stock");
-    const totalShelvesIndex = headers.indexOf("Total Shelves");
+    const totalAreaOfShelfIndex = headers.indexOf("Total area of Shelf");
+    const totalAreaOfShelvesIndex = headers.indexOf("Total area of Shelves");
+    const totalShelfAreaOccupiedIndex = headers.indexOf("Total Shelf Area Occupied");
+    const maxShelfAreaOccupiedIndex = headers.indexOf("Max Shelf Area Occupied");
+    const noOfShelvesOccupiedIndex = headers.indexOf("No of Shelves Occupied");
     const maxRacksIndex = headers.indexOf("Max Racks");
     const extraShelvesIndex = headers.indexOf("Shelves extra");
     const itemsPerShelfIndex = headers.indexOf("Items Per Shelf");
-    const maxRackIndex = headers.indexOf("Max Rack");
+    const maxRackAtMaxQuantityIndex = headers.indexOf("Max Rack at Max Quantity");
     const maxShelvesIndex = headers.indexOf("Max Shelves");
     const RKUIdIndex = headers.indexOf("RKU ID");
 
@@ -1929,6 +1932,35 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
+          if (totalNumberOfShelfIndex !== -1) {
+            const numberOfRacksCell = `${getColumnLetter(numberOfRacksIndex)}${index + 2}`;
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: totalNumberOfShelfIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: totalNumberOfShelfIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${numberOfRacksCell}*${numberOfShelvesCell}` || 0,                        
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.numberValue",
+              },
+            });
+          }
+
           if (lengthOfShelfIndex !== -1) {
             requests.push({
               updateCells: {
@@ -2037,26 +2069,25 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
-          if (totalShelfAreaInRackIndex !== -1) {
-            const totalAreaOfShelfCell = `${ getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
-            
-            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+          if (totalAreaOfShelvesIndex !== -1) {
+            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+            const totalNumberOfShelfCell = `${getColumnLetter(totalNumberOfShelfIndex) }${index + 2}`;
 
             requests.push({
               updateCells: {
                 range: {
                   sheetId: userSheet.properties.sheetId,
                   startRowIndex: index + 1,
-                  startColumnIndex: totalShelfAreaInRackIndex,
+                  startColumnIndex: totalAreaOfShelvesIndex,
                   endRowIndex: index + 2,
-                  endColumnIndex: totalShelfAreaInRackIndex + 1,
+                  endColumnIndex: totalAreaOfShelvesIndex + 1,
                 },
                 rows: [
                   {
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=${totalAreaOfShelfCell}*${numberOfShelvesCell}`
+                          formulaValue: `=${totalAreaOfShelfCell}*${totalNumberOfShelfCell}`
                         },
                       },
                     ],
@@ -2067,7 +2098,38 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
-          if (maxAreaOfStockIndex !== -1) {
+
+          if (totalShelfAreaOccupiedIndex !== -1) {
+            const totalAreaOfShelvesCell = `${ getColumnLetter(totalAreaOfShelvesIndex)}${index + 2}`;
+            
+            const quantityCell = `${getColumnLetter(quantityIndex)}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: totalShelfAreaOccupiedIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: totalShelfAreaOccupiedIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=${totalAreaOfShelvesCell}-(${quantityCell} * ${parseFloat(data.area_size_lateral)})`
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxShelfAreaOccupiedIndex !== -1) {
             const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex) }${index + 2}`;
 
             requests.push({
@@ -2075,9 +2137,9 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                 range: {
                   sheetId: userSheet.properties.sheetId,
                   startRowIndex: index + 1,
-                  startColumnIndex: maxAreaOfStockIndex,
+                  startColumnIndex: maxShelfAreaOccupiedIndex,
                   endRowIndex: index + 2,
-                  endColumnIndex: maxAreaOfStockIndex + 1,
+                  endColumnIndex: maxShelfAreaOccupiedIndex + 1,
                 },
                 rows: [
                   {
@@ -2095,25 +2157,25 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
-          if (totalShelvesIndex !== -1) {
+          if (noOfShelvesOccupiedIndex !== -1) {
+            const totalShelfAreaOccupiedCell = `${getColumnLetter(totalShelfAreaOccupiedIndex)}${index + 2}`;
             const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
-            const maxAreaOfStockCell = `${getColumnLetter(maxAreaOfStockIndex)}${index + 2}`;
 
             requests.push({
               updateCells: {
                 range: {
                   sheetId: userSheet.properties.sheetId,
                   startRowIndex: index + 1,
-                  startColumnIndex: totalShelvesIndex,
+                  startColumnIndex: noOfShelvesOccupiedIndex,
                   endRowIndex: index + 2,
-                  endColumnIndex: totalShelvesIndex + 1,
+                  endColumnIndex: noOfShelvesOccupiedIndex + 1,
                 },
                 rows: [
                   {
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=${maxAreaOfStockCell}/${totalAreaOfShelfCell}`
+                          formulaValue: `=ROUNDUP(${totalShelfAreaOccupiedCell}/${totalAreaOfShelfCell})`
                         },
                       },
                     ],
@@ -2125,8 +2187,19 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (maxRacksIndex !== -1) {
-            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
-            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+            const maxRackAtMaxQuantityCell = `${getColumnLetter(maxRackAtMaxQuantityIndex)}${index + 1}`;
+            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${index + 1}`;
+            const numberOfRacksCell = `${getColumnLetter(numberOfRacksIndex)}${index + 2}`;
+
+            let formulaValue;
+
+            if (index === 0) {
+              // First row (Excel row 2): set to numberOfRacksCell directly
+              formulaValue = `=${numberOfRacksCell}`;
+            } else {
+              // All other rows: compute difference
+              formulaValue = `=${maxRacksCell}-${maxRackAtMaxQuantityCell}`;
+            }
 
             requests.push({
               updateCells: {
@@ -2142,7 +2215,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=${totalShelvesCell}/${numberOfShelvesCell}`
+                          formulaValue: formulaValue,
                         },
                       },
                     ],
@@ -2153,9 +2226,10 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
+
           if (extraShelvesIndex !== -1) {
-            const maxAreaOfStockCell = `${getColumnLetter(maxAreaOfStockIndex)}${index + 2}`;
-            const totalShelfAreaInRackCell = `${getColumnLetter(totalShelfAreaInRackIndex)}${index + 2}`;
+            const maxShelfAreaOccupiedCell = `${getColumnLetter(maxShelfAreaOccupiedIndex)}${index + 2}`;
+            const totalShelfAreaOccupiedCell = `${getColumnLetter(totalShelfAreaOccupiedIndex)}${index + 2}`;
 
             requests.push({
               updateCells: {
@@ -2171,7 +2245,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDUP(${maxAreaOfStockCell}/${totalShelfAreaInRackCell})`
+                          formulaValue: `=ROUNDUP(${maxShelfAreaOccupiedCell}/${totalShelfAreaOccupiedCell})`
                         },
                       },
                     ],
@@ -2210,25 +2284,26 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
             });
           }
 
-          if (maxRackIndex !== -1) {
-            const totalShelvesCell = `${getColumnLetter(totalShelvesIndex)}${index + 2}`;
-            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
+          if (maxRackAtMaxQuantityIndex !== -1) {
+            const numberOfRacksCell = `${getColumnLetter(numberOfRacksIndex)}${index + 2}`;
+            const totalAreaOfShelfCell = `${getColumnLetter(totalAreaOfShelfIndex)}${index + 2}`;
+            const maxShelfAreaOccupiedCell = `${getColumnLetter(maxShelfAreaOccupiedIndex)}${index + 2}`;
             
             requests.push({
               updateCells: {
                 range: {
                   sheetId: userSheet.properties.sheetId,
                   startRowIndex: index + 1,
-                  startColumnIndex: maxRackIndex,
+                  startColumnIndex: maxRackAtMaxQuantityIndex,
                   endRowIndex: index + 2,
-                  endColumnIndex: maxRackIndex + 1,
+                  endColumnIndex: maxRackAtMaxQuantityIndex + 1,
                 },
                 rows: [
                   {
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=${totalShelvesCell}/${numberOfShelvesCell}`
+                          formulaValue: `=ROUNDDOWN((${numberOfRacksCell}*${totalAreaOfShelfCell})/${maxShelfAreaOccupiedCell})`
                         },
                       },
                     ],
@@ -2240,8 +2315,8 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
           }
 
           if (maxShelvesIndex !== -1) {
-            const maxStockSizeCell = `${getColumnLetter(maxStockSizeIndex)}${index + 2}`;
-            const itemsPerShelfCell = `${getColumnLetter(itemsPerShelfIndex)}${index + 2}`;
+            const maxRackAtMaxQuantityCell = `${getColumnLetter(maxRackAtMaxQuantityIndex)}${index + 2}`;
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${index + 2}`;
 
 
             requests.push({
@@ -2258,7 +2333,7 @@ async function createSKUSheet(drive, sheets, folderId, email, queryData, rackWal
                     values: [
                       {
                         userEnteredValue: {
-                          formulaValue: `=ROUNDUP(${maxStockSizeCell}/${itemsPerShelfCell})`
+                          formulaValue: `=ROUNDUP(${maxRackAtMaxQuantityCell}/${numberOfShelvesCell})`
                         },
                       },
                     ],
