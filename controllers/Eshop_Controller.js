@@ -552,15 +552,70 @@ const post_member_data = async (req, resp) => {
 
 
 
+// const update_shop_user_to_merchant = async (req, resp) => {
+//   const { user_access_token, member_id, is_merchant } = req.body;
+
+//   try {
+//     // Step 1: Get user_id from user_credentials using access_token
+//     const userResult = await ambarsariyaPool.query(
+//       `SELECT u.user_id FROM sell.user_credentials uc 
+//         JOIN sell.users u ON u.user_id = uc.user_id
+//         WHERE uc.access_token = $1 AND u.user_type = 'shop'`,
+//       [user_access_token]
+//     );
+
+//     if (userResult.rows.length === 0) {
+//       return resp.json({ message: "Invalid user access token." });
+//     }
+
+//     const user_id = userResult.rows[0].user_id;
+
+//     // Step 2: Update eshop_form using user_id
+//     const eshopResult = await ambarsariyaPool.query(
+//       `UPDATE sell.eshop_form
+//        SET is_merchant = $1,
+//            member_id = $2
+//        WHERE user_id = $3
+//        RETURNING shop_access_token`,
+//       [is_merchant, member_id, user_id]
+//     );
+
+//     if (eshopResult.rows.length === 0) {
+//       return resp
+//         .json({ message: "No e-shop found for this user." });
+//     }
+
+//     // Step 3: Update users table to set is_merchant = true
+//     await ambarsariyaPool.query(
+//       `UPDATE sell.users
+//        SET is_merchant = $1
+//        WHERE user_id = $2`,
+//       [is_merchant, user_id]
+//     );
+
+//     return resp.status(200).json({
+//       message: "Merchant status updated successfully.",
+//       shop_access_token: eshopResult.rows[0].shop_access_token,
+//     });
+
+//   } catch (err) {
+//     console.error("Error updating merchant status:", err);
+//     return resp.status(500).json({
+//       message: "Internal server error",
+//       error: err.message,
+//     });
+//   }
+// };
+
 const update_shop_user_to_merchant = async (req, resp) => {
   const { user_access_token, member_id, is_merchant } = req.body;
 
   try {
-    // Step 1: Get user_id from user_credentials using access_token
+    // 1. Get shop_user_id from access_token
     const userResult = await ambarsariyaPool.query(
       `SELECT u.user_id FROM sell.user_credentials uc 
-        JOIN sell.users u ON u.user_id = uc.user_id
-        WHERE uc.access_token = $1 AND u.user_type = 'shop'`,
+       JOIN sell.users u ON u.user_id = uc.user_id
+       WHERE uc.access_token = $1 AND u.user_type = 'shop'`,
       [user_access_token]
     );
 
@@ -568,44 +623,85 @@ const update_shop_user_to_merchant = async (req, resp) => {
       return resp.json({ message: "Invalid user access token." });
     }
 
-    const user_id = userResult.rows[0].user_id;
+    const shop_user_id = userResult.rows[0].user_id;
 
-    // Step 2: Update eshop_form using user_id
+    // 2. Get shop_id (shop_no) from eshop_form
+    const shopResult = await ambarsariyaPool.query(
+      `SELECT shop_no FROM sell.eshop_form WHERE user_id = $1`,
+      [shop_user_id]
+    );
+
+    if (shopResult.rows.length === 0) {
+      return resp.json({ message: "Shop not found for this user." });
+    }
+
+    const shop_id = shopResult.rows[0].shop_no;
+
+    // 3. Get member_user_id from member_profiles
+    const memberUserResult = await ambarsariyaPool.query(
+      `SELECT user_id FROM sell.member_profiles WHERE member_id = $1`,
+      [member_id]
+    );
+
+    if (memberUserResult.rows.length === 0) {
+      return resp.json({ message: "Invalid member ID." });
+    }
+
+    const member_user_id = memberUserResult.rows[0].user_id;
+
+    // 4. Insert into sell.merchant and get merchant_id
+    const merchantInsert = await ambarsariyaPool.query(
+      `INSERT INTO sell.merchant (member_id, member_user_id, shop_id, shop_user_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING merchant_id`,
+      [member_id, member_user_id, shop_id, shop_user_id]
+    );
+
+    const merchant_id = merchantInsert.rows[0].merchant_id;
+
+    // 5. Update eshop_form with merchant_id
     const eshopResult = await ambarsariyaPool.query(
       `UPDATE sell.eshop_form
        SET is_merchant = $1,
-           member_id = $2
-       WHERE user_id = $3
+           member_id = $2,
+           merchant_id = $3
+       WHERE user_id = $4
        RETURNING shop_access_token`,
-      [is_merchant, member_id, user_id]
+      [is_merchant, member_id, merchant_id, shop_user_id]
     );
 
-    if (eshopResult.rows.length === 0) {
-      return resp
-        .json({ message: "No e-shop found for this user." });
-    }
-
-    // Step 3: Update users table to set is_merchant = true
+    // 6. Update users table (shop_user)
     await ambarsariyaPool.query(
       `UPDATE sell.users
        SET is_merchant = $1
        WHERE user_id = $2`,
-      [is_merchant, user_id]
+      [is_merchant, shop_user_id]
+    );
+
+    // 7. Update member_profiles with merchant_id
+    await ambarsariyaPool.query(
+      `UPDATE sell.member_profiles
+       SET merchant_id = $1
+       WHERE member_id = $2`,
+      [merchant_id, member_id]
     );
 
     return resp.status(200).json({
-      message: "Merchant status updated successfully.",
-      shop_access_token: eshopResult.rows[0].shop_access_token,
+      message: "Merchant setup successful.",
+      merchant_id,
+      shop_id,
+      shop_access_token: eshopResult.rows[0].shop_access_token
     });
 
   } catch (err) {
-    console.error("Error updating merchant status:", err);
+    console.error("Error during merchant update:", err);
     return resp.status(500).json({
       message: "Internal server error",
       error: err.message,
     });
   }
 };
+
 
 
 
@@ -1254,6 +1350,7 @@ const get_allUsers = async (req, res) => {
   shop_uc.username AS shop_username,
   member_uc.username AS member_username,
   ef.business_name AS business_name,
+  m.merchant_id AS merchant_id,
   mp.member_id,
   ef.shop_no
 FROM sell.users shop
@@ -1267,6 +1364,8 @@ JOIN sell.eshop_form ef
   ON ef.user_id = shop.user_id
 JOIN sell.member_profiles mp 
   ON mp.user_id = member.user_id
+JOIN sell.merchant m 
+  ON m.member_user_id = member.user_id AND m.member_id = mp.member_id AND m.shop_user_id = shop.user_id AND m.shop_id = ef.shop_no
 WHERE shop.user_type = 'shop'
   AND member.user_type = 'member'
   AND shop.is_merchant = true
