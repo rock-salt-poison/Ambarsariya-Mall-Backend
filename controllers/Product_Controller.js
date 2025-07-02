@@ -5,6 +5,7 @@ const post_products = async (req, res) => {
   const { products, categories } = req.body;
   const shopNo = products[0].shop_no; // Assuming all products belong to the same shop_no
 
+  console.log(products);
   ambarsariyaPool.query("BEGIN"); // Start a transaction
   try {
     await ambarsariyaPool.query("BEGIN"); // Start a transaction
@@ -40,7 +41,7 @@ const post_products = async (req, res) => {
         product_type, 
         product_description, 
         category, 
-        price, 
+        cost_price, 
         unit,
         brand, 
         iku_id,
@@ -52,7 +53,7 @@ const post_products = async (req, res) => {
         packing, 
         product_style, 
         area_size_lateral,
-        inventory_or_stock_quantity, 
+        max_stock_quantity, 
         quantity_in_stock,
         shipping_information, 
         variant_group, 
@@ -73,10 +74,18 @@ const post_products = async (req, res) => {
         variation_4, 
         selling_price,
         product_catalog,
-        brand_catalog
+        brand_catalog, 
+        variation_1_max_stock_quantity,
+        variation_2_max_stock_quantity,
+        variation_3_max_stock_quantity,
+        variation_4_max_stock_quantity,
+        variation_1_stock_quantity,
+        variation_2_stock_quantity,
+        variation_3_stock_quantity,
+        variation_4_stock_quantity
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48
       ) ON CONFLICT (product_id) DO NOTHING;`;
 
       await ambarsariyaPool.query(productQuery, [
@@ -86,7 +95,7 @@ const post_products = async (req, res) => {
         product.product_type,
         product.product_description,
         product.category,
-        product.price,
+        product.cost_price,
         product.unit,
         product.brand,
         product.iku,
@@ -98,8 +107,8 @@ const post_products = async (req, res) => {
         product.packing,
         product.product_style,
         product.area_size_lateral,
-        product.inventory_or_stock_quantity,
-        product.inventory_or_stock_quantity,
+        product.max_stock_quantity,
+        product.max_stock_quantity,
         product.shipping_information,
         product.variant_group,
         product.features,
@@ -120,6 +129,14 @@ const post_products = async (req, res) => {
         product.selling_price,
         product.product_catalog,
         product.brand_catalog,
+        product.variation_1_max_stock_quantity,
+        product.variation_2_max_stock_quantity,
+        product.variation_3_max_stock_quantity,
+        product.variation_4_max_stock_quantity,
+        product.variation_1_stock_quantity,
+        product.variation_2_stock_quantity,
+        product.variation_3_stock_quantity,
+        product.variation_4_stock_quantity,
       ]);
     }
 
