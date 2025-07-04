@@ -3833,19 +3833,28 @@ WHERE shop.user_type = 'shop'
 const get_category_wise_shops = async (req, res) => {
   try {
 
-    const category = req.query.category?.split(',').map(Number);
-    console.log(category);
+    // const category = req.query.category?.split(',').map(Number);
+    const category = req.query.category;
+    const product = req.query.product;
+    console.log(category, product);
     
-        const query = `
-          SELECT *
-          FROM sell.eshop_form
-          WHERE category && $1::int[];
-        `;
-    const result = await ambarsariyaPool.query(query, [category]);
+        // const query = `
+        //   SELECT *
+        //   FROM sell.eshop_form
+        //   WHERE category && $1::int[];
+        // `;
+
+
+    const query = `
+      SELECT ef.shop_no, ef.business_name, p.* FROM sell.products p 
+      left join sell.eshop_form ef on ef.shop_no = p.shop_no
+      where p.product_name = $1 and p.category = $2;
+    `;
+    const result = await ambarsariyaPool.query(query, [product, category]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.json({ valid: false, message: "No such category exists." });
+      res.json({ valid: false, message: "No such shop exists." });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -3856,6 +3865,46 @@ const get_category_wise_shops = async (req, res) => {
       .json({ message: "Error processing request.", error: err.message });
   }
 };
+
+const get_mou_selected_shops_products = async (req, res) => {
+  try {
+    const shop_nos = req.query.shop_nos?.split(',').map(s => s.trim());
+    const category = parseInt(req.query.category);
+    const product = req.query.product?.trim();
+
+    console.log("Category:", category, "Product:", product, "Shops:", shop_nos);
+
+    const query = `
+      SELECT 
+        ef.shop_no, 
+        ef.business_name, 
+        p.* 
+      FROM 
+        sell.products p 
+      LEFT JOIN 
+        sell.eshop_form ef 
+      ON 
+        ef.shop_no = p.shop_no
+      WHERE 
+        p.shop_no = ANY($1) 
+        AND p.category = $2 
+        AND p.product_name = $3;
+    `;
+
+    const result = await ambarsariyaPool.query(query, [shop_nos, category, product]);
+
+    if (result.rowCount === 0) {
+      return res.json({ valid: false, message: "No matching shop or product found." });
+    }
+
+    return res.json({ valid: true, data: result.rows });
+
+  } catch (err) {
+    console.error("Error processing request:", err);
+    return res.status(500).json({ message: "Internal Server Error", error: err.message });
+  }
+};
+
 
 module.exports = {
   get_checkIfMemberExists,
@@ -3915,5 +3964,6 @@ module.exports = {
   get_shop_product_items,
   update_shop_user_to_merchant,
   get_merchant_users,
-  get_category_wise_shops
+  get_category_wise_shops,
+  get_mou_selected_shops_products
 };

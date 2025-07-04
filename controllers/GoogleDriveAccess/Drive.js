@@ -904,9 +904,15 @@ async function createItemsSheet(
     const itemAreaIndex = headers.indexOf("Item area");
     const sellingPriceIndex = headers.indexOf("Selling Price");
     const costPriceIndex = headers.indexOf("Cost Price");
-    const itemPackageDimensionsIndex = headers.indexOf(
-      "ITEM ID Package Dimensions (max)"
-    );
+    const weeklyMinQuantityIndex = headers.indexOf("Weekly  (Min Quantity)");
+    const monthlyMinQuantityIndex = headers.indexOf("Monthly  (Min Quantity)");
+    const dailyMinQuantityIndex = headers.indexOf("Daily (Min Quantity)");
+    const editableMinQuantityIndex = headers.indexOf("Editable (Min Quantity)");
+    const itemPackageDimensionsIndex = headers.indexOf("ITEM ID Package Dimensions (max)");
+    const specification1Index = headers.indexOf("Specification 1");
+    const specification2Index = headers.indexOf("Specification 2");
+    const specification3Index = headers.indexOf("Specification 3");
+    const specification4Index = headers.indexOf("Specification 4");
     const numberOfRacksIndex = headers.indexOf("Number of Racks");
     const numberOfShelvesIndex = headers.indexOf("Number of Shelves");
     const lengthOfShelfIndex = headers.indexOf("Length of Shelf");
@@ -1168,6 +1174,70 @@ async function createItemsSheet(
                 }", "_", "${data.brand}", "_", "${data.variations}", "_", ${
                   data.variations
                 }*${maxItemQuantityCell}), " ", "-"))`,
+                "formula"
+              )
+            );
+          }
+
+          if (specification1Index !== -1) {
+            const costPriceCell = `${getColumnLetter(costPriceIndex)}${rowIndex + 1}`;
+            const weeklyMinQuantityCell = `${getColumnLetter(weeklyMinQuantityIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                specification1Index,
+                specification1Index + 1,
+                `=${costPriceCell}*${weeklyMinQuantityCell}`,
+                "formula"
+              )
+            );
+          }
+
+          if (specification2Index !== -1) {
+            const costPriceCell = `${getColumnLetter(costPriceIndex)}${rowIndex + 1}`;
+            const monthlyMinQuantityCell = `${getColumnLetter(monthlyMinQuantityIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                specification2Index,
+                specification2Index + 1,
+                `=${costPriceCell}*${monthlyMinQuantityCell}`,
+                "formula"
+              )
+            );
+          }
+
+          if (specification3Index !== -1) {
+            const costPriceCell = `${getColumnLetter(costPriceIndex)}${rowIndex + 1}`;
+            const dailyMinQuantityCell = `${getColumnLetter(dailyMinQuantityIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                specification3Index,
+                specification3Index + 1,
+                `=${costPriceCell}*${dailyMinQuantityCell}`,
+                "formula"
+              )
+            );
+          }
+
+          if (specification4Index !== -1) {
+            const costPriceCell = `${getColumnLetter(costPriceIndex)}${rowIndex + 1}`;
+            const editableMinQuantityCell = `${getColumnLetter(editableMinQuantityIndex)}${rowIndex + 1}`;
+
+            rowRequests.push(
+              createUpdateRequest(
+                userSheet.properties.sheetId,
+                rowIndex,
+                specification4Index,
+                specification4Index + 1,
+                `=${costPriceCell}*${editableMinQuantityCell}`,
                 "formula"
               )
             );
@@ -2879,8 +2949,8 @@ async function createRKUSheet(
     const productsPerShelfIndex = headers.indexOf("Product (s) per Shelf ");
     const maxRacksIndex = headers.indexOf("Max Racks");
     const extraShelvesMaxIndex = headers.indexOf("Extra Shelves (Max)");
-    const rackNoRKUIDIndex = headers.indexOf("Rack No (RKU ID)");
-    const shelfNoProductIDIndex = headers.indexOf("Shelf No (Product ID)");
+    const rackNoRackIDIndex = headers.indexOf("Rack No (Rack ID)");
+    const requiredIDProductIDIndex = headers.indexOf("Required ID (Product ID)");
     const productIDIndex = headers.indexOf("Product ID");
     const placementMaxIndex = headers.indexOf("Placement (max)");
     const quantitySaleIndex = headers.indexOf("Quantity Sale");
@@ -2984,7 +3054,7 @@ async function createRKUSheet(
                 rowIndex,
                 RKUIDIndex,
                 RKUIDIndex + 1,
-                `=CONCATENATE("${data.product_id}","_","${data.inventory_or_stock_quantity}","_","${data.item_id}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves}/${data.no_of_shelves}), "_", TEXT(NOW(), "yyyy-mm-ddThh:mm:ss.000"))`,
+                `=CONCATENATE("${data.product_id}","_","${data.max_stock_quantity}","_","${data.item_id}", "_", "${data.sku_id}","_",ROUNDUP(${data.total_shelves_extra}/${data.no_of_shelves}), "_", TEXT(NOW(), "yyyy-mm-ddThh:mm:ss.000"))`,
                 "formula"
               )
             );
@@ -3075,7 +3145,7 @@ async function createRKUSheet(
                 rowIndex,
                 maxRacksIndex,
                 maxRacksIndex + 1,
-                parseInt(data.max_rack),
+                parseInt(data.max_rack_at_max_quantity),
                 "number"
               )
             );
@@ -3088,27 +3158,30 @@ async function createRKUSheet(
                 rowIndex,
                 extraShelvesMaxIndex,
                 extraShelvesMaxIndex + 1,
-                parseInt(data.shelves_extra),
+                parseInt(data.max_shelves_extra),
                 "number"
               )
             );
           }
 
-          if (rackNoRKUIDIndex !== -1) {
+          if (rackNoRackIDIndex !== -1) {
+            const maxRacksCell = `${getColumnLetter(maxRacksIndex)}${rowIndex + 1}`;
+            const extraShelvesMaxCell = `${getColumnLetter(extraShelvesMaxIndex)}${rowIndex + 1}`;
+
             rowRequests.push(
               createUpdateRequest(
                 userSheet.properties.sheetId,
                 rowIndex,
-                rackNoRKUIDIndex,
-                rackNoRKUIDIndex + 1,
-                `=ROUNDDOWN((${data.no_of_items}/${data.items_per_shelf})/${data.no_of_shelves})`,
+                rackNoRackIDIndex,
+                rackNoRackIDIndex + 1,
+                `=${maxRacksCell}*${data?.no_of_shelves}+${extraShelvesMaxCell}-${data?.variation_stock_quantity}`,
                 "formula"
               )
             );
           }
 
-          if (shelfNoProductIDIndex !== -1) {
-            const rackNoRKUIDCell = `${getColumnLetter(rackNoRKUIDIndex)}${
+          if (requiredIDProductIDIndex !== -1) {
+            const rackNoRKUIDCell = `${getColumnLetter(rackNoRackIDIndex)}${
               rowIndex + 1
             }`;
 
@@ -3116,9 +3189,9 @@ async function createRKUSheet(
               createUpdateRequest(
                 userSheet.properties.sheetId,
                 rowIndex,
-                shelfNoProductIDIndex,
-                shelfNoProductIDIndex + 1,
-                `=(${rackNoRKUIDCell} * ${data.no_of_shelves})/${rackNoRKUIDCell}`,
+                requiredIDProductIDIndex,
+                requiredIDProductIDIndex + 1,
+                `=${data?.max_variation_quantity}+${rackNoRKUIDCell}`,
                 "formula"
               )
             );
@@ -3156,7 +3229,7 @@ async function createRKUSheet(
                 rowIndex,
                 placementMaxIndex,
                 placementMaxIndex + 1,
-                `=CONCATENATE("Number of walls ", ROUNDDOWN(${data.max_shelves}/${maxRacksCell}), " + Number of Racks ",ROUNDDOWN((${data.items_per_shelf}/${data.items_per_shelf})/${numberOfRacksInAWallCell}), " + Shelves ", ${data.shelves_extra} )`,
+                `=CONCATENATE("Number of walls ", ROUNDDOWN(${data.max_shelves_extra}/${maxRacksCell}), " + Number of Racks ",ROUNDDOWN((${data.items_per_shelf}/${data.items_per_shelf})/${numberOfRacksInAWallCell}), " + Shelves ", ${data.total_shelves_extra} )`,
                 "formula"
               )
             );
@@ -3825,28 +3898,34 @@ async function createRKUCsv(email, shop_no, roomId) {
           rku.rku AS rku_id,
           s.total_area_of_shelf,
           s.sku_id,
-          s.no_of_shelves_occupied,
+          s.total_stock_racks_occupied,
           s.no_of_walls_of_rack,
           s.no_of_racks_in_a_wall,
           s.items_per_shelf,
           s.max_rack_at_max_quantity,
-          s.shelves_extra,
-          s.max_shelves,
+          s.total_shelves_extra,
+          s.max_shelves_extra,
           p.area_size_lateral,
           p.product_id,
-          p.inventory_or_stock_quantity,
+          p.max_stock_quantity,
           p.product_dimensions_width_in_cm,
           p.product_dimensions_breadth_in_cm,
           p.product_dimensions_height_in_cm,
           e.oauth_access_token,
           e.oauth_refresh_token,
           t.item_id,
+          split_part(t.item_id, '_', -1)::int AS max_variation_quantity,
+          split_part(t.item_id, '_', -2)::int AS variation_stock_quantity,
           t.no_of_shelves,
           t.shelf_length,
           t.shelf_breadth,
           t.shelf_height,
           t.item_area,
-          t.no_of_items
+          t.no_of_items,
+          COALESCE(p.variation_1_stock_quantity, 0) +
+          COALESCE(p.variation_2_stock_quantity, 0) +
+          COALESCE(p.variation_3_stock_quantity, 0) +
+          COALESCE(p.variation_4_stock_quantity, 0) AS total_stock_quantity
       FROM
           sell.sku s
       JOIN
