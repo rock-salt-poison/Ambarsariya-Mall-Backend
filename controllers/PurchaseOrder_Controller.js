@@ -114,7 +114,7 @@ const get_purchase_orders = async (req, res) => {
         COALESCE(so_product->>'selected_variant', product->>'selectedVariant') AS selected_variant,
         product->>'description' AS description, 
         COALESCE((so_product->>'total_price')::numeric, (product->>'total_price')::numeric) AS total_price,
-        pr.inventory_or_stock_quantity AS quantity,  
+        pr.max_stock_quantity AS quantity,  
         pr.product_name,  
         pr.variant_group,
         pr.quantity_in_stock,
