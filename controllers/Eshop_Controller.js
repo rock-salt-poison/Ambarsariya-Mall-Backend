@@ -3836,6 +3836,9 @@ const get_category_wise_shops = async (req, res) => {
     // const category = req.query.category?.split(',').map(Number);
     const category = req.query.category;
     const product = req.query.product;
+    const domain = req.query.domain;
+    const sector = req.query.sector;
+    const shop_no = req.query.shop_no;
     console.log(category, product);
     
         // const query = `
@@ -3844,13 +3847,37 @@ const get_category_wise_shops = async (req, res) => {
         //   WHERE category && $1::int[];
         // `;
 
+    // const query = `SELECT ef.shop_no, ef.business_name, d.domain_name, s.sector_name, p.* FROM sell.products p 
+    //   left join sell.eshop_form ef on ef.shop_no = p.shop_no
+    //   LEFT JOIN 
+    //     domains d 
+    //   ON d.domain_id = ef.domain
+    //   LEFT JOIN 
+    //     sectors s 
+    //   ON s.sector_id = ef.sector
+    //   where p.product_name = $1 and p.category = $2`;
 
     const query = `
-      SELECT ef.shop_no, ef.business_name, p.* FROM sell.products p 
-      left join sell.eshop_form ef on ef.shop_no = p.shop_no
-      where p.product_name = $1 and p.category = $2;
+      SELECT 
+        ef.shop_no, 
+        ef.business_name, 
+        d.domain_name, 
+        s.sector_name
+      FROM 
+        sell.eshop_form ef
+      LEFT JOIN 
+        domains d ON d.domain_id = ef.domain
+      LEFT JOIN 
+        sectors s ON s.sector_id = ef.sector
+      WHERE 
+        ef.domain = (
+          SELECT domain FROM sell.eshop_form WHERE shop_no = $1
+        )
+        AND ef.sector = (
+          SELECT sector FROM sell.eshop_form WHERE shop_no = $1
+        );
     `;
-    const result = await ambarsariyaPool.query(query, [product, category]);
+    const result = await ambarsariyaPool.query(query, [shop_no]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -3878,6 +3905,8 @@ const get_mou_selected_shops_products = async (req, res) => {
       SELECT 
         ef.shop_no, 
         ef.business_name, 
+        d.domain_name,
+        s.sector_name,
         p.* 
       FROM 
         sell.products p 
@@ -3885,6 +3914,12 @@ const get_mou_selected_shops_products = async (req, res) => {
         sell.eshop_form ef 
       ON 
         ef.shop_no = p.shop_no
+      LEFT JOIN 
+        domains d 
+      ON d.domain_id = ef.domain
+      LEFT JOIN 
+        sectors s 
+      ON s.sector_id = ef.sector
       WHERE 
         p.shop_no = ANY($1) 
         AND p.category = $2 
