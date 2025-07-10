@@ -219,12 +219,12 @@ const get_buyer_details = async (req, res) => {
                     mp.address,
                     mp.latitude,
                     mp.longitude
-                  from sell.users u
-                  join sell.member_profiles mp
-                  on mp.user_id = u.user_id
+                  from sell.member_profiles mp
+                  join sell.users u
+                  on u.user_id = mp.user_id
                   join sell.user_credentials uc
-                  on uc.user_id = u.user_id
-                  where u.user_id = $1`;
+                  on uc.user_id = mp.user_id
+                  where mp.member_id = $1`;
       let result = await ambarsariyaPool.query(query, [user_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the user_id is invalid
