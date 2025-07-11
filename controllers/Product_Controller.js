@@ -286,9 +286,36 @@ where p.product_id = $1;`;
   }
 };
 
+
+const get_in_stock_updates = async (req, res) => {
+  const { shop_no } = req.params;
+
+  try {
+    if (shop_no) {
+      let query = `SELECT p.product_id ,i.item_id, s.sku_id, s.space_available_for_no_of_items, p.selling_price, p.quantity_in_stock
+        FROM sell.products p 
+        LEFT JOIN sell.items i  ON i.product_id = p.product_id
+        LEFT JOIN sell.sku s  ON s.product_id = p.product_id
+        WHERE p.shop_no = $1`;
+      let result = await ambarsariyaPool.query(query, [shop_no]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: "No products are there." });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch products" });
+  }
+};
+
 module.exports = {
   post_products,
   get_products,
   get_product_names,
   get_product_variants,
+  get_in_stock_updates
 };

@@ -1676,6 +1676,10 @@ async function createSKUSheet(
       "Max Rack at Max Quantity"
     );
     const maxShelvesExtraIndex = headers.indexOf("Max Shelves Extra");
+    const quantityAreaCoveredShelvesIndex = headers.indexOf("Quantity Area Covered Shelves");
+    const maxQuantityAreaCoveredShelvesIndex = headers.indexOf("Max Quantity Area Covered Shelves");
+    const unoccupiedAreaUncoveredShelvesIndex = headers.indexOf("Unoccupied Area Uncovered Shelves");
+    const spaceAvailableForNoOfItemsIndex = headers.indexOf("Space Available for No of Items");
     const RKUIdIndex = headers.indexOf("RKU ID");
 
     // Loop through the rows and columns to apply dynamic formulas
@@ -2648,6 +2652,154 @@ async function createSKUSheet(
                           formulaValue: `=ROUNDUP((${maxStockSizeCell}*${parseFloat(
                             data.area_size_lateral
                           )})/${totalAreaOfShelfInARackCell})`,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (quantityAreaCoveredShelvesIndex !== -1) {
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${
+              index + 2
+            }`;
+            const totalStockRacksOccupiedCell = `${getColumnLetter(
+              totalStockRacksOccupiedIndex
+            )}${index + 2}`;
+            const extraShelvesCell = `${getColumnLetter(
+              extraShelvesIndex
+            )}${index + 2}`;
+            const itemsPerShelfCell = `${getColumnLetter(
+              itemsPerShelfIndex
+            )}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: quantityAreaCoveredShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: quantityAreaCoveredShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=(${numberOfShelvesCell}*${totalStockRacksOccupiedCell}+${extraShelvesCell})*${itemsPerShelfCell}`,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (maxQuantityAreaCoveredShelvesIndex !== -1) {
+            const numberOfShelvesCell = `${getColumnLetter(numberOfShelvesIndex)}${
+              index + 2
+            }`;
+            const maxRackAtMaxQuantityCell = `${getColumnLetter(
+              maxRackAtMaxQuantityIndex
+            )}${index + 2}`;
+            const maxShelvesExtraCell = `${getColumnLetter(
+              maxShelvesExtraIndex
+            )}${index + 2}`;
+            const itemsPerShelfCell = `${getColumnLetter(
+              itemsPerShelfIndex
+            )}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: maxQuantityAreaCoveredShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: maxQuantityAreaCoveredShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=(${maxRackAtMaxQuantityCell}*${numberOfShelvesCell}+${maxShelvesExtraCell})*${itemsPerShelfCell}`,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (unoccupiedAreaUncoveredShelvesIndex !== -1) {
+            const maxQuantityAreaCoveredShelvesCell = `${getColumnLetter(maxQuantityAreaCoveredShelvesIndex)}${
+              index + 2
+            }`;
+            const quantityAreaCoveredShelvesCell = `${getColumnLetter(
+              quantityAreaCoveredShelvesIndex
+            )}${index + 2}`;
+            const itemsPerShelfCell = `${getColumnLetter(
+              itemsPerShelfIndex
+            )}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: unoccupiedAreaUncoveredShelvesIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: unoccupiedAreaUncoveredShelvesIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=(${maxQuantityAreaCoveredShelvesCell}-${quantityAreaCoveredShelvesCell})/${itemsPerShelfCell}`,
+                        },
+                      },
+                    ],
+                  },
+                ],
+                fields: "userEnteredValue.formulaValue",
+              },
+            });
+          }
+
+          if (spaceAvailableForNoOfItemsIndex !== -1) {
+            const unoccupiedAreaUncoveredShelvesCell = `${getColumnLetter(unoccupiedAreaUncoveredShelvesIndex)}${
+              index + 2
+            }`;
+            
+            const itemsPerShelfCell = `${getColumnLetter(
+              itemsPerShelfIndex
+            )}${index + 2}`;
+
+            requests.push({
+              updateCells: {
+                range: {
+                  sheetId: userSheet.properties.sheetId,
+                  startRowIndex: index + 1,
+                  startColumnIndex: spaceAvailableForNoOfItemsIndex,
+                  endRowIndex: index + 2,
+                  endColumnIndex: spaceAvailableForNoOfItemsIndex + 1,
+                },
+                rows: [
+                  {
+                    values: [
+                      {
+                        userEnteredValue: {
+                          formulaValue: `=ROUNDUP(${unoccupiedAreaUncoveredShelvesCell}*${itemsPerShelfCell})`,
                         },
                       },
                     ],

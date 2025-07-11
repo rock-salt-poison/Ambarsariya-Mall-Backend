@@ -35,9 +35,13 @@ const post_sku = async (req, res) => {
           max_shelves_extra,
           rku_id,
           total_no_of_shelf,
-          shop_no
+          shop_no,
+          quantity_area_covered_shelves,
+          max_quantity_area_covered_shelves,
+          unoccupied_area_uncovered_shelves,
+          space_available_for_no_of_items
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
         )
         ON CONFLICT (sku_id, product_id, shop_no) 
         DO UPDATE SET
@@ -63,7 +67,11 @@ const post_sku = async (req, res) => {
           max_shelves_extra = EXCLUDED.max_shelves_extra,
           rku_id = EXCLUDED.rku_id,
           total_no_of_shelf = EXCLUDED.total_no_of_shelf,
-          shop_no = EXCLUDED.shop_no;
+          shop_no = EXCLUDED.shop_no,
+          quantity_area_covered_shelves = EXCLUDED.quantity_area_covered_shelves,
+          max_quantity_area_covered_shelves = EXCLUDED.max_quantity_area_covered_shelves,
+          unoccupied_area_uncovered_shelves = EXCLUDED.unoccupied_area_uncovered_shelves,
+          space_available_for_no_of_items = EXCLUDED.space_available_for_no_of_item;
       `;
 
       // Execute query with item values
@@ -90,7 +98,11 @@ const post_sku = async (req, res) => {
         sku.max_shelves_extra,
         sku.rku_id,
         sku.total_no_of_shelf,
-        sku.shop_no
+        sku.shop_no,
+        sku.quantity_area_covered_shelves,
+        sku.max_quantity_area_covered_shelves,
+        sku.unoccupied_area_uncovered_shelves,
+        sku.space_available_for_no_of_items
       ]);
     }
 
