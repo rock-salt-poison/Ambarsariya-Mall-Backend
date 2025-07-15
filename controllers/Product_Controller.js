@@ -150,49 +150,69 @@ const post_products = async (req, res) => {
 };
 
 const get_products = async (req, res) => {
-  const { shop_no, product_id } = req.params;
+  const { shop_no, product_id, item_id } = req.params;
   try {
     let query, result;
 
-    // Check if 'title' exists and set the query accordingly
+    // Check if 'product_id' exists and set the query accordingly
     if (shop_no && product_id) {
       query = `SELECT 
                 p.*, 
-                (
-                    SELECT i2.selling_price
-                    FROM sell.items i2
-                    WHERE i2.item_id = (
-                        SELECT item_id
-                        FROM sell.items
-                        WHERE product_id = p.product_id
-                          AND item_id LIKE '%' || p.iku_id[1]
-                        LIMIT 1
-                    )
-                ) AS first_iku_price
-            FROM sell.products p
-            LEFT JOIN sell.items i ON i.product_id = p.product_id
-            WHERE p.shop_no = $1 and p.product_id = $2
-            GROUP BY p.product_id;`;
-      result = await ambarsariyaPool.query(query, [shop_no, product_id]);
+                COALESCE(i.selling_price, p.selling_price) AS final_price
+              FROM sell.products p
+              LEFT JOIN sell.items i 
+                ON i.product_id = p.product_id AND i.item_id = $3
+              WHERE p.shop_no = $1 AND p.product_id = $2
+              GROUP BY p.product_id, i.selling_price;
+`;
+      result = await ambarsariyaPool.query(query, [shop_no, product_id, item_id]);
     } else if (shop_no) {
+      // query = `SELECT 
+      //           p.*, 
+      //           array_agg(i.item_id) AS item_ids,
+      //           (
+      //               SELECT i2.selling_price
+      //               FROM sell.items i2
+      //               WHERE i2.item_id = (
+      //                   SELECT item_id
+      //                   FROM sell.items
+      //                   WHERE product_id = p.product_id
+      //                     AND item_id LIKE '%' || p.iku_id[1]
+      //                   LIMIT 1
+      //               )
+      //           ) AS first_iku_price
+      //       FROM sell.products p
+      //       LEFT JOIN sell.items i ON i.product_id = p.product_id
+      //       WHERE p.shop_no = $1
+      //       GROUP BY p.product_id;`;
       query = `SELECT 
-                p.*, 
-                array_agg(i.item_id) AS item_ids,
-                (
-                    SELECT i2.selling_price
-                    FROM sell.items i2
-                    WHERE i2.item_id = (
-                        SELECT item_id
-                        FROM sell.items
-                        WHERE product_id = p.product_id
-                          AND item_id LIKE '%' || p.iku_id[1]
-                        LIMIT 1
-                    )
-                ) AS first_iku_price
-            FROM sell.products p
-            LEFT JOIN sell.items i ON i.product_id = p.product_id
-            WHERE p.shop_no = $1
-            GROUP BY p.product_id;`;
+  p.*, 
+  array_agg(i.item_id) AS item_ids,
+  i_match.item_id AS matched_item_id,
+  COALESCE(i_match.selling_price, p.selling_price) AS matched_price,
+  i_match.quantity_in_stock AS matched_quantity,
+  i_match.subscribe,
+  i_match.weekly_min_quantity,
+  i_match.monthly_min_quantity,
+  i_match.daily_min_quantity,
+  i_match.editable_min_quantity,
+  i_match.specification_1,
+  i_match.specification_2,
+  i_match.specification_3,
+  i_match.specification_4
+FROM sell.products p
+LEFT JOIN sell.items i ON i.product_id = p.product_id
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM sell.items i2
+  WHERE i2.product_id = p.product_id
+    AND SPLIT_PART(i2.item_id, '_', array_length(string_to_array(i2.item_id, '_'), 1) - 2) = REPLACE(p.variation_1, ' ', '-')
+  ORDER BY i2.item_id
+  LIMIT 1
+) i_match ON TRUE
+WHERE p.shop_no = $1
+GROUP BY p.product_id, i_match.item_id, i_match.selling_price, i_match.quantity_in_stock, i_match.subscribe, i_match.daily_min_quantity, i_match.weekly_min_quantity, i_match.monthly_min_quantity, i_match.weekly_min_quantity, i_match.editable_min_quantity, i_match.specification_1, i_match.specification_2, i_match.specification_3, i_match.specification_4;
+`
       result = await ambarsariyaPool.query(query, [shop_no]);
     }
 
