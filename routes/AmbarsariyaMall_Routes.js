@@ -11,6 +11,7 @@ const skuController = require('../controllers/SKU_Controller');
 const rkuController = require('../controllers/RKU_Controller');
 const saleController = require('../controllers/SaleOrder_Controller');
 const invoiceController = require('../controllers/Invoice_Controller');
+const mouController = require('../controllers/MoU_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
 
@@ -251,6 +252,7 @@ router.put("/sell/support", (req, res, next) => {
 
 router.put('/sell/send-otp', otpController.sendOTP);
 router.post('/sell/username-otp', usernameOtpController.sendOTP);
+router.post('/sell/identification-of-mou', mouController.post_identification_of_mou);
 
 
 router.delete('/sell/support-chat-notifications/:id', eshopController.delete_supportChatNotifications);
