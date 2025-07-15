@@ -3839,6 +3839,7 @@ const get_category_wise_shops = async (req, res) => {
     const domain = req.query.domain;
     const sector = req.query.sector;
     const shop_no = req.query.shop_no;
+    const purchaser_shop_no = req.query.purchaser_shop_no;
     console.log(category, product);
     
         // const query = `
@@ -3875,9 +3876,10 @@ const get_category_wise_shops = async (req, res) => {
         )
         AND ef.sector = (
           SELECT sector FROM sell.eshop_form WHERE shop_no = $1
-        );
+        )
+        AND ef.shop_no != $2;
     `;
-    const result = await ambarsariyaPool.query(query, [shop_no]);
+    const result = await ambarsariyaPool.query(query, [shop_no, purchaser_shop_no]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
