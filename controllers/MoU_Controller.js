@@ -74,29 +74,27 @@ const post_identification_of_mou = async (req, res) => {
   }
 };
 
-
-
-const get_items = async (req, res) => {
-  const { shop_no } = req.params;
+const get_mou = async (req, res) => {
+  const { access_token } = req.query;
 
   try {
-    if (shop_no) {
-      let query = `SELECT item_id, no_of_racks, no_of_shelves, shelf_length, shelf_height, shelf_breadth FROM sell.items WHERE shop_no = $1`;
-      let result = await ambarsariyaPool.query(query, [shop_no]);
+    if (access_token) {
+      let query = `SELECT * FROM sell.mou WHERE access_token = $1`;
+      let result = await ambarsariyaPool.query(query, [access_token]);
       if (result.rowCount === 0) {
-        // If no rows are found, assume the shop_no is invalid
+        // If no rows are found, assume the access_token is invalid
         res
-          .json({ valid: false, message: "No items are there." });
+          .json({ valid: false, message: "No mou exists." });
       } else {
         res.json({ valid: true, data: result.rows });
       }
     }
   } catch (e) {
     console.error(e);
-    res.status(500).json({ e: "Failed to fetch data" });
+    res.status(500).json({ e: "Failed to fetch mou" });
   }
 };
 
 
 
-module.exports = { post_identification_of_mou, get_items };
+module.exports = { post_identification_of_mou, get_mou };

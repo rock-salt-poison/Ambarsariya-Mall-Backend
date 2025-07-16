@@ -3942,6 +3942,117 @@ const get_mou_selected_shops_products = async (req, res) => {
   }
 };
 
+const get_vendor_details = async (req, res) => {
+  try {
+
+    const shop_no = req.query.shop_no?.split(',').map(String);
+    
+    console.log(shop_no);
+    
+        
+    const query = `
+      SELECT 
+        e.shop_no,
+        e.business_name,
+        e.daily_walkin ,
+        e.cost_sensitivity ,
+        
+        -- Average compliance and service scores
+        COALESCE(AVG(r.quality_of_compliance), 0) AS quality_of_compliance,
+        COALESCE(AVG(r.quality_of_service), 0) AS quality_of_service,
+        
+        -- Years in business
+        DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) AS years_in_business,
+
+        -- x5: Score based on years in business
+        CASE 
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 2 THEN 2
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
+            ELSE 0
+        END AS years_in_business_score,
+
+        -- Final average score
+        ROUND(((
+        e.daily_walkin + 
+        e.cost_sensitivity + 
+        COALESCE(AVG(r.quality_of_compliance), 0) + 
+        COALESCE(AVG(r.quality_of_service), 0) + 
+        CASE 
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 2 THEN 2
+            WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
+            ELSE 0
+        END
+    ) / 5.0)::numeric, 2) AS average_score,
+
+
+        -- Classification
+        CASE 
+            WHEN (
+                (e.daily_walkin + 
+                e.cost_sensitivity + 
+                COALESCE(AVG(r.quality_of_compliance), 0) + 
+                COALESCE(AVG(r.quality_of_service), 0) + 
+                CASE 
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 2 THEN 2
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
+                    ELSE 0
+                END
+            ) / 5.0 ) >= 3.5 THEN 'A'
+            WHEN (
+                (e.daily_walkin + 
+                e.cost_sensitivity + 
+                COALESCE(AVG(r.quality_of_compliance), 0) + 
+                COALESCE(AVG(r.quality_of_service), 0) + 
+                CASE 
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 2 THEN 2
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
+                    ELSE 0
+                END
+            ) / 5.0 ) >= 3.0 THEN 'B'
+            WHEN (
+                (e.daily_walkin + 
+                e.cost_sensitivity + 
+                COALESCE(AVG(r.quality_of_compliance), 0) + 
+                COALESCE(AVG(r.quality_of_service), 0) + 
+                CASE 
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 2 THEN 2
+                    WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
+                    ELSE 0
+                END
+            ) / 5.0 ) >= 2.5 THEN 'C'
+            ELSE 'D'
+        END AS shop_class
+
+    FROM sell.eshop_form e
+    LEFT JOIN sell.shop_reviews r ON e.shop_no = r.shop_no
+    WHERE e.shop_no = ANY($1)
+    GROUP BY e.shop_no, e.business_name, e.daily_walkin, e.cost_sensitivity, e.establishment_date;
+    `;
+    const result = await ambarsariyaPool.query(query, [shop_no]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.json({ valid: false, message: "No such shop exists." });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
+  }
+};
 
 module.exports = {
   get_checkIfMemberExists,
@@ -4002,5 +4113,6 @@ module.exports = {
   update_shop_user_to_merchant,
   get_merchant_users,
   get_category_wise_shops,
-  get_mou_selected_shops_products
+  get_mou_selected_shops_products,
+  get_vendor_details
 };

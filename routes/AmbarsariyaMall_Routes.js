@@ -135,6 +135,8 @@ router.get('/merchants', eshopController.get_merchant_users);
 router.get('/category-wise-shops', eshopController.get_category_wise_shops);
 router.get('/mou-selected-shops-products', eshopController.get_mou_selected_shops_products);
 router.get('/in-stock-products/:shop_no', productController.get_in_stock_updates);
+router.get('/sell/mou/vendor-details', eshopController.get_vendor_details);
+router.get('/sell/mou', mouController.get_mou);
 
 
 router.post('/sell/support', eshopController.post_visitorData);
