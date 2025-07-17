@@ -14,6 +14,7 @@ const { initializeWebSocket } = require('./webSocket');
 const ambarsariyaRoutes = require('./routes/AmbarsariyaMall_Routes');
 const adminRoutes = require('./routes/AdminRoutes');
 const driveRoutes = require('./routes/DriveRoutes');
+const paymentRoutes = require('./routes/PaymentRoutes');
 const photosRoutes = require('./routes/GooglePhotos_Routes');
 
 // Middleware to parse incoming JSON requests
@@ -32,6 +33,7 @@ app.get('/health', (req, res) => {
 app.use('/api/ambarsariya', ambarsariyaRoutes);
 app.use('/admin/api', adminRoutes);
 app.use('/api/drive', driveRoutes);
+app.use('/api/payment', paymentRoutes);
 app.use('/api/google-photo', photosRoutes);
 
 // Create HTTP server and integrate it with Socket.IO
