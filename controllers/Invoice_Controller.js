@@ -150,6 +150,13 @@ const post_invoiceOrder = async (req, res) => {
 
     const invoice_no = purchase_order.rows[0].invoice_no;
 
+    await ambarsariyaPool.query(
+      `UPDATE sell.sale_order
+      SET status = $1
+      WHERE po_no = $2`,
+      [data.order_status, data.po_no]
+    );
+
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
     res.status(201).json({
       message: "Invoice order created successfully",

@@ -32,7 +32,6 @@ const post_saleOrder = async (req, res) => {
         balance_credit, 
         balance_credit_due_date, 
         after_due_date_surcharges_per_day,
-        status, 
         send_qr_upi_bank_details, 
         seller_id, 
         coupon_cost,
@@ -47,7 +46,7 @@ const post_saleOrder = async (req, res) => {
         category
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+        $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
       )
       ON CONFLICT (po_no) DO UPDATE SET
         products = EXCLUDED.products,
@@ -68,7 +67,6 @@ const post_saleOrder = async (req, res) => {
         balance_credit = EXCLUDED.balance_credit,
         balance_credit_due_date = EXCLUDED.balance_credit_due_date,
         after_due_date_surcharges_per_day = EXCLUDED.after_due_date_surcharges_per_day,
-        status = EXCLUDED.status,
         send_qr_upi_bank_details = EXCLUDED.send_qr_upi_bank_details,
         coupon_cost = EXCLUDED.coupon_cost,
         updated_at = CURRENT_TIMESTAMP,
@@ -107,7 +105,6 @@ const post_saleOrder = async (req, res) => {
       data.balance_credit,
       data.balance_credit_due_date,
       data.after_due_date_surcharges_per_day,
-      data.status,
       data.send_qr_upi_bank_details,
       data.seller_id,
       data.coupon_cost,
@@ -121,6 +118,14 @@ const post_saleOrder = async (req, res) => {
       data.sector,
       data.category
     ]);
+
+    // update status in purchase_order
+    await ambarsariyaPool.query(
+      `UPDATE sell.purchase_order
+      SET status = $1
+      WHERE po_no = $2`,
+      [data.status, data.po_no]
+    );
 
     // Step 2: Update stock in Sell.items
     const stockUpdates = data.stockUpdates || [];

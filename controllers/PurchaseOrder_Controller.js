@@ -249,13 +249,16 @@ const get_all_purchased_orders = async (req, res) => {
   try {
     if (buyer_id) {
       let query = `SELECT 
-        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount , so.status 
+        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount, 
+        po.status AS purchase_order_status,
+		    so.status AS sale_order_status 
       FROM sell.purchase_order po
       LEFT JOIN sell.sale_order so
       ON so.buyer_id = po.buyer_id AND so.po_no = po.po_no
       LEFT JOIN type_of_services ts
       ON ts.id = po.shipping_method
-      WHERE po.buyer_id = $1 `;
+      WHERE po.buyer_id = $1 
+      ORDER BY po.po_no desc`;
       let result = await ambarsariyaPool.query(query, [buyer_id]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
