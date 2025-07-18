@@ -6,6 +6,9 @@ const razorpayController = require('../controllers/Razorpay_Controller');
 
 router.post('/create-order', razorpayController.post_createOrder);
 router.post('/verify-payment', razorpayController.post_verifyPayment);
+router.post('/create-contact', razorpayController.post_createContact);
+router.post('/create-fund-account', razorpayController.post_createFundAccount);
+router.post('/payout', razorpayController.post_payoutToShopkeeper);
 
 
 module.exports = router;

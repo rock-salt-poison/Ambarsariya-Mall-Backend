@@ -1,4 +1,5 @@
 const { createDbPool } = require("../db_config/db");
+const { decryptData } = require("../utils/cryptoUtils");
 const ambarsariyaPool = createDbPool();
 
 const post_invoiceOrder = async (req, res) => {
@@ -166,44 +167,58 @@ const get_seller_details = async (req, res) => {
   console.log(shop_no);
   
   try {
-    if (shop_no) {
-      let query = `SELECT 
-                    d.domain_name, 
-                    d.domain_id, 
-                    s.sector_id,
-                    s.sector_name, 
-                    ef.poc_name,
-                    ef.address,
-                    ef.business_name,
-                    ef.gst,
-                    ef.msme,
-                    ef.latitude,
-                    ef.longitude,
-                    u.pan_no,
-                    u.cin_no,
-                    u.phone_no_1,
-                    u.phone_no_2,
-                    uc.username
-                  FROM sell.eshop_form ef
-                  JOIN sell.users u ON u.user_id = ef.user_id
-                  JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
-                  JOIN domains d ON d.domain_id = ef.domain
-                  JOIN sectors s ON s.sector_id = ef.sector
-                  WHERE 
-                    ef.shop_no = $1`;
-      let result = await ambarsariyaPool.query(query, [shop_no]);
-      if (result.rowCount === 0) {
-        // If no rows are found, assume the shop_no is invalid
-        res
-          .json({ valid: false, message: "Invalid shop number." });
-      } else {
-        res.json({ valid: true, data: result.rows });
+  if (shop_no) {
+    let query = `SELECT 
+                  d.domain_name, 
+                  d.domain_id, 
+                  s.sector_id,
+                  s.sector_name, 
+                  ef.poc_name,
+                  ef.address,
+                  ef.business_name,
+                  ef.gst,
+                  ef.msme,
+                  ef.latitude,
+                  ef.longitude,
+                  ef.upi_id,
+                  u.pan_no,
+                  u.cin_no,
+                  u.phone_no_1,
+                  u.phone_no_2,
+                  uc.username
+                FROM sell.eshop_form ef
+                JOIN sell.users u ON u.user_id = ef.user_id
+                JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+                JOIN domains d ON d.domain_id = ef.domain
+                JOIN sectors s ON s.sector_id = ef.sector
+                WHERE ef.shop_no = $1`;
+
+    let result = await ambarsariyaPool.query(query, [shop_no]);
+
+    if (result.rowCount === 0) {
+      return res.json({ valid: false, message: "Invalid shop number." });
+    }
+
+    const data = result.rows;
+
+    // Decrypt UPI ID only if it's not null
+    if (data[0].upi_id) {
+      try {
+        const decryptedUpi = decryptData(data[0].upi_id); // Replace with your decryption method
+        data[0].upi_id = decryptedUpi;
+      } catch (err) {
+        console.error("UPI decryption failed:", err.message);
+        data[0].upi_id = null; // Or leave as-is depending on your use case
       }
     }
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ e: "Failed to fetch data" });
+
+    res.json({ valid: true, data });
   }
+} catch (e) {
+  console.error(e);
+  res.status(500).json({ e: "Failed to fetch data" });
+}
+
 };
 
 const get_buyer_details = async (req, res) => {
