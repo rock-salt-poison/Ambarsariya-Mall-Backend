@@ -6,6 +6,11 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_SECRET,
 });
 
+const auth = {
+  username: process.env.RAZORPAY_KEY,
+  password: process.env.RAZORPAY_SECRET,
+};
+
 // Create Razorpay order
 
 
@@ -29,12 +34,12 @@ const post_createOrder = async (req, res) => {
 
 const post_createContact = async (req, res) => {
     try {
-        const { name, email, contact } = req.body;
+        const { name, email, contact, type } = req.body;
         const response = await axios.post('https://api.razorpay.com/v1/contacts', {
             name,
             email,
             contact,
-            type: 'vendor',
+            type,
         }, { auth });
 
         res.json(response.data);
@@ -45,13 +50,7 @@ const post_createContact = async (req, res) => {
 
 const post_createFundAccount = async (req, res) => {
   try {
-    const { name, contact, email, upi_id } = req.body;
-
-    // Razorpay basic auth
-    const auth = {
-      username: process.env.RAZORPAY_KEY,
-      password: process.env.RAZORPAY_SECRET,
-    };
+    const { name, contact, email, upi_id , type} = req.body;
 
     // 1. Create Contact
     const contactResp = await axios.post(
@@ -60,7 +59,7 @@ const post_createFundAccount = async (req, res) => {
         name,
         contact,
         email,
-        type: 'vendor',
+        type,
       },
       { auth }
     );
@@ -90,11 +89,6 @@ const post_createFundAccount = async (req, res) => {
 const post_payoutToShopkeeper = async (req, res) => {
   try {
     const { fund_account_id, amount } = req.body;
-
-    const auth = {
-      username: process.env.RAZORPAY_KEY,
-      password: process.env.RAZORPAY_SECRET,
-    };
 
     const response = await axios.post(
       'https://api.razorpay.com/v1/payouts',
