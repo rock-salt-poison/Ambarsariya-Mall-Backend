@@ -717,6 +717,8 @@ const update_eshop = async (req, resp) => {
     category,
     advt_video,
     key_players,
+    razorpay_contact_id,
+    razorpay_fund_account_id
   } = req.body;
 
   console.log("Received file:", req.file); // Log the file
@@ -770,7 +772,9 @@ const update_eshop = async (req, resp) => {
            daily_walkin = $8,
            parking_availability = $9,
            category = $10,
-           advertisement_video_url = $11
+           advertisement_video_url = $11,
+           razorpay_contact_id = $13,
+           razorpay_fund_account_id = $14
        WHERE shop_access_token = $12
        RETURNING shop_access_token`,
       [
@@ -786,6 +790,8 @@ const update_eshop = async (req, resp) => {
         category,
         advt_video,
         shopAccessToken,
+        razorpay_contact_id,
+        razorpay_fund_account_id
       ]
     );
 

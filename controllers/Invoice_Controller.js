@@ -187,6 +187,8 @@ const get_seller_details = async (req, res) => {
                   ef.msme,
                   ef.latitude,
                   ef.longitude,
+                  ef.razorpay_contact_id,
+                  ef.razorpay_fund_account_id,
                   ef.upi_id,
                   u.pan_no,
                   u.cin_no,

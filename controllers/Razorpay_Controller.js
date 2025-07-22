@@ -79,7 +79,7 @@ const post_createFundAccount = async (req, res) => {
 
     const fundAccountId = fundResp.data.id;
 
-    res.json({ fundAccountId });
+    res.json({ fundAccountId, contact_id });
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: err.message });
