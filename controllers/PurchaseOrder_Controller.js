@@ -203,7 +203,12 @@ const get_purchase_order_details = async (req, res) => {
 
   try {
     if (po_access_token) {
-      let query = `SELECT * FROM sell.purchase_order WHERE po_access_token = $1`;
+      let query = `SELECT po.*, uc.access_token FROM sell.purchase_order po 
+                  LEFT JOIN sell.eshop_form ef
+                  ON ef.shop_no = po.seller_id
+                  LEFT JOIN sell.user_credentials uc
+                  ON uc.user_id = ef.user_id
+                  WHERE po.po_access_token = $1`;
       let result = await ambarsariyaPool.query(query, [po_access_token]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid

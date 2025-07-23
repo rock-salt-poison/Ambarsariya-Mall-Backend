@@ -4,16 +4,15 @@ const bcrypt = require("bcrypt");
 const { uploadFileToGCS } = require("../utils/storageBucket");
 const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
 const { encryptData, decryptData } = require("../utils/cryptoUtils");
-const nodemailer = require('nodemailer');
-const {broadcastMessage, emitChatMessage} = require("../webSocket");
-
+const nodemailer = require("nodemailer");
+const { broadcastMessage, emitChatMessage } = require("../webSocket");
 
 const get_checkIfMemberExists = async (req, res) => {
   const { username, phone1, phone2 } = req.query;
   console.log(username, phone1, phone2);
 
-  const normalizedPhone1 = phone1.replace(/\D/g, '').slice(-10);
-  const normalizedPhone2 = phone2.replace(/\D/g, '').slice(-10);
+  const normalizedPhone1 = phone1.replace(/\D/g, "").slice(-10);
+  const normalizedPhone2 = phone2.replace(/\D/g, "").slice(-10);
 
   try {
     const memberQuery = `
@@ -68,8 +67,10 @@ const get_checkIfMemberExists = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error checking member/shop existence:', error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+    console.error("Error checking member/shop existence:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
 
@@ -96,7 +97,7 @@ const get_checkIfShopExists = async (req, res) => {
         exists: true,
         message: "Shop already exists for this username.",
         shop_no: result.rows[0].shop_no,
-        access_token: result.rows[0].access_token
+        access_token: result.rows[0].access_token,
       });
     } else {
       return res.status(200).json({
@@ -105,8 +106,10 @@ const get_checkIfShopExists = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error checking shop existence:', error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+    console.error("Error checking shop existence:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
 
@@ -161,8 +164,10 @@ const get_checkIfMemberIsMerchant = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error checking member/shop existence:', error);
-    return res.status(500).json({ message: 'Internal server error.', error: error.message });
+    console.error("Error checking member/shop existence:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
 
@@ -177,7 +182,9 @@ const get_checkIfPaidShopExists = async (req, res) => {
       JOIN sell.user_credentials uc ON ef.user_id = uc.user_id
       WHERE LOWER(uc.username) = LOWER($1) AND ef.paid_version = true;
     `;
-    const paidResult = await ambarsariyaPool.query(paidShopQuery, [username.toLowerCase()]);
+    const paidResult = await ambarsariyaPool.query(paidShopQuery, [
+      username.toLowerCase(),
+    ]);
 
     if (paidResult.rows.length > 0) {
       return res.status(200).json({
@@ -185,7 +192,7 @@ const get_checkIfPaidShopExists = async (req, res) => {
         isPaid: true,
         message: "Paid shop exists for this username.",
         shop_no: paidResult.rows[0].shop_no,
-        access_token: paidResult.rows[0].access_token
+        access_token: paidResult.rows[0].access_token,
       });
     }
 
@@ -197,7 +204,9 @@ const get_checkIfPaidShopExists = async (req, res) => {
       WHERE LOWER(uc.username) = LOWER($1)
       LIMIT 1;
     `;
-    const anyResult = await ambarsariyaPool.query(anyShopQuery, [username.toLowerCase()]);
+    const anyResult = await ambarsariyaPool.query(anyShopQuery, [
+      username.toLowerCase(),
+    ]);
 
     if (anyResult.rows.length > 0) {
       return res.status(200).json({
@@ -205,7 +214,7 @@ const get_checkIfPaidShopExists = async (req, res) => {
         isPaid: false,
         message: "Shop exists, but not using paid version.",
         shop_no: anyResult.rows[0].shop_no,
-        access_token: anyResult.rows[0].access_token
+        access_token: anyResult.rows[0].access_token,
       });
     }
 
@@ -213,15 +222,15 @@ const get_checkIfPaidShopExists = async (req, res) => {
     return res.status(200).json({
       exists: false,
       isPaid: false,
-      message: "No shop found for this username."
+      message: "No shop found for this username.",
     });
-
   } catch (error) {
     console.error("Error checking shop existence:", error);
-    return res.status(500).json({ message: "Internal server error.", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
-
 
 const post_book_eshop = async (req, resp) => {
   const {
@@ -252,7 +261,7 @@ const post_book_eshop = async (req, resp) => {
     homeVisit,
     delivery,
     user_type,
-    shop_access_token
+    shop_access_token,
   } = req.body;
 
   // Create `type_of_service` array
@@ -264,7 +273,7 @@ const post_book_eshop = async (req, resp) => {
   try {
     await ambarsariyaPool.query("BEGIN");
     console.log(shop_access_token);
-    
+
     if (shop_access_token) {
       // -----------------------
       // UPDATE Existing Eshop
@@ -292,7 +301,7 @@ const post_book_eshop = async (req, resp) => {
           paidVersion,
           merchant,
           premiumVersion,
-          shop_access_token
+          shop_access_token,
         ]
       );
 
@@ -301,7 +310,7 @@ const post_book_eshop = async (req, resp) => {
       return resp.status(200).json({
         message: "E-shop data successfully updated.",
         shop_no: result.rows[0]?.shop_no,
-        shop_access_token
+        shop_access_token,
       });
     } else {
       // -----------------------
@@ -320,7 +329,8 @@ const post_book_eshop = async (req, resp) => {
       if (existingMemberCheck.rows.length > 0) {
         await ambarsariyaPool.query("ROLLBACK");
         return resp.status(409).json({
-          message: "A member with the same username or phone number already exists.",
+          message:
+            "A member with the same username or phone number already exists.",
         });
       }
 
@@ -361,7 +371,7 @@ const post_book_eshop = async (req, resp) => {
           paidVersion,
           merchant,
           member_detail,
-          premiumVersion
+          premiumVersion,
         ]
       );
 
@@ -390,7 +400,7 @@ const post_book_eshop = async (req, resp) => {
       return resp.status(201).json({
         message: "E-shop data successfully created.",
         shop_access_token: newShopAccessToken,
-        user_access_token
+        user_access_token,
       });
     }
   } catch (err) {
@@ -398,36 +408,52 @@ const post_book_eshop = async (req, resp) => {
     console.error("Error storing data", err);
     return resp.status(500).json({
       message: "Error storing data",
-      error: err.message
+      error: err.message,
     });
   }
 };
-
-
 
 const post_member_data = async (req, resp) => {
   console.log("Received files:", req.files["profile_img"]);
 
   const {
-    name, username, password, address,
-    latitude, longitude, phone, gender, dob,
-    access_token, is_merchant, merchant_access_token
+    name,
+    username,
+    password,
+    address,
+    latitude,
+    longitude,
+    phone,
+    gender,
+    dob,
+    access_token,
+    is_merchant,
+    merchant_access_token,
   } = req.body;
 
   let uploadedProfileUrl = null;
   let uploadedBgImgUrl = null;
 
-  const profileFile = req.files["profile_img"] ? req.files["profile_img"][0] : null;
+  const profileFile = req.files["profile_img"]
+    ? req.files["profile_img"][0]
+    : null;
   const bgFile = req.files["bg_img"] ? req.files["bg_img"][0] : null;
 
   if (profileFile) {
-    uploadedProfileUrl = await uploadFileToGCS(profileFile, "member/display_picture");
+    uploadedProfileUrl = await uploadFileToGCS(
+      profileFile,
+      "member/display_picture"
+    );
   }
   if (bgFile) {
-    uploadedBgImgUrl = await uploadFileToGCS(bgFile, "member/background_picture");
+    uploadedBgImgUrl = await uploadFileToGCS(
+      bgFile,
+      "member/background_picture"
+    );
   }
 
-  const title = gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
+  const title =
+    gender === "Male" ? "Mr." : gender === "Female" ? "Ms." : "Other";
 
   try {
     await ambarsariyaPool.query("BEGIN");
@@ -495,7 +521,7 @@ const post_member_data = async (req, resp) => {
             dob,
             uploadedProfileUrl || existingProfileImg,
             uploadedBgImgUrl || existingBgImg,
-            newUserId
+            newUserId,
           ]
         );
 
@@ -529,7 +555,15 @@ const post_member_data = async (req, resp) => {
          (user_id, address, latitude, longitude, dob, profile_img, bg_img)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING member_id`,
-        [newUserId, address, latitude, longitude, dob, uploadedProfileUrl, uploadedBgImgUrl]
+        [
+          newUserId,
+          address,
+          latitude,
+          longitude,
+          dob,
+          uploadedProfileUrl,
+          uploadedBgImgUrl,
+        ]
       );
 
       member_id = memberProfilesData.rows[0].member_id;
@@ -541,16 +575,16 @@ const post_member_data = async (req, resp) => {
       message: "Form submitted successfully.",
       user_access_token: userAccessToken,
       member_id: member_id,
-      isMerchant: isMerchant
+      isMerchant: isMerchant,
     });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
-    resp.status(500).json({ message: "Error storing data", error: err.message });
+    resp
+      .status(500)
+      .json({ message: "Error storing data", error: err.message });
   }
 };
-
-
 
 // const update_shop_user_to_merchant = async (req, resp) => {
 //   const { user_access_token, member_id, is_merchant } = req.body;
@@ -558,7 +592,7 @@ const post_member_data = async (req, resp) => {
 //   try {
 //     // Step 1: Get user_id from user_credentials using access_token
 //     const userResult = await ambarsariyaPool.query(
-//       `SELECT u.user_id FROM sell.user_credentials uc 
+//       `SELECT u.user_id FROM sell.user_credentials uc
 //         JOIN sell.users u ON u.user_id = uc.user_id
 //         WHERE uc.access_token = $1 AND u.user_type = 'shop'`,
 //       [user_access_token]
@@ -690,9 +724,8 @@ const update_shop_user_to_merchant = async (req, resp) => {
       message: "Merchant setup successful.",
       merchant_id,
       shop_id,
-      shop_access_token: eshopResult.rows[0].shop_access_token
+      shop_access_token: eshopResult.rows[0].shop_access_token,
     });
-
   } catch (err) {
     console.error("Error during merchant update:", err);
     return resp.status(500).json({
@@ -701,9 +734,6 @@ const update_shop_user_to_merchant = async (req, resp) => {
     });
   }
 };
-
-
-
 
 const update_eshop = async (req, resp) => {
   const {
@@ -718,7 +748,7 @@ const update_eshop = async (req, resp) => {
     advt_video,
     key_players,
     razorpay_contact_id,
-    razorpay_fund_account_id
+    razorpay_fund_account_id,
   } = req.body;
 
   console.log("Received file:", req.file); // Log the file
@@ -791,7 +821,7 @@ const update_eshop = async (req, resp) => {
         advt_video,
         shopAccessToken,
         razorpay_contact_id,
-        razorpay_fund_account_id
+        razorpay_fund_account_id,
       ]
     );
 
@@ -831,7 +861,9 @@ const update_eshop_location = async (req, resp) => {
       shop_access_token,
     });
 
-    const locationPinDropArray = location_pin_drop.map((obj) => JSON.stringify(obj));
+    const locationPinDropArray = location_pin_drop.map((obj) =>
+      JSON.stringify(obj)
+    );
 
     // Perform the UPDATE operation
     const eshopResult = await ambarsariyaPool.query(
@@ -849,7 +881,9 @@ const update_eshop_location = async (req, resp) => {
 
     // If no rows were affected, return an error
     if (eshopResult.rows.length === 0) {
-      return resp.json({ message: "No e-shop found with the provided access token." });
+      return resp.json({
+        message: "No e-shop found with the provided access token.",
+      });
     }
 
     resp.status(200).json({
@@ -858,7 +892,9 @@ const update_eshop_location = async (req, resp) => {
     });
   } catch (err) {
     console.error("Error updating e-shop location:", err);
-    resp.status(500).json({ message: "Error updating data", error: err.message });
+    resp
+      .status(500)
+      .json({ message: "Error updating data", error: err.message });
   }
 };
 
@@ -880,15 +916,18 @@ const update_shop_is_open_status = async (req, resp) => {
 
     return resp.status(200).json({
       message: "E-shop open status updated successfully.",
-      updated: isOpen
+      updated: isOpen,
     });
-
   } catch (err) {
     console.error("Error updating e-shop open status:", err);
-    return resp.status(500).json({ message: "Server error updating open status.", error: err.message });
+    return resp
+      .status(500)
+      .json({
+        message: "Server error updating open status.",
+        error: err.message,
+      });
   }
 };
-
 
 const get_shopUserData = async (req, res) => {
   try {
@@ -993,10 +1032,10 @@ GROUP BY ef.shop_no, ef.user_id, u.user_type, uc.username, u.title,
     }
 
     const shopData = result.rows;
-    
 
     // Decrypt UPI ID
-    shopData[0].upi_id = shopData[0].upi_id !==null ? decryptData(shopData[0].upi_id) : null;
+    shopData[0].upi_id =
+      shopData[0].upi_id !== null ? decryptData(shopData[0].upi_id) : null;
 
     res.json(shopData);
   } catch (err) {
@@ -1011,11 +1050,10 @@ const get_memberData = async (req, res) => {
   try {
     const { memberAccessToken } = req.query;
     console.log(memberAccessToken);
-    
+
     // Validate that the member_access_token is provided
     if (!memberAccessToken) {
-      return res
-        .json({ message: "Member access token is required." });
+      return res.json({ message: "Member access token is required." });
     }
 
     const query = `
@@ -1146,8 +1184,7 @@ const post_authLogin = async (req, res) => {
 
   // Input validation
   if (!username || !password || !type) {
-    return res
-      .json({ message: "Username, password, and type are required." });
+    return res.json({ message: "Username, password, and type are required." });
   }
 
   try {
@@ -1376,8 +1413,7 @@ WHERE shop.user_type = 'shop'
   AND member.user_type = 'member'
   AND shop.is_merchant = true
   AND member.is_merchant = true
-  AND shop.user_id <> member.user_id;`,
-        
+  AND shop.user_id <> member.user_id;`
       );
       res.json(result.rows);
     } else {
@@ -1439,7 +1475,15 @@ const post_visitorData = async (req, resp) => {
         `INSERT INTO sell.support (name, phone_no, otp, domain_id, sector_id, user_type, access_token)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING access_token`,
-        [name, phone_no, otp, data.domain, data.sector, data.user_type, data.access_token]
+        [
+          name,
+          phone_no,
+          otp,
+          data.domain,
+          data.sector,
+          data.user_type,
+          data.access_token,
+        ]
       );
       newAccessToken = insertSupport.rows[0].access_token;
     } else {
@@ -1474,7 +1518,7 @@ const get_visitorData = async (req, res) => {
     const { token, sender_id } = req.params;
     let query, params;
 
-    console.log(token, sender_id)
+    console.log(token, sender_id);
     if (sender_id) {
       // If sender_id exists, include response subquery
       query = `
@@ -1548,15 +1592,28 @@ const get_visitorData = async (req, res) => {
     }
   } catch (err) {
     console.error("Error processing request:", err);
-    res.status(500).json({ message: "Error processing request.", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
   }
 };
 
-
 const put_visitorData = async (req, resp) => {
-  const { name, phone_no, domain, domain_name, sector, sector_name,sending_from, purpose, message, user_type, access_token } = req.body;
-  console.log('Received request to process visitor data', req.body);
-  broadcastMessage('Processing visitor\'s data');
+  const {
+    name,
+    phone_no,
+    domain,
+    domain_name,
+    sector,
+    sector_name,
+    sending_from,
+    purpose,
+    message,
+    user_type,
+    access_token,
+  } = req.body;
+  console.log("Received request to process visitor data", req.body);
+  broadcastMessage("Processing visitor's data");
 
   try {
     // Check if there are merchants with the same domain and sector
@@ -1569,7 +1626,8 @@ const put_visitorData = async (req, resp) => {
     );
 
     if (merchantsCheckQuery.rows.length === 0) {
-      const errorMessage = 'No merchants found with the same domain and sector.';
+      const errorMessage =
+        "No merchants found with the same domain and sector.";
       console.error(errorMessage);
       broadcastMessage(errorMessage);
       return resp.json({ message: errorMessage });
@@ -1579,9 +1637,12 @@ const put_visitorData = async (req, resp) => {
     const currentfile = req.file ? req.file : null;
 
     if (currentfile) {
-      uploadedFile = await uploadFileToGCS(currentfile, "support_page/file_attached");
-      console.log('File uploaded to GCS:', uploadedFile);
-      broadcastMessage('File uploaded to GCS');
+      uploadedFile = await uploadFileToGCS(
+        currentfile,
+        "support_page/file_attached"
+      );
+      console.log("File uploaded to GCS:", uploadedFile);
+      broadcastMessage("File uploaded to GCS");
     }
 
     // Check if access_token already exists
@@ -1591,8 +1652,10 @@ const put_visitorData = async (req, resp) => {
     );
 
     let result;
-    let visitor_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].visitor_id : null;
-    let support_id = existingRecord.rows.length > 0 ? existingRecord.rows[0].support_id : null;
+    let visitor_id =
+      existingRecord.rows.length > 0 ? existingRecord.rows[0].visitor_id : null;
+    let support_id =
+      existingRecord.rows.length > 0 ? existingRecord.rows[0].support_id : null;
     let existingFile = null;
 
     if (existingRecord.rows.length > 0) {
@@ -1600,8 +1663,8 @@ const put_visitorData = async (req, resp) => {
 
       if (existingFile && uploadedFile) {
         await deleteFileFromGCS(existingFile);
-        console.log('Old file deleted from GCS:', existingFile);
-        broadcastMessage('Old file deleted from GCS');
+        console.log("Old file deleted from GCS:", existingFile);
+        broadcastMessage("Old file deleted from GCS");
       }
 
       result = await ambarsariyaPool.query(
@@ -1614,11 +1677,17 @@ const put_visitorData = async (req, resp) => {
              updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
          WHERE access_token = $6
          RETURNING visitor_id, support_id`,
-        [domain, sector, purpose, message, uploadedFile || existingFile, access_token]
+        [
+          domain,
+          sector,
+          purpose,
+          message,
+          uploadedFile || existingFile,
+          access_token,
+        ]
       );
-      console.log('Visitor data updated successfully');
-      broadcastMessage('Visitor data updated successfully!');
-
+      console.log("Visitor data updated successfully");
+      broadcastMessage("Visitor data updated successfully!");
     } else {
       result = await ambarsariyaPool.query(
         `INSERT INTO Sell.support 
@@ -1627,17 +1696,27 @@ const put_visitorData = async (req, resp) => {
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata', 
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
          RETURNING visitor_id, support_id`,
-        [name, phone_no, domain, sector, purpose, message, uploadedFile, user_type, access_token]
+        [
+          name,
+          phone_no,
+          domain,
+          sector,
+          purpose,
+          message,
+          uploadedFile,
+          user_type,
+          access_token,
+        ]
       );
-      console.log('New visitor record created successfully');
-      broadcastMessage('New visitor record created successfully!');
+      console.log("New visitor record created successfully");
+      broadcastMessage("New visitor record created successfully!");
       visitor_id = result.rows[0].visitor_id;
       support_id = result.rows[0].support_id;
     }
 
     if (purpose) {
       console.log(`Purpose is ${purpose}. Notifying merchants...`);
-      broadcastMessage('Notifying merchants...');
+      broadcastMessage("Notifying merchants...");
 
       const usersQuery = await ambarsariyaPool.query(
         `SELECT ef.shop_no, uc.username, uc.user_id, u.user_type
@@ -1649,12 +1728,12 @@ const put_visitorData = async (req, resp) => {
       );
 
       if (usersQuery.rows.length > 0) {
-        console.log('Merchants to be notified:', usersQuery.rows);
+        console.log("Merchants to be notified:", usersQuery.rows);
 
         const transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT,
-          secure: process.env.SMTP_SECURE === 'true',
+          secure: process.env.SMTP_SECURE === "true",
           auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
@@ -1663,16 +1742,17 @@ const put_visitorData = async (req, resp) => {
 
         for (let user of usersQuery.rows) {
           console.log(support_id);
-          
+
           // Determine the link to the file, either new or existing
-          const fileLink = uploadedFile || existingFile
-            ? `You can view the file here: ${uploadedFile || existingFile}`
-            : 'No file attached';
+          const fileLink =
+            uploadedFile || existingFile
+              ? `You can view the file here: ${uploadedFile || existingFile}`
+              : "No file attached";
 
           const mailOptions = {
             from: process.env.SMTP_USER,
             to: user.username,
-            subject: 'New Buyer Inquiry',
+            subject: "New Buyer Inquiry",
             text: `Hello ${user.username},
 
 A new user has shown interest in buying something from your store.
@@ -1701,7 +1781,15 @@ Your Support Team`,
                 (domain_id, sector_id, visitor_id, sent_to, sent_from, purpose, message, created_at)
               VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
               RETURNING id`,
-              [domain, sector, visitor_id, user.shop_no, sending_from, purpose, message]
+              [
+                domain,
+                sector,
+                visitor_id,
+                user.shop_no,
+                sending_from,
+                purpose,
+                message,
+              ]
             );
 
             const notification_id = notificationResult.rows[0].id;
@@ -1709,7 +1797,7 @@ Your Support Team`,
             // Send the email
             await transporter.sendMail(mailOptions);
             console.log(`Email sent to merchant: ${user.username}`);
-            broadcastMessage('Email sent to merchants.');
+            broadcastMessage("Email sent to merchants.");
 
             // Insert the corresponding chat message
             await ambarsariyaPool.query(
@@ -1726,31 +1814,30 @@ Your Support Team`,
                 sending_from,
                 user_type,
                 user.shop_no,
-                'shop',
-                  `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
+                "shop",
+                `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
               ]
             );
-
-
           } catch (error) {
             console.error(`Error sending email to ${user.username}:`, error);
-            broadcastMessage('Error sending email to merchants.');
+            broadcastMessage("Error sending email to merchants.");
           }
         }
       } else {
-        console.log('No merchants found with the same domain and sector.');
-        broadcastMessage('No merchants found with the same domain and sector.');
+        console.log("No merchants found with the same domain and sector.");
+        broadcastMessage("No merchants found with the same domain and sector.");
       }
-    } 
+    }
     // else {
     //   console.log('No email will be sent.');
     //   broadcastMessage('Purpose is not "buy". No email will be sent.');
     // }
 
     resp.status(200).json({
-      message: existingRecord.rows.length > 0
-        ? "Visitor data updated successfully."
-        : "New visitor record created successfully.",
+      message:
+        existingRecord.rows.length > 0
+          ? "Visitor data updated successfully."
+          : "New visitor record created successfully.",
       visitor_access_token: visitor_id,
     });
   } catch (err) {
@@ -1764,11 +1851,11 @@ Your Support Team`,
 
 const patch_supportChatResponse = async (req, resp) => {
   const { support_id } = req.params;
-  const response = req.body;  // The new response object
+  const response = req.body; // The new response object
 
   console.log(response);
 
-  const responseArray = [response];  // This will ensure it's an array of JSON objects
+  const responseArray = [response]; // This will ensure it's an array of JSON objects
 
   try {
     // Ensure response is in the correct format as a JSONB array
@@ -1781,10 +1868,14 @@ const patch_supportChatResponse = async (req, resp) => {
          END
        WHERE support_id = $2
        RETURNING *`,
-      [responseArray, support_id]  // Pass the response array directly (without JSON.stringify)
+      [responseArray, support_id] // Pass the response array directly (without JSON.stringify)
     );
 
-    resp.json({ valid: true, data: result.rows[0], message:'Response submitted' });
+    resp.json({
+      valid: true,
+      data: result.rows[0],
+      message: "Response submitted",
+    });
   } catch (error) {
     console.error(error);
     resp.status(500).json({ valid: false, error: "Failed to update response" });
@@ -1831,11 +1922,14 @@ const post_supportChatMessage = async (req, res) => {
     ]);
 
     if (sender_id !== visitor_id) {
-      await ambarsariyaPool.query(`
+      await ambarsariyaPool.query(
+        `
         UPDATE Sell.support
         SET response = true
         WHERE support_id = $1
-      `, [support_id]);
+      `,
+        [support_id]
+      );
     }
 
     await ambarsariyaPool.query("COMMIT");
@@ -1904,11 +1998,17 @@ const get_supportChatMessages = async (req, res) => {
           WHERE scm.support_id = $1 AND scm.notification_id = $2
           ORDER BY scm.sent_at ASC;
         `;
-    const result = await ambarsariyaPool.query(query, [support_id, notification_id]);
+    const result = await ambarsariyaPool.query(query, [
+      support_id,
+      notification_id,
+    ]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
-      res.json({ valid: false, message: "Invalid support id or notificaiton id" });
+      res.json({
+        valid: false,
+        message: "Invalid support id or notificaiton id",
+      });
     } else {
       res.json({ valid: true, data: result.rows });
     }
@@ -1962,17 +2062,20 @@ const delete_supportChatNotifications = async (req, res) => {
   const { id } = req.params;
 
   try {
-    await ambarsariyaPool.query("DELETE FROM sell.support_chat_notifications WHERE id = $1", [id]);
+    await ambarsariyaPool.query(
+      "DELETE FROM sell.support_chat_notifications WHERE id = $1",
+      [id]
+    );
     res.json({ message: "Notification deleted successfully" });
   } catch (err) {
     console.error("Error deleting notification:", err);
     res.status(500).json({ error: "Failed to delete message" });
   }
-}
+};
 
 const put_forgetPassword = async (req, resp) => {
   const { username, password, user_type } = req.body;
-console.log(user_type);
+  console.log(user_type);
 
   try {
     // Determine allowed user types based on the user_type
@@ -2023,7 +2126,7 @@ console.log(user_type);
 };
 
 const post_verify_otp = async (req, res) => {
-  const { username, otp, user_type } = req.body;  // Ensure that 'user_type' is passed in the request body
+  const { username, otp, user_type } = req.body; // Ensure that 'user_type' is passed in the request body
 
   try {
     // Corrected SQL query to SELECT from the database
@@ -2038,20 +2141,24 @@ const post_verify_otp = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [username, user_type]);
 
     if (result.rows.length === 0) {
-      return res.status(400).send({ message: 'OTP not found.' });
+      return res.status(400).send({ message: "OTP not found." });
     }
 
     const otpRecord = result.rows[0];
 
-     // Get current UTC time
+    // Get current UTC time
     let nowUtc = new Date();
 
     // Convert UTC to IST (Add 5 hours 30 minutes)
-    let nowIST = new Date(nowUtc.getTime() + (5.5 * 60 * 60 * 1000));
+    let nowIST = new Date(nowUtc.getTime() + 5.5 * 60 * 60 * 1000);
 
     // Convert stored UTC time (created_otp_at & expiry_otp_at) to IST
-    let otpCreatedIST = new Date(new Date(otpRecord.otp_created_at).getTime() + (5.5 * 60 * 60 * 1000));
-    let otpExpiryIST = new Date(new Date(otpRecord.otp_expiry_at).getTime() + (5.5 * 60 * 60 * 1000));
+    let otpCreatedIST = new Date(
+      new Date(otpRecord.otp_created_at).getTime() + 5.5 * 60 * 60 * 1000
+    );
+    let otpExpiryIST = new Date(
+      new Date(otpRecord.otp_expiry_at).getTime() + 5.5 * 60 * 60 * 1000
+    );
 
     console.log("Current IST Time:", nowIST.toISOString());
     console.log("OTP Created Time (IST):", otpCreatedIST.toISOString());
@@ -2059,26 +2166,28 @@ const post_verify_otp = async (req, res) => {
 
     // Check if OTP is expired
     if (nowIST > otpExpiryIST) {
-      return res.status(400).send({ message: 'OTP has expired. Request a new one.' });
+      return res
+        .status(400)
+        .send({ message: "OTP has expired. Request a new one." });
     }
 
     // Check if OTP is valid
     if (otpRecord.otp !== otp) {
-      return res.status(400).send({ message: 'Invalid OTP.' });
+      return res.status(400).send({ message: "Invalid OTP." });
     }
 
     // Additional check: OTP creation time should not be in the future
     if (nowIST < otpCreatedIST) {
-      return res.status(400).send({ message: 'OTP creation time is invalid.' });
+      return res.status(400).send({ message: "OTP creation time is invalid." });
     }
 
-    res.status(200).send({ message: 'OTP verified successfully.' });
+    res.status(200).send({ message: "OTP verified successfully." });
 
     // Optionally, delete OTP record after successful verification
     // await pool.query('DELETE FROM otp_validations WHERE id = $1', [otpRecord.id]);
   } catch (err) {
     console.error(err);
-    res.status(500).send({ message: 'Error verifying OTP.' });
+    res.status(500).send({ message: "Error verifying OTP." });
   }
 };
 
@@ -2221,8 +2330,7 @@ const post_discount_coupons = async (req, res) => {
 
       for (const [couponType, discountData] of Object.entries(discounts)) {
         if (!discountData.checked) continue;
-        console.log('discountData : ', discountData);
-        
+        console.log("discountData : ", discountData);
 
         // Ensure the date_range is valid, if not set default values
         const validityStart = inputData.validity_start || "2024-01-01"; // Default to a specific start date if missing
@@ -2252,7 +2360,7 @@ const post_discount_coupons = async (req, res) => {
           shopNo, // Use shopNo here
           validityStart,
           validityEnd,
-          no_of_coupons
+          no_of_coupons,
         ]);
 
         const couponId = couponResult.rows[0].id;
@@ -2422,7 +2530,6 @@ const get_nearby_shops = async (req, res) => {
   }
 };
 
-
 const get_nearby_areas_for_shop = async (req, res) => {
   const { shopToken, shop_no } = req.params;
 
@@ -2474,7 +2581,6 @@ const get_nearby_areas_for_shop = async (req, res) => {
   }
 };
 
-
 const post_member_emotional = async (req, res) => {
   const { member_id } = req.params;
   const {
@@ -2487,7 +2593,7 @@ const post_member_emotional = async (req, res) => {
     mental_resolution_date,
     mental_resolution_time,
     mental_resolution_message,
-    notify_mental_resolution
+    notify_mental_resolution,
   } = req.body.data;
 
   try {
@@ -2536,7 +2642,7 @@ const post_member_emotional = async (req, res) => {
       mental_resolution_date,
       mental_resolution_time,
       mental_resolution_message,
-      notify_mental_resolution
+      notify_mental_resolution,
     ];
 
     await ambarsariyaPool.query(upsertQuery, values);
@@ -2730,7 +2836,6 @@ const get_member_emotional = async (req, res) => {
 //   }
 // };
 
-
 const post_member_personal = async (req, resp) => {
   const { member_id } = req.params;
   const {
@@ -2823,14 +2928,17 @@ const post_member_personal = async (req, resp) => {
 
     await ambarsariyaPool.query("COMMIT");
 
-    resp.status(201).json({ message: "Details stored or updated successfully." });
+    resp
+      .status(201)
+      .json({ message: "Details stored or updated successfully." });
   } catch (err) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error storing data", err);
-    resp.status(500).json({ message: "Error storing data", error: err.message });
+    resp
+      .status(500)
+      .json({ message: "Error storing data", error: err.message });
   }
 };
-
 
 const get_member_personal = async (req, res) => {
   try {
@@ -2857,7 +2965,6 @@ const get_member_personal = async (req, res) => {
       .json({ message: "Error processing request.", error: err.message });
   }
 };
-
 
 const get_member_professional = async (req, res) => {
   try {
@@ -2910,7 +3017,7 @@ const post_member_professional = async (req, res) => {
     reference,
     language,
     volunteer_experience,
-    professional_goals
+    professional_goals,
   } = req.body.data;
 
   try {
@@ -2983,7 +3090,7 @@ const post_member_professional = async (req, res) => {
       reference,
       language,
       volunteer_experience,
-      professional_goals
+      professional_goals,
     ];
 
     await ambarsariyaPool.query(upsertQuery, values);
@@ -3021,7 +3128,7 @@ const post_member_relations = async (req, res) => {
     position_score,
     arrange_event,
     next_event,
-    passed_event
+    passed_event,
   } = req.body.data;
 
   try {
@@ -3062,7 +3169,7 @@ const post_member_relations = async (req, res) => {
 
     const values = [
       member_id,
-      user_id, 
+      user_id,
       relation,
       other_relation,
       place_name,
@@ -3083,7 +3190,7 @@ const post_member_relations = async (req, res) => {
       position_score,
       arrange_event,
       next_event,
-      passed_event
+      passed_event,
     ];
 
     await ambarsariyaPool.query(upsertQuery, values);
@@ -3094,30 +3201,30 @@ const post_member_relations = async (req, res) => {
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving relations data:", error);
-    res.status(500).json({ error: "Internal server error", message:error.error});
+    res
+      .status(500)
+      .json({ error: "Internal server error", message: error.error });
   }
 };
 
-
 const post_member_community = async (req, res) => {
   const {
-    member_id, 
+    member_id,
     user_id,
     member_relation_id,
     community,
     journal,
     relation,
     group_name,
-    media
+    media,
   } = req.body;
 
   console.log("Received file:", req.file);
 
-
   try {
     await ambarsariyaPool.query("BEGIN");
 
-    let uploadedUSPLink ;
+    let uploadedUSPLink;
 
     if (req.file) {
       const targetFolder = "member/community_file";
@@ -3146,14 +3253,14 @@ const post_member_community = async (req, res) => {
 
     const values = [
       member_id,
-      user_id, 
+      user_id,
       member_relation_id,
       community,
       journal,
       relation,
       group_name,
       media,
-      uploadedUSPLink
+      uploadedUSPLink,
     ];
 
     await ambarsariyaPool.query(upsertQuery, values);
@@ -3164,10 +3271,11 @@ const post_member_community = async (req, res) => {
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving community data:", error);
-    res.status(500).json({ error: "Internal server error", message:error.error});
+    res
+      .status(500)
+      .json({ error: "Internal server error", message: error.error });
   }
 };
-
 
 const post_member_events = async (req, res) => {
   const { member_id } = req.params;
@@ -3184,7 +3292,7 @@ const post_member_events = async (req, res) => {
     longitude,
     date,
     time,
-    rules_or_description
+    rules_or_description,
   } = req.body;
 
   console.log("Received file:", req.file);
@@ -3232,7 +3340,7 @@ const post_member_events = async (req, res) => {
       longitude,
       date,
       time,
-      rules_or_description
+      rules_or_description,
     ];
 
     const result = await ambarsariyaPool.query(insertQuery, insertValues);
@@ -3262,7 +3370,9 @@ const post_member_events = async (req, res) => {
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error creating event:", error);
-    res.status(500).json({ error: "Internal server error", message:error.detail });
+    res
+      .status(500)
+      .json({ error: "Internal server error", message: error.detail });
   }
 };
 
@@ -3295,7 +3405,6 @@ on ee.id = me.event_engagement_id
   }
 };
 
-
 const get_member_relations = async (req, res) => {
   try {
     const { member_id, user_id } = req.params;
@@ -3327,10 +3436,11 @@ const get_member_relations = async (req, res) => {
     }
   } catch (err) {
     console.error("Error processing request:", err);
-    res.status(500).json({ message: "Error processing request.", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
   }
 };
-
 
 const get_member_relation_detail = async (req, res) => {
   try {
@@ -3341,7 +3451,10 @@ const get_member_relation_detail = async (req, res) => {
             SELECT * FROM sell.member_relations 
             WHERE member_id = $1 AND access_token = $2 
         `;
-    const result = await ambarsariyaPool.query(query, [member_id, access_token]);
+    const result = await ambarsariyaPool.query(query, [
+      member_id,
+      access_token,
+    ]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -3356,7 +3469,6 @@ const get_member_relation_detail = async (req, res) => {
       .json({ message: "Error processing request.", error: err.message });
   }
 };
-
 
 const get_member_relation_types = async (req, res) => {
   try {
@@ -3399,7 +3511,10 @@ const get_member_relation_specific_groups = async (req, res) => {
                 (relation = $2 AND relation != 'Other')
                 OR (relation = 'Other' AND other_relation = $2));
         `;
-    const result = await ambarsariyaPool.query(query, [member_id, selectedRelation]);
+    const result = await ambarsariyaPool.query(query, [
+      member_id,
+      selectedRelation,
+    ]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -3419,28 +3534,42 @@ const delete_memberRelation = async (req, res) => {
   const { access_token, id } = req.params;
 
   try {
-    await ambarsariyaPool.query("DELETE FROM sell.member_relations WHERE id = $1 AND access_token = $2", [id, access_token]);
+    await ambarsariyaPool.query(
+      "DELETE FROM sell.member_relations WHERE id = $1 AND access_token = $2",
+      [id, access_token]
+    );
     res.json({ message: "Relation deleted successfully" });
   } catch (err) {
     console.error("Error deleting relation:", err);
     res.status(500).json({ error: "Failed to delete relation" });
   }
-}
+};
 
 const put_member_share_level = async (req, res) => {
-  const {memberId, level, isPublic} = req.body;
+  const { memberId, level, isPublic } = req.body;
 
-  if (!memberId || !level || typeof isPublic !== 'boolean') {
-    return res.status(400).json({ success: false, message: 'Invalid parameters' });
+  if (!memberId || !level || typeof isPublic !== "boolean") {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid parameters" });
   }
 
   // Dynamically choose the table to update based on the share level
-  const table = level.toLowerCase();  // Convert the level to lowercase to match table names (emotional, personal, etc.)
-  
+  const table = level.toLowerCase(); // Convert the level to lowercase to match table names (emotional, personal, etc.)
+
   // Ensure the level corresponds to a valid table
-  const validLevels = ['emotional', 'personal', 'professional', 'relations', 'locations', 'community'];
+  const validLevels = [
+    "emotional",
+    "personal",
+    "professional",
+    "relations",
+    "locations",
+    "community",
+  ];
   if (!validLevels.includes(table)) {
-    return res.status(400).json({ success: false, message: 'Invalid share level' });
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid share level" });
   }
 
   try {
@@ -3449,15 +3578,18 @@ const put_member_share_level = async (req, res) => {
     const result = await ambarsariyaPool.query(query, [isPublic, memberId]);
 
     if (result.rowCount === 0) {
-      return res.json({ success: false, message: 'Data not found' });
+      return res.json({ success: false, message: "Data not found" });
     }
 
-    res.json({ success: true, message: `${level} Share level updated successfully` });
+    res.json({
+      success: true,
+      message: `${level} Share level updated successfully`,
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: 'An error occurred' });
+    res.status(500).json({ success: false, message: "An error occurred" });
   }
-} 
+};
 
 const get_member_share_level = async (req, res) => {
   try {
@@ -3541,7 +3673,10 @@ const get_member_event_purpose_engagement = async (req, res) => {
             ON ee.id = epe.engagement_id
             WHERE ep.event_type = $1 and ep.id=$2
         `;
-    const result = await ambarsariyaPool.query(query, [event_type, event_purpose_id]);
+    const result = await ambarsariyaPool.query(query, [
+      event_type,
+      event_purpose_id,
+    ]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -3570,15 +3705,17 @@ const put_near_by_shops = async (req, res) => {
     const result = await ambarsariyaPool.query(fetchQuery, [famous_area]);
 
     if (result.rows.length === 0) {
-      return res.json({ success: false, message: 'Famous area not found' });
+      return res.json({ success: false, message: "Famous area not found" });
     }
 
     const { id, near_by_shops } = result.rows[0];
 
     // 2. Check if shop_no is already in the array
-    const existing = (near_by_shops || []).map(item => item);
+    const existing = (near_by_shops || []).map((item) => item);
     if (existing.includes(shop_no)) {
-      return res.status(400).json({ success: false, message: 'shop already exists' });
+      return res
+        .status(400)
+        .json({ success: false, message: "shop already exists" });
     }
 
     // 3. Append shop_no to the JSONB array using PostgreSQL operators
@@ -3595,11 +3732,10 @@ const put_near_by_shops = async (req, res) => {
 
     await ambarsariyaPool.query(updateQuery, [shop_no, id]);
 
-    res.json({ success: true, message: 'shop_no added successfully' });
-
+    res.json({ success: true, message: "shop_no added successfully" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -3628,11 +3764,9 @@ const get_existing_domains = async (req, res) => {
   }
 };
 
-
 const get_existing_sectors = async (req, res) => {
   try {
     const { domain_id } = req.query; // Extract the member_id from the request
-
 
     // Query for full visitor data
     const query = `
@@ -3663,7 +3797,9 @@ const get_searched_products = async (req, res) => {
     const { domain_id, sector_id, product } = req.query;
 
     if (!domain_id) {
-      return res.status(400).json({ valid: false, message: "Domain ID is required" });
+      return res
+        .status(400)
+        .json({ valid: false, message: "Domain ID is required" });
     }
 
     let query = `
@@ -3673,7 +3809,7 @@ const get_searched_products = async (req, res) => {
       JOIN categories c ON c.category_id = p.category
       WHERE e.domain = $1
     `;
-    
+
     const params = [domain_id];
     let idx = 2;
 
@@ -3700,17 +3836,17 @@ const get_searched_products = async (req, res) => {
     } else {
       res.json({ valid: true, data: result.rows });
     }
-
   } catch (err) {
     console.error("Error processing request:", err);
-    res.status(500).json({ message: "Error processing request.", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
   }
 };
 
 const get_shop_categories = async (req, res) => {
   try {
     const { shop_no } = req.query; // Extract the member_id from the request
-
 
     // Query for full visitor data
     const query = `
@@ -3738,7 +3874,6 @@ const get_shop_products = async (req, res) => {
   try {
     const { shop_no, category } = req.query; // Extract the member_id from the request
 
-
     // Query for full visitor data
     const query = `
           select product_id, product_name, brand from sell.products where category = $2 and shop_no = $1;
@@ -3759,11 +3894,9 @@ const get_shop_products = async (req, res) => {
   }
 };
 
-
 const get_shop_product_items = async (req, res) => {
   try {
     const { product_id } = req.query; // Extract the member_id from the request
-
 
     // Query for full visitor data
     const query = `
@@ -3787,7 +3920,6 @@ const get_shop_product_items = async (req, res) => {
 
 const get_merchant_users = async (req, res) => {
   try {
-
     // Query for full visitor data
     const query = `
           SELECT 
@@ -3838,7 +3970,6 @@ WHERE shop.user_type = 'shop'
 
 const get_category_wise_shops = async (req, res) => {
   try {
-
     // const category = req.query.category?.split(',').map(Number);
     const category = req.query.category;
     const product = req.query.product;
@@ -3847,20 +3978,20 @@ const get_category_wise_shops = async (req, res) => {
     const shop_no = req.query.shop_no;
     const purchaser_shop_no = req.query.purchaser_shop_no;
     console.log(category, product);
-    
-        // const query = `
-        //   SELECT *
-        //   FROM sell.eshop_form
-        //   WHERE category && $1::int[];
-        // `;
 
-    // const query = `SELECT ef.shop_no, ef.business_name, d.domain_name, s.sector_name, p.* FROM sell.products p 
+    // const query = `
+    //   SELECT *
+    //   FROM sell.eshop_form
+    //   WHERE category && $1::int[];
+    // `;
+
+    // const query = `SELECT ef.shop_no, ef.business_name, d.domain_name, s.sector_name, p.* FROM sell.products p
     //   left join sell.eshop_form ef on ef.shop_no = p.shop_no
-    //   LEFT JOIN 
-    //     domains d 
+    //   LEFT JOIN
+    //     domains d
     //   ON d.domain_id = ef.domain
-    //   LEFT JOIN 
-    //     sectors s 
+    //   LEFT JOIN
+    //     sectors s
     //   ON s.sector_id = ef.sector
     //   where p.product_name = $1 and p.category = $2`;
 
@@ -3885,7 +4016,10 @@ const get_category_wise_shops = async (req, res) => {
         )
         AND ef.shop_no != $2;
     `;
-    const result = await ambarsariyaPool.query(query, [shop_no, purchaser_shop_no]);
+    const result = await ambarsariyaPool.query(query, [
+      shop_no,
+      purchaser_shop_no,
+    ]);
 
     if (result.rowCount === 0) {
       // If no rows are found, assume the token is invalid
@@ -3903,7 +4037,7 @@ const get_category_wise_shops = async (req, res) => {
 
 const get_mou_selected_shops_products = async (req, res) => {
   try {
-    const shop_nos = req.query.shop_nos?.split(',').map(s => s.trim());
+    const shop_nos = req.query.shop_nos?.split(",").map((s) => s.trim());
     const category = parseInt(req.query.category);
     const product = req.query.product?.trim();
 
@@ -3934,28 +4068,34 @@ const get_mou_selected_shops_products = async (req, res) => {
         AND p.product_name = $3;
     `;
 
-    const result = await ambarsariyaPool.query(query, [shop_nos, category, product]);
+    const result = await ambarsariyaPool.query(query, [
+      shop_nos,
+      category,
+      product,
+    ]);
 
     if (result.rowCount === 0) {
-      return res.json({ valid: false, message: "No matching shop or product found." });
+      return res.json({
+        valid: false,
+        message: "No matching shop or product found.",
+      });
     }
 
     return res.json({ valid: true, data: result.rows });
-
   } catch (err) {
     console.error("Error processing request:", err);
-    return res.status(500).json({ message: "Internal Server Error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error", error: err.message });
   }
 };
 
 const get_vendor_details = async (req, res) => {
   try {
+    const shop_no = req.query.shop_no?.split(",").map(String);
 
-    const shop_no = req.query.shop_no?.split(',').map(String);
-    
     console.log(shop_no);
-    
-        
+
     const query = `
       SELECT 
         e.shop_no,
@@ -4060,6 +4200,105 @@ const get_vendor_details = async (req, res) => {
   }
 };
 
+const post_shop_review = async (req, res) => {
+  const {
+    shop_no,
+    reviewer_id,
+    review_date,
+    quality_of_compliance,
+    quality_of_service,
+    price_effective,
+    user_type,
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.shop_reviews( 
+        shop_no,
+        reviewer_id,
+        review_date,
+        quality_of_compliance,
+        quality_of_service,
+        price_effective,
+        user_type  
+      )
+      VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7 
+      )
+      ON CONFLICT (shop_no, reviewer_id) 
+      DO UPDATE SET
+        shop_no = EXCLUDED.shop_no ,
+        reviewer_id = EXCLUDED.reviewer_id ,
+        review_date = EXCLUDED.review_date ,
+        quality_of_compliance = EXCLUDED.quality_of_compliance ,
+        quality_of_service = EXCLUDED.quality_of_service ,
+        price_effective = EXCLUDED.price_effective ,
+        user_type = EXCLUDED.user_type; 
+      `;
+
+    const values = [
+      shop_no,
+      reviewer_id,
+      review_date,
+      quality_of_compliance,
+      quality_of_service,
+      price_effective,
+      user_type,
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Review submitted successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving review data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+const get_member_shop_review = async (req, res) => {
+  const { shop_no, reviewer_id } = req.params;
+
+  try {
+    const result = await ambarsariyaPool.query(
+      `SELECT * FROM sell.shop_reviews 
+       WHERE shop_no = $1 AND reviewer_id = $2`,
+      [shop_no, reviewer_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No review found" });
+    }
+
+    res.status(200).json({ data: result.rows[0] });
+  } catch (error) {
+    console.error("Error fetching review data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+
+const delete_shop_review = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await ambarsariyaPool.query(
+      "DELETE FROM sell.shop_reviews WHERE review_id = $1",
+      [id]
+    );
+    res.json({ message: "Review deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting review:", err);
+    res.status(500).json({ error: "Failed to delete review" });
+  }
+};
+
 module.exports = {
   get_checkIfMemberExists,
   get_checkIfShopExists,
@@ -4091,16 +4330,16 @@ module.exports = {
   post_member_emotional,
   get_member_emotional,
   post_member_personal,
-  get_member_personal, 
+  get_member_personal,
   post_member_professional,
-  get_member_professional, 
+  get_member_professional,
   post_member_relations,
   get_member_relations,
   get_member_relation_detail,
   delete_memberRelation,
   put_member_share_level,
   get_member_share_level,
-  get_member_event_purpose, 
+  get_member_event_purpose,
   get_member_event_purpose_engagement,
   post_member_events,
   get_member_events,
@@ -4120,5 +4359,8 @@ module.exports = {
   get_merchant_users,
   get_category_wise_shops,
   get_mou_selected_shops_products,
-  get_vendor_details
+  get_vendor_details,
+  post_shop_review,
+  get_member_shop_review,
+  delete_shop_review
 };
