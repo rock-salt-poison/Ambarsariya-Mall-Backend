@@ -4261,6 +4261,90 @@ const post_shop_review = async (req, res) => {
   }
 };
 
+const post_shop_comment = async (req, res) => {
+  const {
+    review_id,
+    commenter_id,
+    commenter_name,
+    comment
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.review_comments( 
+        review_id,
+        commenter_id,
+        commenter_name,
+        comment
+      )
+      VALUES (
+        $1, $2, $3, $4
+      )
+      `;
+
+    const values = [
+      review_id,
+      commenter_id,
+      commenter_name,
+      comment
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Comment submitted successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving comment data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+const post_shop_comment_reply = async (req, res) => {
+  const {
+    comment_id,
+    replier_id,
+    replier_name,
+    reply
+  } = req.body.data;
+
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+    const upsertQuery = `
+      INSERT INTO sell.comment_replies( 
+        comment_id,
+        replier_id,
+        replier_name,
+        reply
+      )
+      VALUES (
+        $1, $2, $3, $4
+      )
+      `;
+
+    const values = [
+      comment_id,
+      replier_id,
+      replier_name,
+      reply
+    ];
+
+    await ambarsariyaPool.query(upsertQuery, values);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(200).json({ message: "Reply submitted successfully." });
+  } catch (error) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error saving comment data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 
 const get_member_shop_review = async (req, res) => {
   const { shop_no, reviewer_id } = req.params;
@@ -4284,20 +4368,47 @@ const get_member_shop_review = async (req, res) => {
 };
 
 
-const delete_shop_review = async (req, res) => {
+const disable_shop_review = async (req, res) => {
   const { id } = req.params;
 
+  const client = await ambarsariyaPool.connect();
+
   try {
-    await ambarsariyaPool.query(
-      "DELETE FROM sell.shop_reviews WHERE review_id = $1",
+    await client.query('BEGIN');
+
+    // 1. Soft delete the review
+    await client.query(
+      "UPDATE sell.shop_reviews SET visible = FALSE WHERE review_id = $1",
       [id]
     );
-    res.json({ message: "Review deleted successfully" });
+
+    // 2. Soft delete comments linked to the review
+    const commentsResult = await client.query(
+      "UPDATE sell.review_comments SET visible = FALSE WHERE review_id = $1 RETURNING comment_id",
+      [id]
+    );
+
+    const commentIds = commentsResult.rows.map(row => row.comment_id);
+
+    // 3. Soft delete replies linked to those comments
+    if (commentIds.length > 0) {
+      await client.query(
+        "UPDATE sell.comment_replies SET visible = FALSE WHERE comment_id = ANY($1)",
+        [commentIds]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: "Review and related comments/replies soft deleted successfully" });
   } catch (err) {
-    console.error("Error deleting review:", err);
+    await client.query('ROLLBACK');
+    console.error("Error soft deleting review and related data:", err);
     res.status(500).json({ error: "Failed to delete review" });
+  } finally {
+    client.release();
   }
 };
+
 
 module.exports = {
   get_checkIfMemberExists,
@@ -4362,5 +4473,7 @@ module.exports = {
   get_vendor_details,
   post_shop_review,
   get_member_shop_review,
-  delete_shop_review
+  disable_shop_review,
+  post_shop_comment,
+  post_shop_comment_reply,
 };

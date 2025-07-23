@@ -357,6 +357,8 @@ router.put("/sell/support", (req, res, next) => {
 router.put("/sell/send-otp", otpController.sendOTP);
 router.post("/sell/username-otp", usernameOtpController.sendOTP);
 router.post("/sell/shop-review", eshopController.post_shop_review);
+router.post("/sell/shop-comment", eshopController.post_shop_comment);
+router.post("/sell/shop-comment-reply", eshopController.post_shop_comment_reply);
 router.post(
   "/sell/identification-of-mou",
   mouController.post_identification_of_mou
@@ -370,9 +372,9 @@ router.delete(
   "/sell/member-relation/:id/:access_token",
   eshopController.delete_memberRelation
 );
-router.delete(
+router.put(
   "/sell/shop-review/:id",
-  eshopController.delete_shop_review
+  eshopController.disable_shop_review
 );
 
 module.exports = router;
