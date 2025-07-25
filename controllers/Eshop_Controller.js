@@ -4313,6 +4313,7 @@ const post_shop_comment_reply = async (req, res) => {
   const {
     comment_id,
     replier_id,
+    review_id,
     replier_name,
     reply
   } = req.body.data;
@@ -4324,11 +4325,12 @@ const post_shop_comment_reply = async (req, res) => {
       INSERT INTO sell.comment_replies( 
         comment_id,
         replier_id,
+        review_id,
         replier_name,
         reply
       )
       VALUES (
-        $1, $2, $3, $4
+        $1, $2, $3, $4, $5
       )
       RETURNING reply_id
     `;
@@ -4336,6 +4338,7 @@ const post_shop_comment_reply = async (req, res) => {
     const values = [
       comment_id,
       replier_id,
+      review_id,
       replier_name,
       reply
     ];
@@ -4446,7 +4449,9 @@ const get_shop_comments_with_replies = async (req, res) => {
 
 
 const disable_shop_review = async (req, res) => {
-  const { id } = req.params;
+  const { id, visible } = req.params;
+  console.log(id, visible);
+  
 
   const client = await ambarsariyaPool.connect();
 
@@ -4455,14 +4460,14 @@ const disable_shop_review = async (req, res) => {
 
     // 1. Soft delete the review
     await client.query(
-      "UPDATE sell.shop_reviews SET visible = FALSE WHERE review_id = $1",
-      [id]
+      "UPDATE sell.shop_reviews SET visible = $2 WHERE review_id = $1",
+      [id, visible]
     );
 
     // 2. Soft delete comments linked to the review
     const commentsResult = await client.query(
-      "UPDATE sell.review_comments SET visible = FALSE WHERE review_id = $1 RETURNING comment_id",
-      [id]
+      "UPDATE sell.review_comments SET visible = $2 WHERE review_id = $1 RETURNING comment_id",
+      [id, visible]
     );
 
     const commentIds = commentsResult.rows.map(row => row.comment_id);
@@ -4470,17 +4475,22 @@ const disable_shop_review = async (req, res) => {
     // 3. Soft delete replies linked to those comments
     if (commentIds.length > 0) {
       await client.query(
-        "UPDATE sell.comment_replies SET visible = FALSE WHERE comment_id = ANY($1)",
-        [commentIds]
+        "UPDATE sell.comment_replies SET visible = $3 WHERE comment_id = ANY($1) OR review_id = $2",
+        [commentIds, id, visible]
+      );
+    }else{
+      await client.query(
+        "UPDATE sell.comment_replies SET visible = $2 WHERE review_id = $1",
+        [id, visible]
       );
     }
 
     await client.query('COMMIT');
-    res.json({ message: "Review and related comments/replies soft deleted successfully" });
+    res.json({ message: "Your review and comments are now disabled." });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error("Error soft deleting review and related data:", err);
-    res.status(500).json({ error: "Failed to delete review" });
+    console.error("Error disabling review and related data:", err);
+    res.status(500).json({ error: "Failed to disable review" });
   } finally {
     client.release();
   }

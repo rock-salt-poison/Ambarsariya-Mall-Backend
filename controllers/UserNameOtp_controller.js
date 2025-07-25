@@ -36,7 +36,8 @@ const sendOTP = async (req, res) => {
       };
   
       await transporter.sendMail(mailOptions);
-  
+      console.log(otp);
+      
       // Respond with a success message
       res.status(200).json({ message: "OTP sent successfully" , otp:otp});
   

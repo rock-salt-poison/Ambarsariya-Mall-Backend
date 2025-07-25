@@ -374,7 +374,7 @@ router.delete(
   eshopController.delete_memberRelation
 );
 router.put(
-  "/sell/shop-review/:id",
+  "/sell/shop-review/:id/:visible",
   eshopController.disable_shop_review
 );
 
