@@ -229,6 +229,7 @@ router.get(
 router.get("/sell/mou/vendor-details", eshopController.get_vendor_details);
 router.get("/sell/mou", mouController.get_mou);
 router.get("/sell/shop-review/:shop_no/:reviewer_id", eshopController.get_member_shop_review);
+router.get("/sell/shop-comments-and-replies", eshopController.get_shop_comments_with_replies);
 
 router.post("/sell/support", eshopController.post_visitorData);
 router.post("/sell/coupons/:shop_no", eshopController.post_discount_coupons);

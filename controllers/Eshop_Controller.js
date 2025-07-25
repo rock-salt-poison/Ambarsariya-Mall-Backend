@@ -4230,13 +4230,12 @@ const post_shop_review = async (req, res) => {
       )
       ON CONFLICT (shop_no, reviewer_id) 
       DO UPDATE SET
-        shop_no = EXCLUDED.shop_no ,
-        reviewer_id = EXCLUDED.reviewer_id ,
         review_date = EXCLUDED.review_date ,
         quality_of_compliance = EXCLUDED.quality_of_compliance ,
         quality_of_service = EXCLUDED.quality_of_service ,
         price_effective = EXCLUDED.price_effective ,
-        user_type = EXCLUDED.user_type; 
+        user_type = EXCLUDED.user_type
+      RETURNING review_id; 
       `;
 
     const values = [
@@ -4249,11 +4248,13 @@ const post_shop_review = async (req, res) => {
       user_type,
     ];
 
-    await ambarsariyaPool.query(upsertQuery, values);
+    const result = await ambarsariyaPool.query(upsertQuery, values);
+    
+    let reviewId = result.rows[0]?.review_id;
 
     await ambarsariyaPool.query("COMMIT");
 
-    res.status(200).json({ message: "Review submitted successfully." });
+    res.status(200).json({ message: "Review submitted successfully.", review_id:reviewId });
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving review data:", error);
@@ -4261,7 +4262,7 @@ const post_shop_review = async (req, res) => {
   }
 };
 
-const post_shop_comment = async (req, res) => {
+const post_shop_comment = async (req, res) => { 
   const {
     review_id,
     commenter_id,
@@ -4282,7 +4283,8 @@ const post_shop_comment = async (req, res) => {
       VALUES (
         $1, $2, $3, $4
       )
-      `;
+      RETURNING comment_id
+    `;
 
     const values = [
       review_id,
@@ -4291,11 +4293,15 @@ const post_shop_comment = async (req, res) => {
       comment
     ];
 
-    await ambarsariyaPool.query(upsertQuery, values);
+    const result = await ambarsariyaPool.query(upsertQuery, values);
+    const insertedCommentId = result.rows[0].comment_id;
 
     await ambarsariyaPool.query("COMMIT");
 
-    res.status(200).json({ message: "Comment submitted successfully." });
+    res.status(200).json({ 
+      message: "Comment submitted successfully.",
+      comment_id: insertedCommentId
+    });
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving comment data:", error);
@@ -4324,7 +4330,8 @@ const post_shop_comment_reply = async (req, res) => {
       VALUES (
         $1, $2, $3, $4
       )
-      `;
+      RETURNING reply_id
+    `;
 
     const values = [
       comment_id,
@@ -4333,17 +4340,22 @@ const post_shop_comment_reply = async (req, res) => {
       reply
     ];
 
-    await ambarsariyaPool.query(upsertQuery, values);
+    const result = await ambarsariyaPool.query(upsertQuery, values);
+    const insertedReplyId = result.rows[0].reply_id;
 
     await ambarsariyaPool.query("COMMIT");
 
-    res.status(200).json({ message: "Reply submitted successfully." });
+    res.status(200).json({ 
+      message: "Reply submitted successfully.",
+      reply_id: insertedReplyId
+    });
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error("Error saving comment data:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 const get_member_shop_review = async (req, res) => {
@@ -4366,6 +4378,71 @@ const get_member_shop_review = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+const get_shop_comments_with_replies = async (req, res) => {
+  const { shop_no } = req.query;
+
+  try {
+    const result = await ambarsariyaPool.query(`
+      SELECT 
+        rc.comment_id,
+        rc.commenter_name,
+        rc.commenter_id,
+        rc.comment,
+        cr.reply_id,
+        cr.replier_id,
+        cr.replier_name,
+        cr.reply
+      FROM 
+        sell.review_comments rc
+      JOIN 
+        sell.shop_reviews sr ON rc.review_id = sr.review_id
+      LEFT JOIN 
+        sell.comment_replies cr 
+        ON rc.comment_id = cr.comment_id AND cr.visible = true
+      WHERE 
+        sr.shop_no = $1 AND sr.visible = true AND rc.visible = true
+      ORDER BY 
+        rc.comment_id, cr.reply_id
+    `, [shop_no]);
+
+    const rows = result.rows;
+      console.log(rows);
+      
+    // Grouping logic
+    const groupedComments = [];
+
+    rows.forEach(row => {
+      const existing = groupedComments.find(c => c.comment_id === row.comment_id);
+
+      const replyObj = row.reply_id
+        ? { reply_id: row.reply_id,
+            replier_id: row.replier_id,
+            user: row.replier_name, 
+            text: row.reply 
+          }
+        : null;
+
+      if (existing) {
+        if (replyObj) existing.replies.push(replyObj);
+      } else {
+        groupedComments.push({
+          comment_id: row.comment_id,
+          commenter_id: row.commenter_id,
+          user: row.commenter_name,
+          text: row.comment,
+          replies: replyObj ? [replyObj] : []
+        });
+      }
+    });
+
+    res.json(groupedComments); 
+  } catch (err) {
+    console.error('Error fetching comments with replies:', err);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+}
+
 
 
 const disable_shop_review = async (req, res) => {
@@ -4476,4 +4553,5 @@ module.exports = {
   disable_shop_review,
   post_shop_comment,
   post_shop_comment_reply,
+  get_shop_comments_with_replies
 };
