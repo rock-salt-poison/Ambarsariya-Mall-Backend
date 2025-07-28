@@ -74,6 +74,11 @@ router.put(
   "/sell/eshop/update-status",
   eshopController.update_shop_is_open_status
 );
+
+router.put(
+  "/sell/eshop/update-parking-status",
+  eshopController.update_shop_parking_status
+);
 router.put("/sell/near-by-shop", eshopController.put_near_by_shops);
 
 router.get("/sell/shop-user-data", eshopController.get_shopUserData);

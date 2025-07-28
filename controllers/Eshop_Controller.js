@@ -929,6 +929,37 @@ const update_shop_is_open_status = async (req, resp) => {
   }
 };
 
+const update_shop_parking_status = async (req, resp) => {
+  const { parking_availability, shop_access_token } = req.body;
+
+  try {
+    const updateResult = await ambarsariyaPool.query(
+      `UPDATE Sell.eshop_form
+       SET parking_availability = $1
+       WHERE shop_access_token = $2`,
+      [parking_availability, shop_access_token]
+    );
+
+    // Optional: check if row was actually updated
+    if (updateResult.rowCount === 0) {
+      return resp.json({ message: "No matching shop found to update." });
+    }
+
+    return resp.status(200).json({
+      message: "E-shop parking availability updated successfully.",
+      updated: parking_availability,
+    });
+  } catch (err) {
+    console.error("Error updating parking availability:", err);
+    return resp
+      .status(500)
+      .json({
+        message: "Server error updating parking availability.",
+        error: err.message,
+      });
+  }
+};
+
 const get_shopUserData = async (req, res) => {
   try {
     const { shop_access_token } = req.query;
@@ -4104,13 +4135,14 @@ const get_vendor_details = async (req, res) => {
         e.cost_sensitivity ,
         
         -- Average compliance and service scores
-        COALESCE(AVG(r.quality_of_compliance), 0) AS quality_of_compliance,
-        COALESCE(AVG(r.quality_of_service), 0) AS quality_of_service,
+       ROUND(COALESCE(AVG(r.quality_of_compliance), 0), 2) AS quality_of_compliance,
+    ROUND(COALESCE(AVG(r.quality_of_service), 0), 2) AS quality_of_service,
+    ROUND(COALESCE(AVG(r.price_effective), 0), 2) AS price_effective,
         
         -- Years in business
         DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) AS years_in_business,
 
-        -- x5: Score based on years in business
+        -- x6: Score based on years in business
         CASE 
             WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
             WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 3 THEN 3
@@ -4124,6 +4156,7 @@ const get_vendor_details = async (req, res) => {
         e.daily_walkin + 
         e.cost_sensitivity + 
         COALESCE(AVG(r.quality_of_compliance), 0) + 
+        COALESCE(AVG(r.price_effective), 0) + 
         COALESCE(AVG(r.quality_of_service), 0) + 
         CASE 
             WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
@@ -4132,7 +4165,7 @@ const get_vendor_details = async (req, res) => {
             WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
             ELSE 0
         END
-    ) / 5.0)::numeric, 2) AS average_score,
+    ) / 6.0)::numeric, 2) AS average_score,
 
 
         -- Classification
@@ -4141,6 +4174,7 @@ const get_vendor_details = async (req, res) => {
                 (e.daily_walkin + 
                 e.cost_sensitivity + 
                 COALESCE(AVG(r.quality_of_compliance), 0) + 
+                COALESCE(AVG(r.price_effective), 0) + 
                 COALESCE(AVG(r.quality_of_service), 0) + 
                 CASE 
                     WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) >= 4 THEN 4
@@ -4149,10 +4183,11 @@ const get_vendor_details = async (req, res) => {
                     WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
                     ELSE 0
                 END
-            ) / 5.0 ) >= 3.5 THEN 'A'
+            ) / 6.0 ) >= 4.0 THEN 'A'
             WHEN (
                 (e.daily_walkin + 
                 e.cost_sensitivity + 
+                COALESCE(AVG(r.price_effective), 0) + 
                 COALESCE(AVG(r.quality_of_compliance), 0) + 
                 COALESCE(AVG(r.quality_of_service), 0) + 
                 CASE 
@@ -4162,10 +4197,11 @@ const get_vendor_details = async (req, res) => {
                     WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
                     ELSE 0
                 END
-            ) / 5.0 ) >= 3.0 THEN 'B'
+            ) / 6.0 ) >= 3 THEN 'B'
             WHEN (
                 (e.daily_walkin + 
                 e.cost_sensitivity + 
+                COALESCE(AVG(r.price_effective), 0) +  
                 COALESCE(AVG(r.quality_of_compliance), 0) + 
                 COALESCE(AVG(r.quality_of_service), 0) + 
                 CASE 
@@ -4175,7 +4211,7 @@ const get_vendor_details = async (req, res) => {
                     WHEN DATE_PART('year', CURRENT_DATE) - DATE_PART('year', e.establishment_date) = 1 THEN 1
                     ELSE 0
                 END
-            ) / 5.0 ) >= 2.5 THEN 'C'
+            ) / 6.0 ) >= 2 THEN 'C'
             ELSE 'D'
         END AS shop_class
 
@@ -4545,6 +4581,7 @@ module.exports = {
   get_member_relation_specific_groups,
   post_member_community,
   update_shop_is_open_status,
+  update_shop_parking_status,
   put_near_by_shops,
   get_nearby_areas_for_shop,
   get_existing_sectors,
