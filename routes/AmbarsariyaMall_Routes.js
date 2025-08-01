@@ -12,6 +12,7 @@ const rkuController = require("../controllers/RKU_Controller");
 const saleController = require("../controllers/SaleOrder_Controller");
 const invoiceController = require("../controllers/Invoice_Controller");
 const mouController = require("../controllers/MoU_Controller");
+const coHelperController = require("../controllers/CoHelper_Controller");
 const UploadFiles = require("../Middleware/UploadFiles");
 const multer = require("multer");
 
@@ -235,6 +236,9 @@ router.get("/sell/mou/vendor-details", eshopController.get_vendor_details);
 router.get("/sell/mou", mouController.get_mou);
 router.get("/sell/shop-review/:shop_no/:reviewer_id", eshopController.get_member_shop_review);
 router.get("/sell/shop-comments-and-replies", eshopController.get_shop_comments_with_replies);
+router.get("/sell/co-helper/:member_id/:co_helper_type", coHelperController.get_coHelper);
+router.get("/sell/co-helpers-by-type-and-service/:co_helper_type/:key_service", coHelperController.get_coHelpers_by_type_and_service);
+router.get("/sell/co-helper-by-type-service-member/:co_helper_type/:key_service/:member_id", coHelperController.get_coHelpers_by_type_service_member_id);
 
 router.post("/sell/support", eshopController.post_visitorData);
 router.post("/sell/coupons/:shop_no", eshopController.post_discount_coupons);
@@ -368,6 +372,10 @@ router.post("/sell/shop-comment-reply", eshopController.post_shop_comment_reply)
 router.post(
   "/sell/identification-of-mou",
   mouController.post_identification_of_mou
+);
+router.post(
+  "/sell/co-helper",
+  coHelperController.post_coHelper
 );
 
 router.delete(
