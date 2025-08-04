@@ -61,7 +61,57 @@ const post_coHelper = async (req, res) => {
   }
 };
 
+const post_coHelperNotification = async (req, res) => {
+  const { data } = req.body;
+  console.log(data);
 
+  try {
+    await ambarsariyaPool.query("BEGIN");
+
+      const coHelperQuery = `
+        INSERT INTO sell.co_helper_notifications (
+          requester_id,
+          co_helper_id,
+          task_date,
+          task_time,
+          task_details,
+          estimated_hours,
+          offerings
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7
+        )
+        
+        RETURNING id
+      `;
+
+      const result = await ambarsariyaPool.query(coHelperQuery, [
+        data?.requester_id,
+        data?.co_helper_id,
+        data?.task_date,
+        data?.task_time,
+        data?.task_details,
+        data?.estimated_hours,
+        data?.offerings
+      ]);
+
+    await ambarsariyaPool.query("COMMIT");
+
+    const insertedId = result.rows[0]?.id;
+
+    res.status(201).json({
+      message: "Notification sent to the Co-Helpers.",
+      id: insertedId,
+    });
+
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error registering co-helpers:", err);
+    res.status(500).json({
+      error: "Error registering co-helpers",
+      message: err.message,
+    });
+  }
+};
 
 
 const get_coHelper = async (req, res) => {
@@ -88,14 +138,18 @@ const get_coHelper = async (req, res) => {
 };
 
 const get_coHelpers_by_type_and_service = async (req, res) => {
-  const { co_helper_type, key_service } = req.params;
+  const { co_helper_type, key_service, buyer_member } = req.params;
 
   try {
-    if (co_helper_type && key_service) {
-      console.log(co_helper_type, key_service);
+    if (co_helper_type && key_service && buyer_member) {
+      console.log(co_helper_type, key_service, buyer_member);
       
-      let query = `SELECT member_id FROM sell.co_helpers WHERE co_helper_type = $1 AND key_services ? $2`;
-      let result = await ambarsariyaPool.query(query, [co_helper_type, key_service]);
+      let query = `SELECT member_id 
+                   FROM sell.co_helpers 
+                   WHERE co_helper_type = $1 
+                   AND key_services ? $2
+                   AND member_id != $3`;
+      let result = await ambarsariyaPool.query(query, [co_helper_type, key_service, buyer_member]);
       if (result.rowCount === 0) {
         // If no rows are found, assume the shop_no is invalid
         res
@@ -119,12 +173,14 @@ const get_coHelpers_by_type_service_member_id = async (req, res) => {
     if (co_helper_type && key_service && member_id) {
       console.log(co_helper_type, key_service, member_id);
       
-      let query = `SELECT co.*, u.full_name 
+      let query = `SELECT co.*, u.full_name, uc.access_token 
   FROM sell.co_helpers co
   LEFT JOIN sell.member_profiles mp 
     ON mp.member_id = co.member_id
   LEFT JOIN sell.users u
     ON u.user_id = mp.user_id
+  LEFT JOIN sell.user_credentials uc
+    ON uc.user_id = mp.user_id
   WHERE co.co_helper_type = $1 
     AND co.key_services ? $2 
     AND co.member_id = $3`;
@@ -147,4 +203,4 @@ const get_coHelpers_by_type_service_member_id = async (req, res) => {
 
 
 
-module.exports = { post_coHelper, get_coHelper, get_coHelpers_by_type_and_service, get_coHelpers_by_type_service_member_id };
+module.exports = { post_coHelper, get_coHelper, get_coHelpers_by_type_and_service, get_coHelpers_by_type_service_member_id, post_coHelperNotification };
