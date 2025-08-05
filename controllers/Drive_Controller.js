@@ -413,6 +413,7 @@ const get_requestDriveAccess = (req, res) => {
 
 const get_requestGoogleAccess = (req, res) => {
   const { username } = req.params;
+  const { redirect_url } = req.query; 
   console.log(username);
   
   if (!username) {
@@ -433,12 +434,15 @@ const get_requestGoogleAccess = (req, res) => {
     "https://www.googleapis.com/auth/chat.messages"
   ];
 
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI2;
+
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
     scope: scopes,
     prompt: "consent",
     login_hint: username,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
+    redirect_uri: redirectUri,
+    state: encodeURIComponent(redirect_url || '')
   });
 
   res.redirect(url);
@@ -518,7 +522,7 @@ const get_handleAuthCallback = async (req, res) => {
 
     // **Dynamically Construct Frontend Redirect URL**
     const FRONTEND_BASE_URL =
-      process.env.FRONTEND_BASE_URL || "http://localhost:3000";
+      process.env.FRONTEND_BASE_URL || "http://localhost:3002";
     const redirectUrl = `${FRONTEND_BASE_URL}/sell/support/shop/${shop_access_token}/dashboard/edit?email=${email}`;
 
     console.log("Redirecting to:", redirectUrl);
@@ -531,40 +535,40 @@ const get_handleAuthCallback = async (req, res) => {
 
 const handleAuthCallback2 = async (req, res) => {
   const code = req.query.code;
-  console.log(code);
-  // Get tokens from the authorization code
-  const { tokens } = await oAuth2Client.getToken({
-    code,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
-  });
-    oAuth2Client.setCredentials(tokens);
+  const state = req.query.state; // ← comes from the state parameter in step 1
+  const dynamicRedirect = decodeURIComponent(state || '');
+
   if (!code) {
     return res.status(400).json({ success: false, message: "Authorization code missing" });
   }
 
   try {
+    // Get tokens from the authorization code
+    const { tokens } = await oAuth2Client.getToken({
+      code,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI2,
+    });
+    oAuth2Client.setCredentials(tokens);
+
     console.log("OAuth Tokens Received:", tokens);
 
     // Get user info from Google
     const oauth2 = google.oauth2({ auth: oAuth2Client, version: 'v2' });
     const { data } = await oauth2.userinfo.get();
     const email = data.email;
-    
-    // You can compare googleEmail with username here if needed
     console.log(`Google account used: ${email}`);
 
     const memberResult = await ambarsariyaPool.query(
       `SELECT mp.member_id 
-      FROM sell.member_profiles mp
-      JOIN sell.user_credentials uc 
-      ON mp.user_id = uc.user_id
-      WHERE uc.username = $1`,
+       FROM sell.member_profiles mp
+       JOIN sell.user_credentials uc 
+       ON mp.user_id = uc.user_id
+       WHERE uc.username = $1`,
       [email]
     );
 
     if (!memberResult.rows.length) {
-      return res
-        .json({ success: false, message: "Member not found" });
+      return res.json({ success: false, message: "Member not found" });
     }
 
     const member_id = memberResult.rows[0].member_id;
@@ -572,27 +576,24 @@ const handleAuthCallback2 = async (req, res) => {
     // Save access token into DB
     await ambarsariyaPool.query(
       `UPDATE sell.member_profiles
-      SET 
-        oauth_access_token = $1,
-        oauth_refresh_token = $2
-      WHERE member_id = $3;
-`,
+       SET 
+         oauth_access_token = $1,
+         oauth_refresh_token = $2
+       WHERE member_id = $3;`,
       [tokens.access_token, tokens.refresh_token, member_id]
     );
 
-    const FRONTEND_BASE_URL =
-    process.env.FRONTEND_BASE_URL || "http://localhost:3000";
-    const redirectUrl = `${FRONTEND_BASE_URL}/sell/esale`;
+    const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || "http://localhost:3002";
+    const finalRedirectUrl = dynamicRedirect || `${FRONTEND_BASE_URL}/sell/esale`;
 
-    console.log("Redirecting to:", redirectUrl);
-    return res.redirect(redirectUrl);
+    console.log("Redirecting to:", finalRedirectUrl);
+    return res.redirect(finalRedirectUrl);
   } catch (err) {
-    console.log(err);
-    
     console.error("OAuth callback2 error:", err.message);
     return res.status(500).json({ success: false, message: "OAuth callback failed" });
   }
 };
+
 
 const get_imageLink = async (req, res) => {
   try {
@@ -765,6 +766,167 @@ const get_userScopes = async (req, res) => {
   }
 };
 
+async function getUserTokensFromDB(email) {
+  const query = `
+    SELECT mp.oauth_access_token, mp.oauth_refresh_token
+    FROM sell.member_profiles mp
+    JOIN sell.user_credentials uc 
+    ON mp.user_id = uc.user_id
+    WHERE uc.username = $1
+  `;
+  const result = await ambarsariyaPool.query(query, [email]);
+  return result.rows[0] || null;
+}
+
+const post_checkCalendarAccess = async (req, res) => {
+  const {email} = req.body ;
+  console.log(email);
+  
+  try {
+    const user = await getUserTokensFromDB(email);
+
+    if (!user || !user.oauth_access_token || !user.oauth_refresh_token) {
+      return res.json({ needsPermission: true, reason: "NO_TOKEN" });
+    }
+
+    let accessToken = user.oauth_access_token;
+
+    try {
+      const scopes = await getTokenScopes(accessToken);
+      const hasCalendarScope = scopes.includes("https://www.googleapis.com/auth/calendar.events");
+
+      if (!hasCalendarScope) {
+        return res.json({ needsPermission: true, reason: "NO_CALENDAR_SCOPE" });
+      }
+
+      return res.json({ needsPermission: false, oauthTokens: user });
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        // Try refreshing the access token
+        try {
+          const newAccessToken = await refreshAccessToken(user.oauth_refresh_token);
+          const scopes = await getTokenScopes(newAccessToken);
+
+          const hasCalendarScope = scopes.includes("https://www.googleapis.com/auth/calendar.events");
+
+          if (!hasCalendarScope) {
+            return res.json({ needsPermission: true, reason: "NO_CALENDAR_SCOPE" });
+          }
+
+          // You may want to update DB with new access token here
+          return res.json({ needsPermission: false, oauthTokens: { ...user, oauth_access_token: newAccessToken } });
+        } catch (refreshError) {
+          return res.json({ needsPermission: true, reason: "REFRESH_FAILED" });
+        }
+      } else {
+        return res.json({ needsPermission: true, reason: "INVALID_OR_EXPIRED_TOKEN" });
+      }
+    }
+  } catch (err) {
+    console.error("Internal server error:", err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+const post_scheduleGoogleCalendarAppointment = async (req, res) => {
+  const {
+    requester_email,
+    requester_id,
+    co_helper_email,
+    co_helper_id,
+    task_date,
+    task_time,
+    estimated_hours,
+    task_details,
+    task_location,
+    requester_name,
+    co_helper_type,
+  } = req.body;
+
+  try {
+    // 1. Fetch requester's tokens (they will be the organizer)
+    const requester = await getUserTokensFromDB(requester_email);
+    if (!requester || !requester.oauth_access_token) {
+      return res.status(403).json({
+        success: false,
+        message: "Requester has not authorized access to Google Calendar",
+      });
+    }
+
+    let accessToken = requester.oauth_access_token;
+
+    // 2. Check access token validity
+    try {
+      await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+    } catch (error) {
+      if (requester.oauth_refresh_token) {
+        accessToken = await refreshAccessToken(requester.oauth_refresh_token);
+
+        // Update the DB with the new token
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles SET oauth_access_token = $1 WHERE member_id = $2`,
+          [accessToken, requester_id]
+        );
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Token expired and no refresh token found for requester",
+        });
+      }
+    }
+
+    // 3. Calculate start and end times
+    const eventStart = new Date(`${task_date}T${task_time}`);
+    const eventEnd = new Date(eventStart.getTime() + estimated_hours * 60 * 60 * 1000);
+
+    // 4. Prepare event
+    const event = {
+      summary: `Task with ${co_helper_type}`,
+      description: task_details,
+      location: task_location,
+      start: {
+        dateTime: eventStart.toISOString(),
+        timeZone: "Asia/Kolkata",
+      },
+      end: {
+        dateTime: eventEnd.toISOString(),
+        timeZone: "Asia/Kolkata",
+      },
+      attendees: [
+        {
+          email: co_helper_email,
+          responseStatus: "needsAction", // will send invite
+        },
+      ],
+      reminders: {
+        useDefault: true,
+      },
+    };
+
+    // 5. Send event to requester's calendar (they become the organizer)
+    await axios.post(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all`,
+      event,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      message: "Appointment scheduled. Co-helper notified via email.",
+    });
+  } catch (err) {
+    console.error("Calendar Scheduling Error:", err?.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while scheduling the appointment",
+    });
+  }
+};
+
 
 
 module.exports = {
@@ -782,5 +944,7 @@ module.exports = {
   get_imageLink,
   get_sheetsData,
   getGoogleContacts,
-  get_userScopes
+  get_userScopes,
+  post_checkCalendarAccess,
+  post_scheduleGoogleCalendarAppointment
 };

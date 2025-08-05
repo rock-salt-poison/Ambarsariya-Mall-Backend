@@ -74,13 +74,13 @@ const post_coHelperNotification = async (req, res) => {
           co_helper_id,
           task_date,
           task_time,
+          task_location,
           task_details,
           estimated_hours,
           offerings
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7
+          $1, $2, $3, $4, $5, $6, $7, $8
         )
-        
         RETURNING id
       `;
 
@@ -89,6 +89,7 @@ const post_coHelperNotification = async (req, res) => {
         data?.co_helper_id,
         data?.task_date,
         data?.task_time,
+        data?.task_location,
         data?.task_details,
         data?.estimated_hours,
         data?.offerings
@@ -173,7 +174,7 @@ const get_coHelpers_by_type_service_member_id = async (req, res) => {
     if (co_helper_type && key_service && member_id) {
       console.log(co_helper_type, key_service, member_id);
       
-      let query = `SELECT co.*, u.full_name, uc.access_token 
+      let query = `SELECT co.*, u.full_name, uc.access_token , uc.username
   FROM sell.co_helpers co
   LEFT JOIN sell.member_profiles mp 
     ON mp.member_id = co.member_id

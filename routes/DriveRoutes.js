@@ -19,6 +19,8 @@ router.get('/image/:fileId', driveController.get_imageLink);
 router.get('/sheet/:sheetId', driveController.get_sheetsData);
 router.get('/google/contacts/:member_id/:user_id', driveController.getGoogleContacts);
 router.get('/user-scopes', driveController.get_userScopes);
+router.post('/check-calendar-access', driveController.post_checkCalendarAccess);
+router.post('/schedule-google-appointment', driveController.post_scheduleGoogleCalendarAppointment);
 
 
 module.exports = router;
