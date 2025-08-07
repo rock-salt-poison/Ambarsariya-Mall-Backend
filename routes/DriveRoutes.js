@@ -21,6 +21,8 @@ router.get('/google/contacts/:member_id/:user_id', driveController.getGoogleCont
 router.get('/user-scopes', driveController.get_userScopes);
 router.post('/check-calendar-access', driveController.post_checkCalendarAccess);
 router.post('/schedule-google-appointment', driveController.post_scheduleGoogleCalendarAppointment);
+router.post('/update-google-calendar-event-status', driveController.post_updateGoogleCalendarEventResponse);
+router.delete('/delete-google-calendar-event', driveController.delete_googleCalendarEvent);
 
 
 module.exports = router;

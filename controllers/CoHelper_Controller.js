@@ -14,15 +14,17 @@ const post_coHelper = async (req, res) => {
         INSERT INTO sell.co_helpers (
           co_helper_type,
           member_id,
+          member_name,
           experience_in_this_domain,
           last_job_fundamentals_or_skills_known,
           key_services,
           average_salary,
           last_salary
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7
+          $1, $2, $3, $4, $5, $6, $7, $8
         )
         ON CONFLICT (co_helper_type, member_id) DO UPDATE SET
+          member_name = EXCLUDED.member_name,
           experience_in_this_domain = EXCLUDED.experience_in_this_domain,
           last_job_fundamentals_or_skills_known = EXCLUDED.last_job_fundamentals_or_skills_known,
           key_services = EXCLUDED.key_services,
@@ -34,6 +36,7 @@ const post_coHelper = async (req, res) => {
       const result = await ambarsariyaPool.query(coHelperQuery, [
         item.co_helper_type,
         item.member_id,
+        item.member_name,
         item.experience,
         item.last_job_skills,
         JSON.stringify(item.key_services),
@@ -71,28 +74,38 @@ const post_coHelperNotification = async (req, res) => {
       const coHelperQuery = `
         INSERT INTO sell.co_helper_notifications (
           requester_id,
+          requester_name,
           co_helper_id,
+          service,
+          scope,
           task_date,
           task_time,
           task_location,
           task_details,
           estimated_hours,
-          offerings
+          offerings,
+          calendar_event_id
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
         )
-        RETURNING id
+        ON CONFLICT (requester_id, co_helper_id, task_date, task_time)
+        DO NOTHING
+        RETURNING id;
       `;
 
       const result = await ambarsariyaPool.query(coHelperQuery, [
         data?.requester_id,
+        data?.requester_name,
         data?.co_helper_id,
+        data?.service,
+        data?.scope,
         data?.task_date,
         data?.task_time,
         data?.task_location,
         data?.task_details,
         data?.estimated_hours,
-        data?.offerings
+        data?.offerings,
+        data?.calendar_event_id,
       ]);
 
     await ambarsariyaPool.query("COMMIT");
@@ -138,6 +151,40 @@ const get_coHelper = async (req, res) => {
   }
 };
 
+const get_member_notifications = async (req, res) => {
+  const { member_id } = req.params;
+
+  try {
+    if (member_id) {
+      console.log(member_id);
+      
+      let query = `SELECT 
+                    chn.*,
+                    ch.*,
+                    chn.id as notification_number,
+                    CASE 
+                      WHEN ch.member_id = $1 THEN 'receiver'
+                      WHEN chn.requester_id = $1 THEN 'sender'
+                      ELSE NULL
+                    END AS member_role
+                  FROM sell.co_helper_notifications chn
+                  LEFT JOIN sell.co_helpers ch ON ch.id = chn.co_helper_id
+                  WHERE ch.member_id = $1 OR chn.requester_id = $1;`;
+      let result = await ambarsariyaPool.query(query, [member_id]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: `No new notifications.` });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch notifications" });
+  }
+};
+
 const get_coHelpers_by_type_and_service = async (req, res) => {
   const { co_helper_type, key_service, buyer_member } = req.params;
 
@@ -164,8 +211,6 @@ const get_coHelpers_by_type_and_service = async (req, res) => {
     res.status(500).json({ e: "Failed to fetch data" });
   }
 };
-
-
 
 const get_coHelpers_by_type_service_member_id = async (req, res) => {
   const { co_helper_type, key_service, member_id } = req.params;
@@ -200,8 +245,49 @@ const get_coHelpers_by_type_service_member_id = async (req, res) => {
   }
 };
 
+const get_co_helper_popup_details = async (req, res) => {
+  const { id, member_id } = req.params;
 
+  try {
+    if (id && member_id) {
+      console.log(id, member_id);
+      
+      let query = `SELECT 
+                    chn.id as notification_id,
+                    chn.*,
+                    ch.*,
+                    CASE 
+                      WHEN ch.member_id = $2 THEN 'receiver'
+                      WHEN chn.requester_id = $2 THEN 'sender'
+                      ELSE NULL
+                    END AS member_role,
+                    uc.username as requester_email
+                  FROM sell.co_helper_notifications chn
+                  LEFT JOIN sell.co_helpers ch ON ch.id = chn.co_helper_id
+                  LEFT JOIN sell.member_profiles mp ON chn.requester_id = mp.member_id
+				          LEFT JOIN sell.user_credentials uc ON mp.user_id = uc.user_id
+                  WHERE chn.id=$1`;
+      let result = await ambarsariyaPool.query(query, [id, member_id]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: `Invalid notification id or member id.` });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch details" });
+  }
+};
 
-
-
-module.exports = { post_coHelper, get_coHelper, get_coHelpers_by_type_and_service, get_coHelpers_by_type_service_member_id, post_coHelperNotification };
+module.exports = { 
+  post_coHelper, 
+  get_coHelper, 
+  get_coHelpers_by_type_and_service, 
+  get_coHelpers_by_type_service_member_id, 
+  post_coHelperNotification,
+  get_member_notifications ,
+  get_co_helper_popup_details
+};

@@ -3,9 +3,14 @@ const { processDrive, createItemCsv, createSKUCsv, createRKUCsv } = require("./G
 const { oAuth2Client, driveService, sheetsService } = require("./GoogleDriveAccess/GoogleAuth");
 const { createDbPool } = require("../db_config/db");
 const { default: axios } = require("axios");
+const dayjs = require("dayjs");
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
 const ambarsariyaPool = createDbPool();
 require("dotenv").config();
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const serviceScopeMapping = {
   contacts: 'https://www.googleapis.com/auth/contacts.readonly',
@@ -828,7 +833,7 @@ const post_checkCalendarAccess = async (req, res) => {
   }
 }
 
-const post_scheduleGoogleCalendarAppointment = async (req, res) => {
+const post_scheduleGoogleCalendarAppointment2 = async (req, res) => {
   const {
     requester_email,
     requester_id,
@@ -847,9 +852,9 @@ const post_scheduleGoogleCalendarAppointment = async (req, res) => {
     // 1. Fetch requester's tokens (they will be the organizer)
     const requester = await getUserTokensFromDB(requester_email);
     if (!requester || !requester.oauth_access_token) {
-      return res.status(403).json({
+      return res.json({
         success: false,
-        message: "Requester has not authorized access to Google Calendar",
+        message: "You have not authorized access to Google Calendar",
       });
     }
 
@@ -904,7 +909,7 @@ const post_scheduleGoogleCalendarAppointment = async (req, res) => {
     };
 
     // 5. Send event to requester's calendar (they become the organizer)
-    await axios.post(
+    const response = await axios.post(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all`,
       event,
       {
@@ -914,15 +919,378 @@ const post_scheduleGoogleCalendarAppointment = async (req, res) => {
       }
     );
 
+    const eventId = response.data.id;
+
     res.json({
       success: true,
       message: "Appointment scheduled. Co-helper notified via email.",
+      eventId
     });
   } catch (err) {
     console.error("Calendar Scheduling Error:", err?.response?.data || err.message);
-    res.status(500).json({
+    res.json({
       success: false,
       message: "An error occurred while scheduling the appointment",
+    });
+  }
+};
+
+const post_updateGoogleCalendarEventResponse = async (req, res) => {
+  const {
+    member_email,        // Email of the co-helper responding
+    member_id,           // Their ID
+    event_id,            // Google Calendar Event ID
+    calendar_id = "primary", // Optional calendar ID
+    response_status,     // 'accepted' | 'declined' | 'tentative'
+    notification_id      // ID of the notification row to update in DB
+  } = req.body;
+
+  if (!["accepted", "declined", "tentative"].includes(response_status)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid response status",
+    });
+  }
+
+  try {
+    // 1. Fetch tokens of the co-helper (they are responding to event)
+    const user = await getUserTokensFromDB(member_email);
+    if (!user || !user.oauth_access_token) {
+      return res.status(401).json({
+        success: false,
+        message: "You have not authorized Google Calendar",
+      });
+    }
+
+    let accessToken = user.oauth_access_token;
+
+    // 2. Check token validity
+    try {
+      await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+    } catch (error) {
+      if (user.oauth_refresh_token) {
+        accessToken = await refreshAccessToken(user.oauth_refresh_token);
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles SET oauth_access_token = $1 WHERE member_id = $2`,
+          [accessToken, member_id]
+        );
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Access token expired and no refresh token found",
+        });
+      }
+    }
+
+    // 3. Get the event details
+    const eventRes = await axios.get(`https://www.googleapis.com/calendar/v3/calendars/${calendar_id}/events/${event_id}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const event = eventRes.data;
+
+    // 4. Update the attendee's response status
+    const updatedAttendees = event.attendees?.map((attendee) => {
+      if (attendee.email === member_email) {
+        return {
+          ...attendee,
+          responseStatus: response_status,
+        };
+      }
+      return attendee;
+    });
+
+    if (!updatedAttendees) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendee not found in event",
+      });
+    }
+
+    // 5. Patch the event with updated attendee status
+    await axios.patch(
+      `https://www.googleapis.com/calendar/v3/calendars/${calendar_id}/events/${event_id}?sendUpdates=all`,
+      { attendees: updatedAttendees },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    // 6. Update the notification status in DB
+    if (notification_id) {
+      await ambarsariyaPool.query(
+        `UPDATE sell.co_helper_notifications SET status = $1 WHERE id = $2`,
+        [response_status, notification_id]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Event response updated to '${response_status}'`,
+    });
+  } catch (err) {
+    console.error("Update RSVP Error:", err?.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update event response",
+    });
+  }
+};
+
+const post_scheduleGoogleCalendarAppointment = async (req, res) => {
+  const {
+    requester_email,
+    requester_id,
+    co_helper_email,
+    co_helper_id,
+    task_date,
+    task_time,
+    estimated_hours,
+    task_details,
+    task_location,
+    requester_name,
+    response_status,
+    notification_id,
+    co_helper_type,
+    service,
+    offerings,
+    calendar_id = "primary",
+  } = req.body;
+console.log(req.body);
+
+  try {
+    // Step 1: Fetch requester's access token
+    const requester = await getUserTokensFromDB(requester_email);
+    if (!requester || !requester.oauth_access_token) {
+      return res.status(401).json({ success: false, message: "You have not authorized access to Google Calendar" });
+    }
+
+    let accessToken = requester.oauth_access_token;
+
+    // Step 2: Validate or refresh requester's token
+    try {
+      await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+    } catch {
+      if (requester.oauth_refresh_token) {
+        accessToken = await refreshAccessToken(requester.oauth_refresh_token);
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles SET oauth_access_token = $1 WHERE member_id = $2`,
+          [accessToken, requester_id]
+        );
+      } else {
+        return res.status(401).json({ success: false, message: "Token expired and no refresh token found for requester" });
+      }
+    }
+
+    // Step 3: Calculate start/end time using dayjs with timezone
+    const [hour, minute, second] = task_time.split(':').map(Number);
+
+    // Base date in Asia/Kolkata
+    const start = dayjs(task_date).tz('Asia/Kolkata').hour(hour).minute(minute).second(second || 0);
+    const end = start.add(estimated_hours, 'hour');
+
+    // ISO string with offset
+    const eventStart = start.format();  // 'YYYY-MM-DDTHH:mm:ssZ'
+    const eventEnd = end.format();
+
+    // Step 4: Fetch co-helper tokens
+    const coHelper = await getUserTokensFromDB(co_helper_email);
+    if (!coHelper || !coHelper.oauth_access_token) {
+      return res.status(400).json({ success: false, message: "Co-helper has not authorized Google Calendar" });
+    }
+
+    let coHelperAccessToken = coHelper.oauth_access_token;
+
+    try {
+      await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${coHelperAccessToken}`);
+    } catch {
+      if (coHelper.oauth_refresh_token) {
+        coHelperAccessToken = await refreshAccessToken(coHelper.oauth_refresh_token);
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles SET oauth_access_token = $1 WHERE member_id = $2`,
+          [coHelperAccessToken, co_helper_id]
+        );
+      } else {
+        return res.status(401).json({ success: false, message: "Co-helper token expired and no refresh token found" });
+      }
+    }
+
+    // Step 5: Check co-helper availability
+    const coHelperAuth = new google.auth.OAuth2();
+    coHelperAuth.setCredentials({ access_token: coHelperAccessToken });
+
+    const calendar = google.calendar({ version: 'v3', auth: coHelperAuth });
+
+    const freeBusy = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: eventStart,
+        timeMax: eventEnd,
+        items: [{ id: calendar_id }],
+      },
+    });
+
+    const busySlots = freeBusy.data.calendars[calendar_id].busy;
+    if (busySlots.length > 0) {
+      return res.status(409).json({ success: false, message: "Co-helper is busy during this time slot" });
+    }
+
+    // Step 6: Create event
+    const event = {
+      summary: `Task with ${co_helper_type}`,
+      description: `Description: ${task_details}\nKey service: ${service}\nOfferings: ${offerings}`,
+      location: task_location,
+      start: {
+        dateTime: eventStart,
+        timeZone: "Asia/Kolkata",
+      },
+      end: {
+        dateTime: eventEnd,
+        timeZone: "Asia/Kolkata",
+      },
+      attendees: [
+        {
+          email: co_helper_email,
+          responseStatus: "needsAction",
+        },
+      ],
+      reminders: {
+        useDefault: true,
+      },
+    };
+
+    const createRes = await axios.post(
+      `https://www.googleapis.com/calendar/v3/calendars/${calendar_id}/events?sendUpdates=all`,
+      event,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    const eventId = createRes.data.id;
+
+    // Step 7: Store event ID in DB
+    await ambarsariyaPool.query(
+      `UPDATE sell.co_helper_notifications SET calendar_event_id = $1 WHERE id = $2`,
+      [eventId, notification_id]
+    );
+
+    // Step 8: Update attendee's responseStatus (accepted/declined/etc.)
+    const updatedAttendees = createRes.data.attendees?.map((attendee) =>
+      attendee.email === co_helper_email
+        ? { ...attendee, responseStatus: response_status }
+        : attendee
+    );
+
+    if (updatedAttendees) {
+      await axios.patch(
+        `https://www.googleapis.com/calendar/v3/calendars/${calendar_id}/events/${eventId}?sendUpdates=all`,
+        { attendees: updatedAttendees },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+    }
+
+    // Step 9: Update DB status
+    if (notification_id) {
+      await ambarsariyaPool.query(
+        `UPDATE sell.co_helper_notifications SET status = $1 WHERE id = $2`,
+        [response_status, notification_id]
+      );
+    }
+
+    // Step 10: Final Response
+    return res.json({
+      success: true,
+      message: `Appointment scheduled successfully. Co-helper response: ${response_status}`,
+      eventId: eventId,
+      htmlLink: createRes.data.htmlLink,
+    });
+  } catch (err) {
+    console.error("Error scheduling event:", err?.response?.data || err.message);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while scheduling the appointment",
+    });
+  }
+};
+
+
+const delete_googleCalendarEvent = async (req, res) => {
+  const {
+    organizer_email,
+    organizer_id,
+    event_id,
+    calendar_id = "primary",
+    notification_id
+  } = req.body;
+
+  try {
+    // 1. Fetch organizer's OAuth tokens
+    const user = await getUserTokensFromDB(organizer_email);
+    if (!user || !user.oauth_access_token) {
+      return res.status(401).json({
+        success: false,
+        message: "You have not authorized Google Calendar",
+      });
+    }
+
+    let accessToken = user.oauth_access_token;
+
+    // 2. Validate or refresh token
+    try {
+      await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+    } catch (error) {
+      if (user.oauth_refresh_token) {
+        accessToken = await refreshAccessToken(user.oauth_refresh_token);
+        await ambarsariyaPool.query(
+          `UPDATE sell.member_profiles SET oauth_access_token = $1 WHERE member_id = $2`,
+          [accessToken, organizer_id]
+        );
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Access token expired and no refresh token found",
+        });
+      }
+    }
+
+    // 3. Delete event from Google Calendar
+    await axios.delete(
+      `https://www.googleapis.com/calendar/v3/calendars/${calendar_id}/events/${event_id}?sendUpdates=all`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    // 4. Optionally update DB to reflect cancellation
+    if (notification_id) {
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.co_helper_notifications
+         WHERE id = $1`,
+        [notification_id]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Event deleted successfully",
+    });
+  } catch (err) {
+    console.error("Event Deletion Error:", err?.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete calendar event",
     });
   }
 };
@@ -946,5 +1314,7 @@ module.exports = {
   getGoogleContacts,
   get_userScopes,
   post_checkCalendarAccess,
-  post_scheduleGoogleCalendarAppointment
+  post_scheduleGoogleCalendarAppointment,
+  post_updateGoogleCalendarEventResponse,
+  delete_googleCalendarEvent
 };

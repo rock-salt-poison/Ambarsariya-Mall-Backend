@@ -239,6 +239,8 @@ router.get("/sell/shop-comments-and-replies", eshopController.get_shop_comments_
 router.get("/sell/co-helper/:member_id/:co_helper_type", coHelperController.get_coHelper);
 router.get("/sell/co-helpers-by-type-and-service/:co_helper_type/:key_service/:buyer_member", coHelperController.get_coHelpers_by_type_and_service);
 router.get("/sell/co-helper-by-type-service-member/:co_helper_type/:key_service/:member_id", coHelperController.get_coHelpers_by_type_service_member_id);
+router.get("/sell/co-helper-member-notifications/:member_id", coHelperController.get_member_notifications);
+router.get("/sell/co-helper-details/:id/:member_id", coHelperController.get_co_helper_popup_details);
 
 router.post("/sell/support", eshopController.post_visitorData);
 router.post("/sell/coupons/:shop_no", eshopController.post_discount_coupons);
