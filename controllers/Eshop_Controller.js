@@ -1163,7 +1163,8 @@ const get_userData = async (req, res) => {
         CASE 
           WHEN u.user_type = 'member' THEN u.full_name
           ELSE ef.business_name
-        END AS "name"
+        END AS "name", 
+        m.merchant_id
     FROM sell.users u
     JOIN sell.user_credentials uc 
       ON u.user_id = uc.user_id
@@ -1171,6 +1172,8 @@ const get_userData = async (req, res) => {
       ON mp.user_id = u.user_id
     LEFT JOIN sell.eshop_form ef
       ON u.user_id = ef.user_id
+    LEFT JOIN sell.merchant m
+      ON m.merchant_id = ef.merchant_id OR m.merchant_id = mp.merchant_id
     LEFT JOIN sell.support s
       ON s.access_token = uc.access_token
     WHERE uc.access_token = $1
@@ -1554,40 +1557,46 @@ const get_visitorData = async (req, res) => {
       // If sender_id exists, include response subquery
       query = `
         SELECT  
-              v.support_id,
-              v.visitor_id,
-              v.name,
-              v.phone_no,
-              v.purpose,
-              v.message,
-              v.file_attached,
-              v.user_type,
-              v.response,
-              v.access_token,
-              d.domain_name,
-              s.sector_name,
-              (
-                SELECT json_agg(response_obj)
-                FROM (
-                  SELECT DISTINCT ON (sc.sender_id)
-                    json_build_object(
-                      'sender_id', sc.sender_id,
-                      'sender_type', sc.sender_type,
-                      'sender_response', sc.message,
-                      'notification_id', sc.notification_id,
-                      'business_name', ef.business_name,
-                      'shop_access_token', ef.shop_access_token
-                    ) AS response_obj
-                  FROM sell.support_chat_messages sc
-                  LEFT JOIN sell.eshop_form ef ON ef.shop_no = sc.sender_id
-                  WHERE sc.support_id = v.support_id AND sc.sender_id != $2
-                  ORDER BY sc.sender_id, sc.sent_at DESC
-                ) latest_responses
-              ) AS response
-            FROM sell.support v
-            LEFT JOIN domains d ON d.domain_id = v.domain_id
-            LEFT JOIN sectors s ON s.sector_id = v.sector_id
-            WHERE v.access_token = $1;
+    v.support_id,
+    v.visitor_id,
+    v.name,
+    v.phone_no,
+    v.purpose,
+    v.message,
+    v.file_attached,
+    v.user_type,
+    v.response,
+    v.access_token,
+    d.domain_name,
+    s.sector_name,
+    (
+      SELECT json_agg(response_obj)
+      FROM (
+        SELECT DISTINCT ON (sc.sender_id)
+          json_build_object(
+            'sender_id', sc.sender_id,
+            'sender_type', sc.sender_type,
+            'sender_response', sc.message,
+            'notification_id', sc.notification_id,
+            'business_name', COALESCE(ef.business_name, ef2.business_name) ,
+            'shop_access_token', COALESCE(ef.shop_access_token, ef2.shop_access_token)
+          ) AS response_obj
+        FROM sell.support_chat_messages sc
+        LEFT JOIN sell.eshop_form ef 
+          ON ef.shop_no = sc.sender_id
+        LEFT JOIN sell.merchant m 
+          ON m.merchant_id = sc.sender_id
+        LEFT JOIN sell.eshop_form ef2 
+          ON ef2.shop_no = m.shop_id
+        WHERE sc.support_id = v.support_id 
+          AND sc.sender_id != $2
+        ORDER BY sc.sender_id, sc.sent_at DESC
+      ) latest_responses
+    ) AS response
+FROM sell.support v
+LEFT JOIN domains d ON d.domain_id = v.domain_id
+LEFT JOIN sectors s ON s.sector_id = v.sector_id
+WHERE v.access_token = $1;
       `;
       params = [token, sender_id];
     } else {
@@ -1750,10 +1759,11 @@ const put_visitorData = async (req, resp) => {
       broadcastMessage("Notifying merchants...");
 
       const usersQuery = await ambarsariyaPool.query(
-        `SELECT ef.shop_no, uc.username, uc.user_id, u.user_type
+        `SELECT ef.shop_no, uc.username, uc.user_id, u.user_type, m.merchant_id
       FROM sell.eshop_form ef 
       JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
       JOIN sell.users u ON u.user_id = uc.user_id
+      LEFT JOIN sell.merchant m ON m.merchant_id = ef.merchant_id
       WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
         [domain, sector, access_token]
       );
@@ -1844,8 +1854,8 @@ Your Support Team`,
                 support_id,
                 sending_from,
                 user_type,
-                user.shop_no,
-                "shop",
+                user.merchant_id !== null ? user.merchant_id : user.shop_no,
+                user.merchant_id !== null ? 'merchant' : 'shop',
                 `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
               ]
             );
