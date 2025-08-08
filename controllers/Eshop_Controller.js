@@ -4482,7 +4482,30 @@ const get_shop_comments_with_replies = async (req, res) => {
   }
 }
 
+const get_shop_details_with_shop_access_token = async (req, res) => {
+  const { shop_access_token } = req.params;
+  console.log(shop_access_token);
+  
+  try {
+    const result = await ambarsariyaPool.query(
+      `SELECT ef.shop_no, ef.business_name, uc.username, ef.poc_name 
+      FROM sell.eshop_form ef 
+      LEFT JOIN sell.user_credentials uc
+      ON uc.user_id = ef.user_id 
+       WHERE ef.shop_access_token = $1`,
+      [shop_access_token]
+    );
 
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Shop not found." });
+    }
+
+    res.status(200).json({ data: result.rows[0] });
+  } catch (error) {
+    console.error("Error fetching shop data:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 const disable_shop_review = async (req, res) => {
   const { id, visible } = req.params;
@@ -4600,5 +4623,6 @@ module.exports = {
   disable_shop_review,
   post_shop_comment,
   post_shop_comment_reply,
-  get_shop_comments_with_replies
+  get_shop_comments_with_replies,
+  get_shop_details_with_shop_access_token
 };

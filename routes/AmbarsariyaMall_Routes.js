@@ -241,6 +241,7 @@ router.get("/sell/co-helpers-by-type-and-service/:co_helper_type/:key_service/:b
 router.get("/sell/co-helper-by-type-service-member/:co_helper_type/:key_service/:member_id", coHelperController.get_coHelpers_by_type_service_member_id);
 router.get("/sell/co-helper-member-notifications/:member_id", coHelperController.get_member_notifications);
 router.get("/sell/co-helper-details/:id/:member_id", coHelperController.get_co_helper_popup_details);
+router.get("/sell/shop-details-with-access-token/:shop_access_token", eshopController.get_shop_details_with_shop_access_token);
 
 router.post("/sell/support", eshopController.post_visitorData);
 router.post("/sell/coupons/:shop_no", eshopController.post_discount_coupons);

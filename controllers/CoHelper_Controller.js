@@ -84,9 +84,10 @@ const post_coHelperNotification = async (req, res) => {
           task_details,
           estimated_hours,
           offerings,
-          calendar_event_id
+          calendar_event_id,
+          shop_no
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
         )
         ON CONFLICT (requester_id, co_helper_id, task_date, task_time)
         DO NOTHING
@@ -106,6 +107,7 @@ const post_coHelperNotification = async (req, res) => {
         data?.estimated_hours,
         data?.offerings,
         data?.calendar_event_id,
+        data?.shop_no
       ]);
 
     await ambarsariyaPool.query("COMMIT");
@@ -261,11 +263,15 @@ const get_co_helper_popup_details = async (req, res) => {
                       WHEN chn.requester_id = $2 THEN 'sender'
                       ELSE NULL
                     END AS member_role,
-                    uc.username as requester_email
+                    uc.username as requester_email,
+                    ef.business_name,
+                    ucef.username as shop_keeper_email
                   FROM sell.co_helper_notifications chn
                   LEFT JOIN sell.co_helpers ch ON ch.id = chn.co_helper_id
                   LEFT JOIN sell.member_profiles mp ON chn.requester_id = mp.member_id
 				          LEFT JOIN sell.user_credentials uc ON mp.user_id = uc.user_id
+				          LEFT JOIN sell.eshop_form ef ON ef.shop_no = chn.shop_no
+				          LEFT JOIN sell.user_credentials ucef ON ef.user_id = ucef.user_id
                   WHERE chn.id=$1`;
       let result = await ambarsariyaPool.query(query, [id, member_id]);
       if (result.rowCount === 0) {

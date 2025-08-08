@@ -8,6 +8,8 @@ const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
 const ambarsariyaPool = createDbPool();
 require("dotenv").config();
+const nodemailer = require("nodemailer");
+
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1047,6 +1049,7 @@ const post_scheduleGoogleCalendarAppointment = async (req, res) => {
     requester_id,
     co_helper_email,
     co_helper_id,
+    co_helper_name,
     task_date,
     task_time,
     estimated_hours,
@@ -1058,6 +1061,8 @@ const post_scheduleGoogleCalendarAppointment = async (req, res) => {
     co_helper_type,
     service,
     offerings,
+    shopKeeperEmail,
+    shopName,
     calendar_id = "primary",
   } = req.body;
 console.log(req.body);
@@ -1123,20 +1128,20 @@ console.log(req.body);
     const coHelperAuth = new google.auth.OAuth2();
     coHelperAuth.setCredentials({ access_token: coHelperAccessToken });
 
-    const calendar = google.calendar({ version: 'v3', auth: coHelperAuth });
+    // const calendar = google.calendar({ version: 'v3', auth: coHelperAuth });
 
-    const freeBusy = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: eventStart,
-        timeMax: eventEnd,
-        items: [{ id: calendar_id }],
-      },
-    });
+    // const freeBusy = await calendar.freebusy.query({
+    //   requestBody: {
+    //     timeMin: eventStart,
+    //     timeMax: eventEnd,
+    //     items: [{ id: calendar_id }],
+    //   },
+    // });
 
-    const busySlots = freeBusy.data.calendars[calendar_id].busy;
-    if (busySlots.length > 0) {
-      return res.status(409).json({ success: false, message: "Co-helper is busy during this time slot" });
-    }
+    // const busySlots = freeBusy.data.calendars[calendar_id].busy;
+    // if (busySlots.length > 0) {
+    //   return res.status(409).json({ success: false, message: "Co-helper is busy during this time slot" });
+    // }
 
     // Step 6: Create event
     const event = {
@@ -1206,6 +1211,41 @@ console.log(req.body);
         [response_status, notification_id]
       );
     }
+
+    const calendarViewLink = createRes.data.htmlLink; // safer than manually building URL
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const mailOptions = {
+  from: process.env.SMTP_USER,
+  to: shopKeeperEmail,
+  subject: "Upcoming Appointment",
+  text: `Hello ${shopName},
+
+${requester_name} is buying something from your store and has added co-helper ${co_helper_name}.
+
+You can view the event here: ${calendarViewLink}
+
+Best regards,
+Your Support Team`,
+  html: `
+    <p>Hello ${shopName},</p>
+    <p>${requester_name} is buying something from your store and has added co-helper <b>${co_helper_name}</b>.</p>
+    <p>You can view the event here: <a href="${calendarViewLink}">Open in Google Calendar</a></p>
+    <p>Best regards,<br>Your Support Team</p>
+  `
+};
+
+await transporter.sendMail(mailOptions);
+
 
     // Step 10: Final Response
     return res.json({
