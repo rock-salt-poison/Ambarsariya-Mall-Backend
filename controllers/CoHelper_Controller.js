@@ -168,7 +168,8 @@ const get_member_notifications = async (req, res) => {
                       WHEN ch.member_id = $1 THEN 'receiver'
                       WHEN chn.requester_id = $1 THEN 'sender'
                       ELSE NULL
-                    END AS member_role
+                    END AS member_role,
+                    chn.created_at as notification_created_at
                   FROM sell.co_helper_notifications chn
                   LEFT JOIN sell.co_helpers ch ON ch.id = chn.co_helper_id
                   WHERE ch.member_id = $1 OR chn.requester_id = $1;`;
@@ -265,7 +266,8 @@ const get_co_helper_popup_details = async (req, res) => {
                     END AS member_role,
                     uc.username as requester_email,
                     ef.business_name,
-                    ucef.username as shop_keeper_email
+                    ucef.username as shop_keeper_email,
+                    chn.created_at as notification_created_at
                   FROM sell.co_helper_notifications chn
                   LEFT JOIN sell.co_helpers ch ON ch.id = chn.co_helper_id
                   LEFT JOIN sell.member_profiles mp ON chn.requester_id = mp.member_id
