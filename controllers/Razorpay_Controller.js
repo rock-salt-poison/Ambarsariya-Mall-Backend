@@ -50,41 +50,54 @@ const post_createContact = async (req, res) => {
 
 const post_createFundAccount = async (req, res) => {
   try {
-    const { name, contact, email, upi_id , type} = req.body;
+    const { name, contact, email, upi_id, type } = req.body;
 
-    // 1. Create Contact
+    // Basic local format check for UPI ID before API call (optional)
+    // const upiRegex = /^[\w.\-]{2,50}@[a-z]{3,}$/i;
+    // if (!upiRegex.test(upi_id)) {
+    //   return res.status(400).json({ error: "Invalid UPI format" });
+    // }
+
+    // Create contact
     const contactResp = await axios.post(
-      'https://api.razorpay.com/v1/contacts',
-      {
-        name,
-        contact,
-        email,
-        type,
-      },
+      "https://api.razorpay.com/v1/contacts",
+      { name, contact, email, type },
       { auth }
     );
 
-    const contact_id = contactResp.data.id;
-
-    // 2. Create Fund Account
+    // Create fund account with VPA (this will validate on Razorpay side)
     const fundResp = await axios.post(
-      'https://api.razorpay.com/v1/fund_accounts',
+      "https://api.razorpay.com/v1/fund_accounts",
       {
-        contact_id,
-        account_type: 'vpa',
-        vpa: { address: upi_id },
+        contact_id: contactResp.data.id,
+        account_type: "vpa",
+        vpa: { address: upi_id }
       },
       { auth }
     );
 
-    const fundAccountId = fundResp.data.id;
+    res.json({
+      message: "Fund account created successfully",
+      fund_account_id: fundResp.data.id,
+      contact_id: contactResp.data.id
+    });
 
-    res.json({ fundAccountId, contact_id });
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: err.message });
+    // If Razorpay returns an error about invalid UPI, catch it here
+    const errData = err.response?.data;
+    if (
+      errData &&
+      errData.error &&
+      errData.error.description.includes("invalid")
+    ) {
+      return res.status(400).json({ error: "Invalid UPI ID" });
+    }
+    console.error(errData || err.message);
+    res.status(500).json({error : errData.error.description} || { error: err.message });
   }
 };
+
+
 
 const post_payoutToShopkeeper = async (req, res) => {
   try {
