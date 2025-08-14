@@ -2411,6 +2411,7 @@ const post_discount_coupons = async (req, res) => {
             VALUES ($1, $2, $3)
             ON CONFLICT (coupon_id, condition_type)
             DO UPDATE SET 
+                condition_type = EXCLUDED.condition_type,
                 condition_value = EXCLUDED.condition_value;
           `;
 

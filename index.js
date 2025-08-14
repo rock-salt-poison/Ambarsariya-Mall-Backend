@@ -16,6 +16,7 @@ const adminRoutes = require('./routes/AdminRoutes');
 const driveRoutes = require('./routes/DriveRoutes');
 const paymentRoutes = require('./routes/PaymentRoutes');
 const photosRoutes = require('./routes/GooglePhotos_Routes');
+const serveRoutes = require('./routes/ServeRoutes');
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
@@ -35,6 +36,7 @@ app.use('/admin/api', adminRoutes);
 app.use('/api/drive', driveRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/google-photo', photosRoutes);
+app.use('/api/ambarsariya/serve', serveRoutes);
 
 // Create HTTP server and integrate it with Socket.IO
 const server = http.createServer(app);

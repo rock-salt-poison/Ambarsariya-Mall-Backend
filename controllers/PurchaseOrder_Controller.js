@@ -30,10 +30,10 @@ const post_purchaseOrder = async (req, res) => {
         products, subtotal, shipping_address, shipping_method, payment_method, 
         special_offers, discount_applied, taxes, co_helper, discount_amount, 
         pre_post_paid, extra_charges, total_amount, date_of_issue, 
-        delivery_terms, additional_instructions, coupon_cost
+        delivery_terms, additional_instructions, coupon_cost, buyer_name, buyer_contact_no
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 
-        $17, $18, $19, $20, $21, $22
+        $17, $18, $19, $20, $21, $22, $23, $24
       ) 
       RETURNING po_access_token
     `;
@@ -45,7 +45,7 @@ const post_purchaseOrder = async (req, res) => {
       JSON.stringify(data.special_offers), JSON.stringify(data.discount_applied), 
       data.taxes, data.co_helper, data.discount_amount, data.pre_post_paid, 
       data.extra_charges, data.total_amount, data.date_of_issue, 
-      data.delivery_terms, data.additional_instructions, data.coupon_cost
+      data.delivery_terms, data.additional_instructions, data.coupon_cost, data.buyer_name, data.buyer_contact_no
     ]);
 
     const po_access_token = purchase_order.rows[0].po_access_token;

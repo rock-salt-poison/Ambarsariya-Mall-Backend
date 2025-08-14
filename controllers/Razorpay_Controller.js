@@ -102,6 +102,8 @@ const post_createFundAccount = async (req, res) => {
 const post_payoutToShopkeeper = async (req, res) => {
   try {
     const { fund_account_id, amount } = req.body;
+    console.log(fund_account_id, amount, process.env.ACCOUNT_NUMBER);
+    
 
     const response = await axios.post(
       'https://api.razorpay.com/v1/payouts',
@@ -123,6 +125,8 @@ const post_payoutToShopkeeper = async (req, res) => {
 
     res.json(response.data);
   } catch (err) {
+    console.log(err);
+    
     res.status(500).json({ error: err.message });
   }
 };
