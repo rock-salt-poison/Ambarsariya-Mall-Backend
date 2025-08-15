@@ -82,6 +82,25 @@ const post_purchaseOrder = async (req, res) => {
 
     }
 
+
+    if (data?.discount_applied?.coupon_type) {
+      const updateCouponQuery = `
+        UPDATE Sell.discount_coupons
+        SET no_of_coupons = GREATEST(no_of_coupons - 1, 0)
+        WHERE coupon_type = $1 AND shop_no = $2
+        RETURNING no_of_coupons
+      `;
+
+      const couponResult = await ambarsariyaPool.query(updateCouponQuery, [
+        data.discount_applied.coupon_type,
+        data.seller_id // assuming seller_id is the shop_no
+      ]);
+
+      if (couponResult.rowCount === 0) {
+        console.log(`No matching coupon found for type: ${data.discount_applied.coupon_type} and shop_no: ${data.seller_id}`);
+      }
+    }
+
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
     res.status(201).json({
       message: "Purchase order created successfully",

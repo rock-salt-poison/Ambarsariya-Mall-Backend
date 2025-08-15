@@ -2458,7 +2458,7 @@ const get_discountCoupons = async (req, res) => {
             sell.discount_coupons c
         JOIN 
             sell.discount_conditions d ON c.id = d.coupon_id
-        WHERE c.shop_no=$1
+        WHERE c.shop_no=$1 AND c.no_of_coupons > 0
         ORDER BY 
             c.id, d.condition_type;
         `;
@@ -2509,6 +2509,31 @@ const get_discountCoupons = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch discounts" });
   }
 };
+
+const get_coupons = async (req, res) => {
+  const { shop_no } = req.params;
+
+  try {
+    if (shop_no) {
+      console.log(shop_no);
+      
+      let query = `
+           select * from sell.discount_coupons where shop_no = $1 and discount_category != 'rsTenPerDay'`;
+      let result = await ambarsariyaPool.query(query, [shop_no]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: `Invalid shop no.` });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "No coupons exists." });
+  }
+};
+
 
 const get_nearby_shops = async (req, res) => {
   const { token } = req.params;
@@ -4635,5 +4660,6 @@ module.exports = {
   post_shop_comment,
   post_shop_comment_reply,
   get_shop_comments_with_replies,
-  get_shop_details_with_shop_access_token
+  get_shop_details_with_shop_access_token,
+  get_coupons
 };
