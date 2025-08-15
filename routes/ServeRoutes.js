@@ -7,6 +7,6 @@ const crmController = require('../controllers/Serve/CRM/CRM_Controller');
 router.get('/customer-records/:start_date/:end_date/:shop_no', crmController.get_customer_records);
 router.get('/completed-orders/:start_date/:end_date/:shop_no/:buyer_id', crmController.get_completed_orders);
 router.get('/pending-orders/:start_date/:end_date/:shop_no/:buyer_id', crmController.get_pending_orders);
-
+router.get('/purchased-total/:shop_no/:buyer_id', crmController.get_last_purchased_total);
 
 module.exports = router;

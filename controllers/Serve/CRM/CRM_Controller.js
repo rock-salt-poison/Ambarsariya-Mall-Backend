@@ -99,8 +99,36 @@ const get_pending_orders = async (req, res) => {
   }
 };
 
+const get_last_purchased_total = async (req, res) => {
+  const { shop_no, buyer_id } = req.params;
+
+  try {
+    if (shop_no && buyer_id) {
+      console.log(shop_no, buyer_id);
+      
+      let query = `
+           SELECT SUM(total_amount) AS total_purchased
+            FROM sell.invoice_order
+            WHERE seller_id = $1
+              AND buyer_id =$2`;
+      let result = await ambarsariyaPool.query(query, [shop_no, buyer_id]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: `Purchaser does not exists.` });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Not purchased anything before" });
+  }
+};
+
 module.exports = { 
   get_customer_records,
   get_completed_orders,
-  get_pending_orders
+  get_pending_orders,
+  get_last_purchased_total,
 };
