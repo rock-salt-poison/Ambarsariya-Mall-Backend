@@ -902,42 +902,131 @@ const delete_support_page_famous_area = async (req, res) => {
   }
 };
 
+// const delete_user = async (req, res) => {
+//   const { user_id } = req.params;
+
+//   try {
+//     // Start a transaction
+//     await ambarsariyaPool.query('BEGIN');
+
+//     // Step 1: Update user_type to 'visitor' in sell.support if access_token matches
+//     await ambarsariyaPool.query(
+//       `
+//       UPDATE sell.support s
+//       SET user_type = 'visitor'
+//       FROM sell.user_credentials uc
+//       WHERE s.access_token = uc.access_token
+//         AND uc.user_id = $1
+//       `,
+//       [user_id]
+//     );
+
+//     // Step 2: Delete the user from sell.users
+//     await ambarsariyaPool.query(
+//       `DELETE FROM sell.users WHERE user_id = $1`,
+//       [user_id]
+//     );
+
+//     // Commit the transaction
+//     await ambarsariyaPool.query('COMMIT');
+
+//     res.json({ message: "User updated and removed successfully" });
+//   } catch (err) {
+//     // Rollback in case of error
+//     await ambarsariyaPool.query('ROLLBACK');
+//     console.error("Error removing user:", err);
+//     res.status(500).json({ error: "Failed to update and remove user" });
+//   }
+// };
+
+
 const delete_user = async (req, res) => {
-  const { user_id } = req.params;
+  const { userId } = req.params;
 
   try {
-    // Start a transaction
-    await ambarsariyaPool.query('BEGIN');
+    await ambarsariyaPool.query("BEGIN");
 
-    // Step 1: Update user_type to 'visitor' in sell.support if access_token matches
-    await ambarsariyaPool.query(
-      `
-      UPDATE sell.support s
-      SET user_type = 'visitor'
-      FROM sell.user_credentials uc
-      WHERE s.access_token = uc.access_token
-        AND uc.user_id = $1
-      `,
-      [user_id]
+    // 1. Check if user is a merchant
+    const userResult = await ambarsariyaPool.query(
+      `SELECT is_merchant, user_type FROM sell.users WHERE user_id = $1`,
+      [userId]
     );
 
-    // Step 2: Delete the user from sell.users
-    await ambarsariyaPool.query(
-      `DELETE FROM sell.users WHERE user_id = $1`,
-      [user_id]
+    if (userResult.rowCount === 0) {
+      await ambarsariyaPool.query("ROLLBACK");
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { is_merchant, user_type } = userResult.rows[0];
+
+    // 🔹 Case 1: Not a merchant → just delete the user
+    if (!is_merchant) {
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.users WHERE user_id = $1`,
+        [userId]
+      );
+      await ambarsariyaPool.query("COMMIT");
+      return res.json({ message: "User deleted successfully" });
+    }
+
+    // 🔹 Case 2: Merchant → fetch merchant details
+    const merchantResult = await ambarsariyaPool.query(
+      `SELECT * FROM sell.merchant WHERE member_user_id = $1 OR shop_user_id = $1`,
+      [userId]
     );
 
-    // Commit the transaction
-    await ambarsariyaPool.query('COMMIT');
+    if (merchantResult.rowCount === 0) {
+      await ambarsariyaPool.query("ROLLBACK");
+      return res.status(404).json({ error: "Merchant details not found" });
+    }
 
-    res.json({ message: "User updated and removed successfully" });
+    const merchant = merchantResult.rows[0];
+
+    // 🔹 Case 2a: Shop user being deleted
+    if (user_type === "shop") {
+      await ambarsariyaPool.query(
+        `UPDATE sell.users SET is_merchant = false WHERE user_id = $1`,
+        [merchant.member_user_id]
+      );
+
+      await ambarsariyaPool.query(
+        `UPDATE sell.member_profiles SET merchant_id = NULL WHERE member_id = $1`,
+        [merchant.member_id]
+      );
+
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.users WHERE user_id = $1`,
+        [userId]
+      );
+    }
+
+    // 🔹 Case 2b: Member user being deleted
+    else if (user_type === "member") {
+      await ambarsariyaPool.query(
+        `UPDATE sell.users SET is_merchant = false WHERE user_id = $1`,
+        [merchant.shop_user_id]
+      );
+
+      await ambarsariyaPool.query(
+        `UPDATE sell.eshop_form SET is_merchant = false, merchant_id = NULL WHERE shop_no = $1`,
+        [merchant.shop_id]
+      );
+
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.users WHERE user_id = $1`,
+        [userId]
+      );
+    }
+
+    await ambarsariyaPool.query("COMMIT");
+    res.json({ message: "Merchant user removed successfully" });
   } catch (err) {
-    // Rollback in case of error
-    await ambarsariyaPool.query('ROLLBACK');
-    console.error("Error removing user:", err);
-    res.status(500).json({ error: "Failed to update and remove user" });
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Error removing merchant user:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 

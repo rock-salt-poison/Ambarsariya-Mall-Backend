@@ -2390,7 +2390,8 @@ const post_discount_coupons = async (req, res) => {
             ON CONFLICT (coupon_type, shop_no)
             DO UPDATE SET 
                 validity_start = EXCLUDED.validity_start,
-                validity_end = EXCLUDED.validity_end
+                validity_end = EXCLUDED.validity_end,
+                no_of_coupons = EXCLUDED.no_of_coupons
             RETURNING id;
           `;
 
