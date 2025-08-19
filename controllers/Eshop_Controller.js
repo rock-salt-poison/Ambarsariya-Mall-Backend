@@ -6,6 +6,7 @@ const { deleteFileFromGCS } = require("../utils/deleteFileFromGCS");
 const { encryptData, decryptData } = require("../utils/cryptoUtils");
 const nodemailer = require("nodemailer");
 const { broadcastMessage, emitChatMessage } = require("../webSocket");
+const QRCode = require("qrcode");
 
 const get_checkIfMemberExists = async (req, res) => {
   const { username, phone1, phone2 } = req.query;
@@ -749,6 +750,7 @@ const update_eshop = async (req, resp) => {
     key_players,
     razorpay_contact_id,
     razorpay_fund_account_id,
+    username
   } = req.body;
 
   console.log("Received file:", req.file); // Log the file
@@ -765,7 +767,7 @@ const update_eshop = async (req, resp) => {
 
     // Fetch the existing file URL from the database
     const existingData = await ambarsariyaPool.query(
-      `SELECT usp_values_url FROM Sell.eshop_form WHERE shop_access_token = $1`,
+      `SELECT usp_values_url, qr_code FROM Sell.eshop_form WHERE shop_access_token = $1`,
       [shopAccessToken]
     );
 
@@ -776,6 +778,7 @@ const update_eshop = async (req, resp) => {
     }
 
     let uploadedUSPLink = existingData.rows[0].usp_values_url;
+    let existingShopQR  = existingData.rows[0].qr_code;
 
     if (req.file) {
       const targetFolder = "shop_usp_values_pdf";
@@ -830,6 +833,62 @@ const update_eshop = async (req, resp) => {
         .status(404)
         .json({ message: "No e-shop found with the provided access token." });
     }
+
+    let qrFileUrl = existingShopQR;
+
+    // ✅ Only generate/send/store QR if not already set
+    if (!existingShopQR) {
+      const qrLink = `https://ambarsariyamall.shop/sell/support/shop/shop-detail/${shopAccessToken}`;
+      const qrBuffer = await QRCode.toBuffer(qrLink, { type: "png" });
+
+      // Wrap buffer into a "file-like" object for uploadFileToGCS
+      const qrFile = {
+        originalname: `${shopAccessToken}.png`,
+        buffer: qrBuffer,
+      };
+
+      const qrFileUrl = await uploadFileToGCS(qrFile, "eshop_qrcodes");
+
+      // Store QR link in DB
+      await ambarsariyaPool.query(
+        `UPDATE Sell.eshop_form SET qr_code = $1 WHERE shop_access_token = $2`,
+        [qrFileUrl, shopAccessToken]
+      );
+
+      // Send email with QR
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_USER,
+        to: username,
+        subject: "🎉 Welcome to Ambarsariya Mall!",
+        html: `
+          <h2>Welcome ${business_name}!</h2>
+          <p>Your shop has been successfully updated 🎊</p>
+          <p>Here is your QR code for shop identification:</p>
+          <img src="${qrFileUrl}" alt="QR Code" />
+          <p>Or click directly: <a href="${qrLink}">${qrLink}</a></p>
+        `,
+        attachments: [
+          {
+            filename: "shop_qr.png",
+            content: qrBuffer,
+          },
+        ],
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+
 
     resp.status(200).json({
       message: "E-shop data successfully updated.",
