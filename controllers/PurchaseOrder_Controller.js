@@ -184,8 +184,8 @@ const get_purchase_orders = async (req, res) => {
             ))
             FROM sell.items i
             WHERE i.product_id = product->>'id'
-        ) AS items
-
+        ) AS items,
+      uc.access_token as buyer_access_token
     FROM sell.purchase_order po
     CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
     LEFT JOIN sell.products pr 
@@ -201,7 +201,11 @@ const get_purchase_orders = async (req, res) => {
     LEFT JOIN type_of_services ts
         ON ts.id = po.shipping_method
     LEFT JOIN sell.eshop_form ef
-    ON ef.shop_no = po.seller_id 
+    ON ef.shop_no = po.seller_id
+    LEFT JOIN sell.member_profiles mp
+    ON mp.member_id = po.buyer_id 
+	  LEFT JOIN sell.user_credentials uc
+    ON uc.user_id = mp.user_id  
     WHERE po.po_no = $1;
 `;
       let result = await ambarsariyaPool.query(query, [po_no]);

@@ -1714,13 +1714,15 @@ const put_visitorData = async (req, resp) => {
     message,
     user_type,
     access_token,
+    custom_domain,
+    custom_sector,
   } = req.body;
   console.log("Received request to process visitor data", req.body);
   broadcastMessage("Processing visitor's data");
 
   try {
     // Check if there are merchants with the same domain and sector
-     if (domain) {
+     if (domain && domain !== '1') {
     const merchantsCheckQuery = await ambarsariyaPool.query(
       `SELECT ef.shop_no, uc.username, uc.user_id
       FROM sell.eshop_form ef 
@@ -1779,6 +1781,8 @@ const put_visitorData = async (req, resp) => {
              purpose = $3,
              message = $4,
              file_attached = $5,
+             custom_domain = $7,
+             custom_sector = $8,
              updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
          WHERE access_token = $6
          RETURNING visitor_id, support_id`,
@@ -1789,6 +1793,8 @@ const put_visitorData = async (req, resp) => {
           message,
           uploadedFile || existingFile,
           access_token,
+          custom_domain, 
+          custom_sector
         ]
       );
       console.log("Visitor data updated successfully");
@@ -1836,8 +1842,10 @@ const put_visitorData = async (req, resp) => {
   
           const fileLink =
             uploadedFile || existingFile
-              ? `You can view the file here: ${uploadedFile || existingFile}`
+              ? `${uploadedFile || existingFile}`
               : "No file attached";
+          console.log(fileLink);
+          
 
          const mailOptions = {
             from: process.env.SMTP_USER,
@@ -1930,8 +1938,11 @@ const put_visitorData = async (req, resp) => {
             // Determine the link to the file, either new or existing
             const fileLink =
               uploadedFile || existingFile
-                ? `You can view the file here: ${uploadedFile || existingFile}`
+                ? `${uploadedFile || existingFile}`
                 : "No file attached";
+
+          console.log(fileLink);
+
   
            const mailOptions = {
               from: process.env.SMTP_USER,
