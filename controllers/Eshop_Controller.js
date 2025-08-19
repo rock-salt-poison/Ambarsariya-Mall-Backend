@@ -1828,7 +1828,7 @@ const put_visitorData = async (req, resp) => {
                   </a>
                 </p>
 
-                <p style="margin-top: 30px;">Best regards,<br/> rock.salt.poison@gmail.com,<br/>Ambarsariya Mall Support Team</p>
+                <p style="margin-top: 30px;">Best regards,<br/> marketing@ambarsariyamall.shop,<br/>Ambarsariya Mall Support Team</p>
               </div>
             `,
           };
@@ -1926,7 +1926,7 @@ const put_visitorData = async (req, resp) => {
                     </a>
                   </p>
   
-                  <p style="margin-top: 15px;">Best regards,<br/> rock.salt.poison@gmail.com,<br/>Ambarsariya Mall Support Team</p>
+                  <p style="margin-top: 15px;">Best regards,<br/> marketing@ambarsariyamall.shop,<br/>Ambarsariya Mall Support Team</p>
                 </div>
               `,
             };

@@ -168,6 +168,7 @@ const get_purchase_orders = async (req, res) => {
         COALESCE(so_product->>'accept_or_deny', 'Hold') AS status,
         so.so_no,
         so.status AS sale_order_status,
+        po.status AS purchase_order_status,
         po.seller_id,
         ef.shop_access_token,
         po.coupon_cost,
