@@ -1569,6 +1569,8 @@ const get_visitorData = async (req, res) => {
     v.access_token,
     d.domain_name,
     s.sector_name,
+    v.custom_domain,
+    v.custom_sector,
     (
       SELECT json_agg(response_obj)
       FROM (
@@ -1614,7 +1616,9 @@ WHERE v.access_token = $1;
           v.response,
           v.access_token,
           d.domain_name,
-          s.sector_name
+          s.sector_name,
+          v.custom_domain,
+          v.custom_sector
         FROM sell.support v
         LEFT JOIN domains d ON d.domain_id = v.domain_id
         LEFT JOIN sectors s ON s.sector_id = v.sector_id
@@ -1657,6 +1661,7 @@ const put_visitorData = async (req, resp) => {
 
   try {
     // Check if there are merchants with the same domain and sector
+     if (domain_name !== "Co-Helper" && domain_name !== "Remote Jobs") {
     const merchantsCheckQuery = await ambarsariyaPool.query(
       `SELECT ef.shop_no, uc.username, uc.user_id
       FROM sell.eshop_form ef 
@@ -1672,6 +1677,7 @@ const put_visitorData = async (req, resp) => {
       broadcastMessage(errorMessage);
       return resp.json({ message: errorMessage });
     }
+  }
 
     let uploadedFile = null;
     const currentfile = req.file ? req.file : null;
@@ -1755,23 +1761,8 @@ const put_visitorData = async (req, resp) => {
     }
 
     if (purpose) {
-      console.log(`Purpose is ${purpose}. Notifying merchants...`);
-      broadcastMessage("Notifying merchants...");
-
-      const usersQuery = await ambarsariyaPool.query(
-        `SELECT ef.shop_no, uc.username, uc.user_id, u.user_type, m.merchant_id
-      FROM sell.eshop_form ef 
-      JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
-      JOIN sell.users u ON u.user_id = uc.user_id
-      LEFT JOIN sell.merchant m ON m.merchant_id = ef.merchant_id
-      WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
-        [domain, sector, access_token]
-      );
-
-      if (usersQuery.rows.length > 0) {
-        console.log("Merchants to be notified:", usersQuery.rows);
-
-        const transporter = nodemailer.createTransport({
+      
+      const transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST,
           port: process.env.SMTP_PORT,
           secure: process.env.SMTP_SECURE === "true",
@@ -1780,95 +1771,226 @@ const put_visitorData = async (req, resp) => {
             pass: process.env.SMTP_PASS,
           },
         });
-
-        for (let user of usersQuery.rows) {
-          console.log(support_id);
-
-          // Determine the link to the file, either new or existing
+      if (purpose === 'Apply as Co-helper' || purpose === 'Remote Jobs'){
+          console.log(`Purpose is ${purpose}. Notifying team...`);
+      broadcastMessage("Notifying team...");
+  
           const fileLink =
             uploadedFile || existingFile
               ? `You can view the file here: ${uploadedFile || existingFile}`
               : "No file attached";
 
-          const mailOptions = {
+         const mailOptions = {
             from: process.env.SMTP_USER,
-            to: user.username,
-            subject: "New Buyer Inquiry",
-            text: `Hello ${user.username},
+            to: "marketing@ambarsariyamall.shop",
+            subject: `New ${purpose} Inquiry`,
+            html: `
+              <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <h2 style="color: #2c3e50;">Hello Team,</h2>
+                
+                <p>
+                 A new candidate has applied under <b>${purpose}</b>.
+                </p>
 
-A new user has shown interest in buying something from your store.
+                <h3 style="margin-top: 20px;">Details:</h3>
+                <ul style="padding-left: 20px;">
+                  <li><b>Name:</b> ${name}</li>
+                  <li><b>Domain:</b> ${domain_name}</li>
+                  <li><b>Sector:</b> ${sector_name}</li>
+                  <li><b>User Type:</b> ${user_type}</li>
+                  <li><b>Phone No:</b> ${phone_no}</li>
+                  <li><b>Purpose:</b> ${purpose}</li>
+                  <li><b>Message:</b> ${message}</li>
+                  ${
+                    fileLink
+                      ? `<li><b>File:</b> <a href="${fileLink}" target="_blank">View File</a></li>`
+                      : ""
+                  }
+                </ul>
 
-Details:
-- Name: ${name}
-- Domain: ${domain_name}
-- Sector: ${sector_name}
-- User Type: ${user_type}
-- Phone No: ${phone_no}
-- Purpose: ${purpose}
-- Message: ${message}
-- File: ${fileLink}
+                <p style="margin-top: 20px;">
+                  ${
+                    [
+                      "We are here to solve your query with care and clarity.",
+                      "Your questions matter — we’re here with the answers.",
+                      "Every query is important, and we’re here to resolve it for you.",
+                      "Our team is always ready to solve your query, big or small.",
+                      "Ask us anything — we’re here to help you find the right solution.",
+                      "Your query is our priority, and we won’t rest until it’s solved.",
+                      "Support isn’t a department, it’s our promise — to solve your query."
+                    ][Math.floor(Math.random() * 7)]
+                  }
+                </p>
 
-Please review the inquiry and take appropriate action.
-https://ambarsariya-emall-frontend.vercel.app/AmbarsariyaMall/sell/support
+                <p style="margin-top: 20px;">
+                  <a href="https://ambarsariyamall.shop/sell/support" style="color: #007bff; text-decoration: none;">
+                    Visit Support Center
+                  </a>
+                </p>
 
-Best regards,
-Your Support Team`,
+                <p style="margin-top: 30px;">Best regards,<br/> rock.salt.poison@gmail.com,<br/>Ambarsariya Mall Support Team</p>
+              </div>
+            `,
           };
 
           try {
-            // Insert into support_chat_notifications and return the notification_id
-            const notificationResult = await ambarsariyaPool.query(
-              `INSERT INTO sell.support_chat_notifications 
-                (domain_id, sector_id, visitor_id, sent_to, sent_from, purpose, message, created_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
-              RETURNING id`,
-              [
-                domain,
-                sector,
-                visitor_id,
-                user.shop_no,
-                sending_from,
-                purpose,
-                message,
-              ]
-            );
-
-            const notification_id = notificationResult.rows[0].id;
-
-            // Send the email
-            await transporter.sendMail(mailOptions);
-            console.log(`Email sent to merchant: ${user.username}`);
-            broadcastMessage("Email sent to merchants.");
-
-            // Insert the corresponding chat message
-            await ambarsariyaPool.query(
-              `INSERT INTO Sell.support_chat_messages (
-                visitor_id, notification_id, support_id, sender_id, sender_type, 
-                receiver_id, receiver_type, message, sent_at
-              ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
-              )`,
-              [
-                visitor_id,
-                notification_id,
-                support_id,
-                sending_from,
-                user_type,
-                user.merchant_id !== null ? user.merchant_id : user.shop_no,
-                user.merchant_id !== null ? 'merchant' : 'shop',
-                `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
-              ]
-            );
-          } catch (error) {
-            console.error(`Error sending email to ${user.username}:`, error);
-            broadcastMessage("Error sending email to merchants.");
-          }
+              // Insert into support_chat_notifications and return the notification_id
+  
+              // Send the email
+              await transporter.sendMail(mailOptions);
+              console.log(`Email sent to the team: marketing@ambarsariyamall.shop`);
+              broadcastMessage("Email sent to the TEAM.");
+  
+            } catch (error) {
+              console.error(`Error sending email to marketing@ambarsariyamall.shop:`, error);
+              broadcastMessage("Error sending email to team.");
+            }
         }
-      } else {
-        console.log("No merchants found with the same domain and sector.");
-        broadcastMessage("No merchants found with the same domain and sector.");
+      }else{
+
+        console.log(`Purpose is ${purpose}. Notifying merchants...`);
+      broadcastMessage("Notifying merchants...");
+        const usersQuery = await ambarsariyaPool.query(
+          `SELECT ef.shop_no, ef.poc_name, uc.username, uc.user_id, u.user_type, m.merchant_id
+        FROM sell.eshop_form ef 
+        JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+        JOIN sell.users u ON u.user_id = uc.user_id
+        LEFT JOIN sell.merchant m ON m.merchant_id = ef.merchant_id
+        WHERE ef.domain = $1 and ef.sector = $2 and uc.access_token != $3`,
+          [domain, sector, access_token]
+        );
+  
+        if (usersQuery.rows.length > 0) {
+          console.log("Merchants to be notified:", usersQuery.rows);
+  
+          
+  
+          for (let user of usersQuery.rows) {
+            console.log(support_id);
+  
+            // Determine the link to the file, either new or existing
+            const fileLink =
+              uploadedFile || existingFile
+                ? `You can view the file here: ${uploadedFile || existingFile}`
+                : "No file attached";
+  
+           const mailOptions = {
+              from: process.env.SMTP_USER,
+              to: (purpose === "Apply as Co-helper" || purpose === "Remote Jobs")
+                ? "ms312093@gmail.com"
+                : user.username,
+              subject: `New ${purpose} Inquiry`,
+              html: `
+                <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                  <h2 style="color: #2c3e50;">Hello ${user.poc_name || "Team"},</h2>
+                  
+                  <p>
+                    ${
+                      purpose === "Apply as Co-helper" || purpose === "Remote Jobs"
+                        ? `A new candidate has applied under <b>${purpose}</b>.`
+                        : `A new user has shown interest in <b>${purpose}</b> at your store.`
+                    }
+                  </p>
+  
+                  <h3 style="margin-top: 20px;">Details:</h3>
+                  <ul style="padding-left: 20px;">
+                    <li><b>Name:</b> ${name}</li>
+                    <li><b>Domain:</b> ${domain_name}</li>
+                    <li><b>Sector:</b> ${sector_name}</li>
+                    <li><b>User Type:</b> ${user_type}</li>
+                    <li><b>Phone No:</b> ${phone_no}</li>
+                    <li><b>Purpose:</b> ${purpose}</li>
+                    <li><b>Message:</b> ${message}</li>
+                    ${
+                      fileLink
+                        ? `<li><b>File:</b> <a href="${fileLink}" target="_blank">View File</a></li>`
+                        : ""
+                    }
+                  </ul>
+  
+                  <p style="margin-top: 20px;">
+                    ${
+                      [
+                        "We are here to solve your query with care and clarity.",
+                        "Your questions matter — we’re here with the answers.",
+                        "Every query is important, and we’re here to resolve it for you.",
+                        "Our team is always ready to solve your query, big or small.",
+                        "Ask us anything — we’re here to help you find the right solution.",
+                        "Your query is our priority, and we won’t rest until it’s solved.",
+                        "Support isn’t a department, it’s our promise — to solve your query."
+                      ][Math.floor(Math.random() * 7)]
+                    }
+                  </p>
+  
+                  <p style="margin-top: 20px;">
+                    <a href="https://ambarsariyamall.shop/sell/support" style="color: #007bff; text-decoration: none;">
+                      Visit Support Center
+                    </a>
+                  </p>
+  
+                  <p style="margin-top: 30px;">Best regards,<br/>Ambarsariya Mall Support Team</p>
+                </div>
+              `,
+            };
+  
+  
+  
+            try {
+              // Insert into support_chat_notifications and return the notification_id
+              const notificationResult = await ambarsariyaPool.query(
+                `INSERT INTO sell.support_chat_notifications 
+                  (domain_id, sector_id, visitor_id, sent_to, sent_from, purpose, message, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata')
+                RETURNING id`,
+                [
+                  domain,
+                  sector,
+                  visitor_id,
+                  user.shop_no,
+                  sending_from,
+                  purpose,
+                  message,
+                ]
+              );
+  
+              const notification_id = notificationResult.rows[0].id;
+  
+              // Send the email
+              await transporter.sendMail(mailOptions);
+              console.log(`Email sent to merchant: ${user.username}`);
+              broadcastMessage("Email sent to merchants.");
+  
+              // Insert the corresponding chat message
+              await ambarsariyaPool.query(
+                `INSERT INTO Sell.support_chat_messages (
+                  visitor_id, notification_id, support_id, sender_id, sender_type, 
+                  receiver_id, receiver_type, message, sent_at
+                ) VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kolkata'
+                )`,
+                [
+                  visitor_id,
+                  notification_id,
+                  support_id,
+                  sending_from,
+                  user_type,
+                  user.merchant_id !== null ? user.merchant_id : user.shop_no,
+                  user.merchant_id !== null ? 'merchant' : 'shop',
+                  `Name: ${name}, Domain: ${domain_name}, Sector: ${sector_name}, User Type: ${user_type}, Phone No: ${phone_no}, Purpose: ${purpose}, Message: ${message}, File: ${fileLink}`,
+                ]
+              );
+            } catch (error) {
+              console.error(`Error sending email to ${user.username}:`, error);
+              broadcastMessage("Error sending email to merchants.");
+            }
+          }
+        } else {
+          console.log("No merchants found with the same domain and sector.");
+          broadcastMessage("No merchants found with the same domain and sector.");
+        }
       }
-    }
+
+    
     // else {
     //   console.log('No email will be sent.');
     //   broadcastMessage('Purpose is not "buy". No email will be sent.');

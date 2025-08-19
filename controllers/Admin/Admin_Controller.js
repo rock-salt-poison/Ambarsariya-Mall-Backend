@@ -946,9 +946,13 @@ const delete_user = async (req, res) => {
   try {
     await ambarsariyaPool.query("BEGIN");
 
-    // 1. Check if user is a merchant
+    // 1. Check if user exists
     const userResult = await ambarsariyaPool.query(
-      `SELECT is_merchant, user_type FROM sell.users WHERE user_id = $1`,
+      `SELECT u.is_merchant, u.user_type, mp.member_id 
+       FROM sell.users u
+       LEFT JOIN sell.member_profiles mp
+       ON mp.user_id = u.user_id
+       WHERE u.user_id = $1`,
       [userId]
     );
 
@@ -957,10 +961,53 @@ const delete_user = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const { is_merchant, user_type } = userResult.rows[0];
+    const { is_merchant, user_type, member_id } = userResult.rows[0];
 
-    // 🔹 Case 1: Not a merchant → just delete the user
+    // Helper: collect file urls and delete from GCS
+    const deleteFilesFromTables = async () => {
+      if (user_type === "member") {
+        // member_events
+        const events = await ambarsariyaPool.query(
+          `SELECT uploaded_file_link FROM sell.member_events WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of events.rows) {
+          if (row.uploaded_file) await deleteFileFromGCS(row.uploaded_file);
+        }
+
+        // member_community
+        const community = await ambarsariyaPool.query(
+          `SELECT uploaded_file FROM sell.member_community WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of community.rows) {
+          if (row.uploaded_file) await deleteFileFromGCS(row.uploaded_file);
+        }
+
+        // member_profiles
+        const profile = await ambarsariyaPool.query(
+          `SELECT profile_img, bg_img FROM sell.member_profiles WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of profile.rows) {
+          if (row.profile_img) await deleteFileFromGCS(row.profile_img);
+          if (row.bg_img) await deleteFileFromGCS(row.bg_img);
+        }
+      } else if (user_type === "shop") {
+        // eshop_form
+        const shop = await ambarsariyaPool.query(
+          `SELECT usp_values_url FROM sell.eshop_form WHERE user_id = $1`,
+          [userId]
+        );
+        for (const row of shop.rows) {
+          if (row.usp_values_url) await deleteFileFromGCS(row.usp_values_url);
+        }
+      }
+    };
+
+    // 🔹 Case 1: Not a merchant → just delete user & files
     if (!is_merchant) {
+      await deleteFilesFromTables();
       await ambarsariyaPool.query(
         `DELETE FROM sell.users WHERE user_id = $1`,
         [userId]
@@ -981,6 +1028,9 @@ const delete_user = async (req, res) => {
     }
 
     const merchant = merchantResult.rows[0];
+
+    // delete files first
+    await deleteFilesFromTables();
 
     // 🔹 Case 2a: Shop user being deleted
     if (user_type === "shop") {
@@ -1026,6 +1076,7 @@ const delete_user = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 

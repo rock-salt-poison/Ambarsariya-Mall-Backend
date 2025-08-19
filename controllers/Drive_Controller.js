@@ -449,7 +449,7 @@ const get_requestGoogleAccess = (req, res) => {
     prompt: "consent",
     login_hint: username,
     redirect_uri: redirectUri,
-    state: encodeURIComponent(redirect_url || '')
+    state: encodeURIComponent(redirect_url || process.env.GOOGLE_REDIRECT_URI2)
   });
 
   res.redirect(url);
