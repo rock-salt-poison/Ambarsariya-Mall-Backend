@@ -1661,7 +1661,7 @@ const put_visitorData = async (req, resp) => {
 
   try {
     // Check if there are merchants with the same domain and sector
-     if (domain_name !== "Co-Helper" && domain_name !== "Remote Jobs") {
+     if (domain) {
     const merchantsCheckQuery = await ambarsariyaPool.query(
       `SELECT ef.shop_no, uc.username, uc.user_id
       FROM sell.eshop_form ef 
@@ -1846,7 +1846,7 @@ const put_visitorData = async (req, resp) => {
               broadcastMessage("Error sending email to team.");
             }
         }
-      }else{
+      else{
 
         console.log(`Purpose is ${purpose}. Notifying merchants...`);
       broadcastMessage("Notifying merchants...");
@@ -1876,9 +1876,7 @@ const put_visitorData = async (req, resp) => {
   
            const mailOptions = {
               from: process.env.SMTP_USER,
-              to: (purpose === "Apply as Co-helper" || purpose === "Remote Jobs")
-                ? "ms312093@gmail.com"
-                : user.username,
+              to: user.username,
               subject: `New ${purpose} Inquiry`,
               html: `
                 <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -1928,7 +1926,7 @@ const put_visitorData = async (req, resp) => {
                     </a>
                   </p>
   
-                  <p style="margin-top: 30px;">Best regards,<br/>Ambarsariya Mall Support Team</p>
+                  <p style="margin-top: 15px;">Best regards,<br/> rock.salt.poison@gmail.com,<br/>Ambarsariya Mall Support Team</p>
                 </div>
               `,
             };
@@ -1990,7 +1988,7 @@ const put_visitorData = async (req, resp) => {
         }
       }
 
-    
+    }
     // else {
     //   console.log('No email will be sent.');
     //   broadcastMessage('Purpose is not "buy". No email will be sent.');
