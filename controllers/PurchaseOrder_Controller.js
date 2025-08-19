@@ -124,6 +124,8 @@ const get_purchase_orders = async (req, res) => {
         po.po_no, 
         po.buyer_id, 
         po.buyer_type, 
+        po.buyer_name, 
+        po.buyer_contact_no, 
         po.seller_id, 
         po.buyer_gst_number, 
         po.seller_gst_number, 
