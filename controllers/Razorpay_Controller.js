@@ -108,9 +108,9 @@ const post_payoutToShopkeeper = async (req, res) => {
     const response = await axios.post(
       'https://api.razorpay.com/v1/payouts',
       {
-        account_number: process.env.ACCOUNT_NUMBER,
+        account_number: '2323230011990505',
         fund_account_id,
-        amount: amount * 100,
+        amount: amount,
         currency: 'INR',
         mode: 'UPI',
         purpose: 'payout',
@@ -147,10 +147,83 @@ const post_verifyPayment = async (req, res) => {
 }
 
 
+const get_paymentDetails = async (req, res) => {
+  try {
+    const { payment_id } = req.params; // pass payment_id in URL
+
+    const response = await axios.get(
+      `https://api.razorpay.com/v1/payments/${payment_id}`,
+      { auth }
+    );
+
+    // Extract important fields
+    const payment = response.data;
+    const result = {
+      payment_id: payment.id,
+      amount: payment.amount / 100, // in INR
+      currency: payment.currency,
+      status: payment.status,
+      fee: (payment.fee || 0) / 100, // fee deducted
+      tax: (payment.tax || 0) / 100, // GST on fee
+      method: payment.method,
+      order_id: payment.order_id,
+      invoice_id: payment.invoice_id,
+      international: payment.international,
+      amount_refunded: payment.amount_refunded,
+      refund_status: payment.refund_status,
+      captured: payment.captured,
+      description: payment.description,
+      card_id: payment.card_id,
+      bank: payment.bank,
+      wallet: payment.wallet,
+      vpa: payment.vpa,
+      email: payment.email,
+      contact: payment.contact,
+      notes: payment.notes,
+      error_code: payment.error_code,
+      error_description: payment.error_description,
+      captured_at: payment.captured_at,
+      created_at: payment.created_at,
+    };
+
+    res.json(result);
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({
+      error: err.response?.data?.error?.description || err.message,
+    });
+  }
+};
+
+const get_payoutDetails = async (req, res) => {
+  try {
+    const { payout_id } = req.params; // pass payment_id in URL
+
+    const response = await axios.get(
+      `https://api.razorpay.com/v1/payouts/${payout_id}`,
+      { auth }
+    );
+
+    // Extract important fields
+    const payout = response.data;
+
+    res.json(payout);
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({
+      error: err.response?.data?.error?.description || err.message,
+    });
+  }
+};
+
+
+
 module.exports = {
     post_createOrder,
     post_createContact,
     post_createFundAccount,
     post_payoutToShopkeeper,
     post_verifyPayment,
+    get_paymentDetails, 
+    get_payoutDetails
 }

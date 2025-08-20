@@ -23,12 +23,12 @@ const post_invoiceOrder = async (req, res) => {
     buyer_address, buyer_location, buyer_contact_no,buyer_email, payment_type,
     payment_details, crm_no, share_invoice_services, co_helper,
     prepaid_postpaid, delivery_order, download_pdf, qr_code,
-    buyer_special_note, emall_special_note
+    buyer_special_note, emall_special_note, razorpay_order_id, razorpay_payment_id, razorpay_signature, razorpay_payout_id
   ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
     $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
     $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44,
-    $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56
+    $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60
   )
   ON CONFLICT (po_no, so_no) DO UPDATE SET
     seller_id = EXCLUDED.seller_id,
@@ -84,7 +84,12 @@ const post_invoiceOrder = async (req, res) => {
     download_pdf = EXCLUDED.download_pdf,
     qr_code = EXCLUDED.qr_code,
     buyer_special_note = EXCLUDED.buyer_special_note,
-    emall_special_note = EXCLUDED.emall_special_note
+    emall_special_note = EXCLUDED.emall_special_note,
+    razorpay_order_id = EXCLUDED.razorpay_order_id, 
+    razorpay_payment_id = EXCLUDED.razorpay_payment_id, 
+    razorpay_signature = EXCLUDED.razorpay_signature,
+    razorpay_payout_id = EXCLUDED.razorpay_payout_id,
+    updated_at = NOW()
   RETURNING invoice_no;
 `;
 
@@ -145,7 +150,11 @@ const post_invoiceOrder = async (req, res) => {
         data.download_pdf,
         data.qr_code,
         data.buyer_special_note,
-        data.emall_special_note
+        data.emall_special_note, 
+        data.razorpay_order_id,
+        data.razorpay_payment_id,
+        data.razorpay_signature,
+        data.razorpay_payout_id
     ]);
 
     const invoice_no = purchase_order.rows[0].invoice_no;
@@ -312,7 +321,7 @@ const get_invoice_orders = async (req, res) => {
   
   try {
     if (invoice_no) {
-      let query = `SELECT io.*, po.created_at as po_created_at, so.created_at as so_created_at FROM sell.invoice_order io
+      let query = `SELECT io.*, po.created_at as po_created_at, so.created_at as so_created_at, po.buyer_type FROM sell.invoice_order io
         JOIN sell.purchase_order po
         ON po.po_no = io.po_no
         JOIN sell.sale_order so
