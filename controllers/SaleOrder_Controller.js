@@ -3,7 +3,7 @@ const ambarsariyaPool = createDbPool();
 
 const post_saleOrder = async (req, res) => {
   const { data } = req.body;
-  console.log(data);
+  // console.log(data);
 
   try {
     await ambarsariyaPool.query("BEGIN"); // Start transaction

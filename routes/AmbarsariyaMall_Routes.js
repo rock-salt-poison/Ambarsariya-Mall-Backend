@@ -252,6 +252,7 @@ router.post("/sell/coupons/:shop_no", eshopController.post_discount_coupons);
 router.post("/sell/products", productController.post_products);
 router.post("/sell/verify_otp", eshopController.post_verify_otp);
 router.post("/purchase_order", purchaseController.post_purchaseOrder);
+router.put("/purchase_order_discount/:po_access_token", purchaseController.put_purchaseOrderDiscount);
 router.post("/sale_order", saleController.post_saleOrder);
 router.post("/sell/items", itemController.post_items);
 router.post("/sell/sku", skuController.post_sku);

@@ -114,6 +114,76 @@ const post_purchaseOrder = async (req, res) => {
 };
 
 
+const put_purchaseOrderDiscount = async (req, res) => {
+  const { data, previous_discount } = req.body; 
+  const { po_access_token } = req.params;
+
+  console.log(data, previous_discount, po_access_token);
+  
+
+  try {
+    await ambarsariyaPool.query("BEGIN"); // Start transaction
+
+    // 1. Update purchase order with new discount
+    const productQuery = `
+      UPDATE Sell.purchase_order
+        SET discount_applied = $1,
+            discount_amount = $2
+        WHERE po_access_token = $3
+        RETURNING po_no
+    `;
+
+    const purchase_order = await ambarsariyaPool.query(productQuery, [
+      JSON.stringify(data.discount_applied),
+      data.discount_amount,
+      po_access_token,
+    ]);
+
+    const updatedPoNo = purchase_order.rows[0].po_no;
+
+    // 2. If there was a previous discount coupon, increment it back
+    if (previous_discount?.coupon_type) {
+      const incrementPrevCouponQuery = `
+        UPDATE Sell.discount_coupons
+        SET no_of_coupons = no_of_coupons + 1
+        WHERE coupon_type = $1 AND shop_no = $2
+        RETURNING no_of_coupons
+      `;
+      await ambarsariyaPool.query(incrementPrevCouponQuery, [
+        previous_discount.coupon_type,
+        data.seller_id,
+      ]);
+    }
+
+    // 3. If new coupon applied, decrement its count
+    if (data?.discount_applied?.coupon_type) {
+      const decrementCurrentCouponQuery = `
+        UPDATE Sell.discount_coupons
+        SET no_of_coupons = GREATEST(no_of_coupons - 1, 0)
+        WHERE coupon_type = $1 AND shop_no = $2
+        RETURNING no_of_coupons
+      `;
+      await ambarsariyaPool.query(decrementCurrentCouponQuery, [
+        data.discount_applied.coupon_type,
+        data.seller_id,
+      ]);
+    }
+
+    // Commit transaction
+    await ambarsariyaPool.query("COMMIT");
+
+    res.status(201).json({
+      message: "Purchase order discount updated successfully",
+      po_no: updatedPoNo,
+    });
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK"); // Rollback on error
+    console.error("Error updating purchase order discount:", err);
+    res.status(400).json({ error: "Order update failed", message: err.message });
+  }
+};
+
+
 const get_purchase_orders = async (req, res) => {
   const { po_no } = req.params;
   console.log(po_no);
@@ -280,7 +350,7 @@ const get_all_purchased_orders = async (req, res) => {
   try {
     if (buyer_id) {
       let query = `SELECT 
-        po.po_no, po.total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount, 
+        po.po_no, COALESCE(so.subtotal, po.total_amount) as total_amount, ts.service, po.shipping_method, po.payment_method, so.products , po.buyer_gst_number, po.discount_amount, 
         po.status AS purchase_order_status,
 		    so.status AS sale_order_status 
       FROM sell.purchase_order po
@@ -401,5 +471,6 @@ module.exports = {
   get_purchase_order_numbers,
   get_all_purchased_orders,
   get_purchased_order,
-  get_buyer_details
+  get_buyer_details,
+  put_purchaseOrderDiscount
 };
