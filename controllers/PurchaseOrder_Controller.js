@@ -43,7 +43,7 @@ const post_purchaseOrder = async (req, res) => {
       data.seller_gst_number, JSON.stringify(data.products), data.subtotal, 
       data.shipping_address, data.shipping_method, data.payment_method, 
       JSON.stringify(data.special_offers), JSON.stringify(data.discount_applied), 
-      data.taxes, data.co_helper, data.discount_amount, data.pre_post_paid, 
+      data.taxes, JSON.stringify(data.co_helper), data.discount_amount, data.pre_post_paid, 
       data.extra_charges, data.total_amount, data.date_of_issue, 
       data.delivery_terms, data.additional_instructions, data.coupon_cost, data.buyer_name, data.buyer_contact_no
     ]);
@@ -255,7 +255,25 @@ const get_purchase_orders = async (req, res) => {
             FROM sell.items i
             WHERE i.product_id = product->>'id'
         ) AS items,
-      uc.access_token as buyer_access_token
+      uc.access_token as buyer_access_token,
+
+      chn.id as co_helper_notification_id,
+      chn.requester_id,
+      chn.task_date as co_helper_task_date,
+      chn.task_time as co_helper_task_time,
+      chn.task_details as co_helper_task_details,
+      chn.estimated_hours as co_helper_estimated_hours,
+      chn.offerings as co_helper_offerings,
+      chn.status as co_helper_status,
+      chn.created_at as co_helper_request_created_at,
+      chn.task_location as co_helper_task_location,
+      chn.service as co_helper_requested_service,
+      co.member_id as co_helper_member_id,
+      co.co_helper_type,
+      co.experience_in_this_domain,
+      co.last_job_fundamentals_or_skills_known,
+      co.average_salary as co_helper_average_salary,
+      co.last_salary as co_helper_last_salary
     FROM sell.purchase_order po
     CROSS JOIN LATERAL jsonb_array_elements(po.products::jsonb) AS product
     LEFT JOIN sell.products pr 
@@ -276,6 +294,11 @@ const get_purchase_orders = async (req, res) => {
     ON mp.member_id = po.buyer_id 
 	  LEFT JOIN sell.user_credentials uc
     ON uc.user_id = mp.user_id  
+    LEFT JOIN sell.co_helper_notifications chn
+    ON chn.id = (po.co_helper->>'id')::int
+    LEFT JOIN sell.co_helpers co
+    ON co.id = chn.co_helper_id  
+
     WHERE po.po_no = $1;
 `;
       let result = await ambarsariyaPool.query(query, [po_no]);

@@ -94,7 +94,7 @@ const post_saleOrder = async (req, res) => {
       data.shipping_method,
       data.shipping_charges,
       data.expected_delivery_date,
-      data.co_helper,
+      JSON.stringify(data.co_helper),
       JSON.stringify(data.subscription_type),
       data.payment_terms,
       data.total_payment_with_all_services,

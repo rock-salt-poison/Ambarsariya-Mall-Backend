@@ -215,6 +215,40 @@ const get_coHelpers_by_type_and_service = async (req, res) => {
   }
 };
 
+const get_requestedCoHelper = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (id) {
+      console.log(id);
+      
+      let query = `select 
+                    chn.*, 
+                    co.member_id, 
+                    co.co_helper_type, 
+                    co.experience_in_this_domain, 
+                    co.last_job_fundamentals_or_skills_known, 
+                    co.average_salary, 
+                    co.last_salary 
+                  from sell.co_helper_notifications chn 
+                  left join sell.co_helpers co
+                  on co.id = chn.co_helper_id
+                  where chn.id = $1`;
+      let result = await ambarsariyaPool.query(query, [id]);
+      if (result.rowCount === 0) {
+        // If no rows are found, assume the shop_no is invalid
+        res
+          .json({ valid: false, message: `No co-helper exists.` });
+      } else {
+        res.json({ valid: true, data: result.rows });
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ e: "Failed to fetch data" });
+  }
+};
+
 const get_coHelpers_by_type_service_member_id = async (req, res) => {
   const { co_helper_type, key_service, member_id } = req.params;
 
@@ -297,5 +331,6 @@ module.exports = {
   get_coHelpers_by_type_service_member_id, 
   post_coHelperNotification,
   get_member_notifications ,
-  get_co_helper_popup_details
+  get_co_helper_popup_details,
+  get_requestedCoHelper
 };
