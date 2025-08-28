@@ -2788,6 +2788,8 @@ const get_nearby_shops = async (req, res) => {
   }
 };
 
+
+
 const get_nearby_areas_for_shop = async (req, res) => {
   const { shopToken, shop_no } = req.params;
 
@@ -2836,6 +2838,46 @@ const get_nearby_areas_for_shop = async (req, res) => {
   } catch (err) {
     console.error("Error in get_nearby_areas_for_shop:", err);
     res.status(500).json({ error: "Server error" });
+  }
+};
+
+const get_near_by_area = async (req, res) => {
+  try {
+    const { searched_value } = req.params; // Extract the shop_no from the request
+
+    // Query for full visitor data
+    const query = `
+            WITH matched_shops AS (
+            SELECT e.latitude, e.longitude
+            FROM sell.eshop_form e
+            JOIN domains d ON e.domain = d.domain_id
+            JOIN sectors s ON e.sector = s.sector_id
+            WHERE d.domain_name ILIKE '%' || $1 || '%'
+              OR s.sector_name ILIKE '%' || $1 || '%'
+          )
+          SELECT DISTINCT fa.*
+          FROM admin.famous_areas fa
+          JOIN matched_shops ms
+            ON (6371 * acos(
+                  cos(radians(ms.latitude)) * cos(radians(fa.latitude)) *
+                  cos(radians(fa.longitude) - radians(ms.longitude)) +
+                  sin(radians(ms.latitude)) * sin(radians(fa.latitude))
+                )) < .5
+          ORDER BY fa.area_title;
+        `;
+    const result = await ambarsariyaPool.query(query, [searched_value]);
+
+    if (result.rowCount === 0) {
+      // If no rows are found, assume the token is invalid
+      res.json({ valid: false, message: "No nearby areas found" });
+    } else {
+      res.json({ valid: true, data: result.rows });
+    }
+  } catch (err) {
+    console.error("Error processing request:", err);
+    res
+      .status(500)
+      .json({ message: "Error processing request.", error: err.message });
   }
 };
 
@@ -4834,6 +4876,7 @@ module.exports = {
   update_shop_parking_status,
   put_near_by_shops,
   get_nearby_areas_for_shop,
+  get_near_by_area,
   get_existing_sectors,
   get_existing_domains,
   get_searched_products,

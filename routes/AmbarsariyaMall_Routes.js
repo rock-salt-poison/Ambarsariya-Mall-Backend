@@ -85,6 +85,7 @@ router.put("/sell/near-by-shop", eshopController.put_near_by_shops);
 router.get("/sell/shop-user-data", eshopController.get_shopUserData);
 router.get("/sell/shops", eshopController.get_allShops);
 router.get("/sell/other-shops", eshopController.get_otherShops);
+router.get("/sell/near-by-areas/:searched_value", eshopController.get_near_by_area);
 router.get(
   "/sell/near-by-area/:shopToken/:shop_no",
   eshopController.get_nearby_areas_for_shop
