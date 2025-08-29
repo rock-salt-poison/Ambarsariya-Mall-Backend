@@ -605,6 +605,8 @@ const handleAuthCallback2 = async (req, res) => {
 const get_imageLink = async (req, res) => {
   try {
     const fileId = req.params.fileId;
+    console.log(fileId);
+    
 
     // Get file metadata to determine MIME type
     const fileMeta = await driveService.files.get({
