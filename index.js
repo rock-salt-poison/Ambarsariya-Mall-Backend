@@ -29,6 +29,7 @@ app.use(cors({
   "https://ambarsariyamall.com",
 "https://ambarsariyamall.com" ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'], // Allow methods including PATCH
+  credentials: true
 }));
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
 
