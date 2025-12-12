@@ -8,4 +8,6 @@ router.get('/permissions', rolesController.get_permissions);
 router.get('/staff-types', rolesController.get_staff_types);
 router.get('/employees', rolesController.get_role_employees);
 
+router.post('/create-role', rolesController.create_role_employee);
+
 module.exports = router;
