@@ -17,11 +17,17 @@ const driveRoutes = require('./routes/DriveRoutes');
 const paymentRoutes = require('./routes/PaymentRoutes');
 const photosRoutes = require('./routes/GooglePhotos_Routes');
 const serveRoutes = require('./routes/ServeRoutes');
+const adminRolesRoutes = require('./routes/AdminRolesRoutes');
 
 // Middleware to parse incoming JSON requests
 app.use(express.json());
 app.use(cors({
-  origin: '*', 
+  // origin: '*', 
+  origin: ["https://www.ambarsariyamall.shop",
+    "https://ambarsariyamall.shop",
+   "http://localhost:3002",
+  "https://ambarsariyamall.com",
+"https://ambarsariyamall.com" ],
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'], // Allow methods including PATCH
 }));
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
@@ -37,6 +43,7 @@ app.use('/api/drive', driveRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/google-photo', photosRoutes);
 app.use('/api/ambarsariya/serve', serveRoutes);
+app.use('/admin/roles', adminRolesRoutes);
 
 // Create HTTP server and integrate it with Socket.IO
 const server = http.createServer(app);

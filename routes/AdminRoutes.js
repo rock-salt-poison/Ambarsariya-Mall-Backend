@@ -27,8 +27,7 @@ router.post("/notice", (req, res, next) => {
       if (err) {
         if (err instanceof multer.MulterError) {
           // Handle Multer errors
-          console.log(err);
-          
+          console.log(err);   
           if (err.code === "LIMIT_FILE_SIZE") {
             return res.status(400).json({ error: "File size exceeds the 1MB limit." });
           }
