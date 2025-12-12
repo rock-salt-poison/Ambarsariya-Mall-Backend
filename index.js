@@ -20,7 +20,6 @@ const serveRoutes = require('./routes/ServeRoutes');
 const adminRolesRoutes = require('./routes/AdminRolesRoutes');
 
 // Middleware to parse incoming JSON requests
-app.use(express.json());
 app.use(cors({
   // origin: '*', 
   origin: ["https://www.ambarsariyamall.shop",
@@ -31,6 +30,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT'], // Allow methods including PATCH
   credentials: true
 }));
+app.use(express.json());
 app.use('/notice_images', express.static(path.join(__dirname, 'notice_images')));
 
 app.get('/health', (req, res) => {
