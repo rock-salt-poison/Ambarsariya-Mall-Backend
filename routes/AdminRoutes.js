@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const loginController = require('../controllers/Admin/LoginController');
 const adminController = require('../controllers/Admin/Admin_Controller');
 const eshopController = require('../controllers/Eshop_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
 
 // get routes for AmbarsariyaMall
+router.get('/employee/:token', loginController.get_userByToken);
 router.get('/travel-time/:mode/:travel_type', adminController.get_travel_time);
 router.get('/countries', adminController.get_countries);
 router.get('/notices', adminController.get_notice);
@@ -19,6 +21,7 @@ router.get('/sell/famous-areas/:token', eshopController.get_nearby_shops);
 
 
 // post routes for AmbarsariyaMall
+router.post('/login', loginController.post_authLogin);
 router.post('/travel-time', adminController.post_travel_time);
 router.post('/countries', adminController.post_countries);
 // router.post('/notice', UploadFiles.single('img'), adminController.post_notice);
