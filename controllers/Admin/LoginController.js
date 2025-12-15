@@ -50,6 +50,7 @@ const get_userByToken = async (req, res) => {
   try {
     const query = `
       SELECT 
+        e.id,
         e.name, 
         e.role_name,
         rp.permission_name,
