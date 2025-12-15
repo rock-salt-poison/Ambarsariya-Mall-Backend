@@ -97,6 +97,7 @@ const get_staff = async (req, res) => {
         s.age,
         s.start_date,
         s.assign_area,
+        s.assign_area_name,
         s.phone,
         d.department_name
       FROM admin.staff s
