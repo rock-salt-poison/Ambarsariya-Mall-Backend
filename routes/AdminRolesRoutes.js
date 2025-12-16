@@ -8,6 +8,7 @@ router.get('/permissions', rolesController.get_permissions);
 router.get('/staff-types', rolesController.get_staff_types);
 router.get('/employees', rolesController.get_role_employees);
 router.get('/staff/:token', rolesController.get_staff);
+router.get('/staff-with-type/:token/:staff_type', rolesController.get_staff_with_type);
 
 router.post('/create-role', rolesController.create_role_employee);
 router.put('/create-staff', rolesController.create_staff);

@@ -116,6 +116,60 @@ const get_staff = async (req, res) => {
   }
 };
 
+
+const get_staff_with_type = async (req, res) => {
+  try {
+    const token = req.params.token;
+    const staff_type = req.params.staff_type;
+
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
+    }
+
+    // 1️⃣ Get logged-in employee
+    const employeeResult = await ambarsariyaPool.query(
+      `
+      SELECT id, department_id
+      FROM admin.employees
+      WHERE access_token = $1
+      `,
+      [token]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    const employeeId = employeeResult.rows[0].id;
+
+    // 2️⃣ Fetch staff under this employee
+    const staffResult = await ambarsariyaPool.query(
+      `
+      SELECT 
+        s.name,
+        st.staff_type_name,
+        s.email,
+        s.username,
+        s.age,
+        s.start_date,
+        s.assign_area,
+        s.assign_area_name,
+        s.phone
+      FROM admin.staff s
+      LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
+      LEFT JOIN admin.employees e ON e.id = s.manager_id
+      WHERE s.manager_id = $1 and s.username is not null and s.assign_area is not null and st.staff_type_name = $2
+      `,
+      [employeeId, staff_type]
+    );
+
+    res.json(staffResult.rows);
+  } catch (err) {
+    console.error("Error fetching staff:", err);
+    res.status(500).json({ error: "Failed to fetch staff" });
+  }
+};
+
 const create_role_employee = async (req, resp) => {
   console.log(req.body);
   const {
@@ -421,4 +475,5 @@ module.exports = {
   store_staff_email_otp,
   verifyStaffEmailOtp,
   create_staff,
+  get_staff_with_type
 };
