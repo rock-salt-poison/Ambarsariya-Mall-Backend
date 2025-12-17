@@ -146,6 +146,7 @@ const get_staff_with_type = async (req, res) => {
     const staffResult = await ambarsariyaPool.query(
       `
       SELECT 
+        s.id,
         s.name,
         st.staff_type_name,
         s.email,
@@ -465,6 +466,129 @@ const create_staff = async (req, resp) => {
   }
 };
 
+const create_staff_task = async (req, resp) => {
+  const {
+    assigned_by,
+    assigned_to,
+    assigned_task,
+    start_date,
+    end_date,
+    assign_area,
+    approx_shops ,
+    approx_offices ,
+    approx_hawkers,
+    assign_daily_task,
+    choose_date,
+    daily_location
+  } = req.body;
+
+  try {
+    if (!assigned_by || !assigned_to || !assigned_task || !start_date || !end_date) {
+      return resp.status(400).json({ message: "Missing required fields" });
+    }
+
+    // 1️⃣ Fetch staff details
+    const staffRes = await ambarsariyaPool.query(
+      `SELECT name, email FROM admin.staff WHERE id = $1`,
+      [assigned_to]
+    );
+
+    if (staffRes.rowCount === 0) {
+      return resp.status(404).json({ message: "Staff not found" });
+    }
+
+    const { name, email } = staffRes.rows[0];
+
+    // 2️⃣ Insert task
+    const result = await ambarsariyaPool.query(
+      `INSERT INTO admin.staff_tasks (
+        assigned_by,
+        assigned_to,
+        assigned_task,
+        start_date,
+        end_date,
+        assign_area,
+        approx_shops,
+        approx_offices,
+        approx_hawkers,
+        assign_daily_task,
+        choose_date,
+        daily_location
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+      ) RETURNING id`,
+      [
+        assigned_by,
+        assigned_to,
+        assigned_task,
+        start_date,
+        end_date,
+        JSON.stringify(assign_area),
+        approx_shops,
+        approx_offices,
+        approx_hawkers,
+        assign_daily_task,
+        choose_date,
+        JSON.stringify(daily_location)
+      ]
+    );
+
+    const taskId = result.rows[0].id;
+
+    // 3️⃣ Send mail
+    if (email) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_USER,
+        to: email,
+        subject: "New Task Assigned – Ambarsariya Mall",
+        html: `
+          <h2>Hello ${name},</h2>
+
+          <p>A new task has been assigned to you.</p>
+
+          <p><strong>Task:</strong> ${assigned_task}</p>
+          <p><strong>Duration:</strong> ${start_date} to ${end_date}</p>
+
+          <p>
+            Please log in to your dashboard using this link:<br/>
+            <a href="https://ambarsariyamall.com" target="_blank">
+              https://ambarsariyamall.com
+            </a>
+          </p>
+
+          <br/>
+          <p>Regards,<br/>
+          <strong>Ambarsariya Mall Team</strong></p>
+        `,
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+    return resp.status(201).json({
+      success: true,
+      message: "Task assigned successfully",
+      task_id: taskId,
+    });
+
+  } catch (err) {
+    console.error(err);
+    resp.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+
 module.exports = {
   get_departments,
   get_permissions,
@@ -475,5 +599,6 @@ module.exports = {
   store_staff_email_otp,
   verifyStaffEmailOtp,
   create_staff,
-  get_staff_with_type
+  get_staff_with_type,
+  create_staff_task
 };

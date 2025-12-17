@@ -11,8 +11,10 @@ router.get('/staff/:token', rolesController.get_staff);
 router.get('/staff-with-type/:token/:staff_type', rolesController.get_staff_with_type);
 
 router.post('/create-role', rolesController.create_role_employee);
-router.put('/create-staff', rolesController.create_staff);
 router.post('/staff-email-otp', rolesController.store_staff_email_otp);
 router.post('/verify-staff-email-otp', rolesController.verifyStaffEmailOtp);
+router.post('/create-staff_task', rolesController.create_staff_task);
+
+router.put('/create-staff', rolesController.create_staff);
 
 module.exports = router;
