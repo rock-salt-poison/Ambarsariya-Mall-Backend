@@ -171,9 +171,117 @@ const get_staff_with_type = async (req, res) => {
   }
 };
 
+// const create_role_employee = async (req, resp) => {
+//   console.log(req.body);
+//   const {
+//     department,
+//     role_name,
+//     rights,
+//     username,
+//     password,
+//     name,
+//     phone,
+//     email,
+//     age,
+//     start_date,
+//   } = req.body;
+
+//   try {
+//     // -------------------------------------
+//     // 1️⃣ VALIDATION: Check required fields
+//     // -------------------------------------
+//     if (!department || !role_name || !rights || !username || !password) {
+//       return resp.status(400).json({ message: "Missing required fields" });
+//     }
+
+//     // -------------------------------------
+//     // 2️⃣ HASH PASSWORD
+//     // -------------------------------------
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     // -------------------------------------
+//     // 3️⃣ INSERT DATA INTO admin.employees TABLE
+//     // -------------------------------------
+//     const result = await ambarsariyaPool.query(
+//       `INSERT INTO admin.employees
+//         (department_id, role_name, permission_id, username, password, name, phone, email, age, start_date)
+//        VALUES
+//         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+//        RETURNING id`,
+//       [
+//         department,
+//         role_name,
+//         rights,
+//         username,
+//         hashedPassword,
+//         name,
+//         phone,
+//         email,
+//         age,
+//         start_date,
+//       ]
+//     );
+
+//     const employeeId = result.rows[0]?.id;
+
+//     if (!employeeId) {
+//       return resp.status(500).json({
+//         message: "Error creating employee entry",
+//       });
+//     }
+
+//     // -------------------------------------
+//     // 4️⃣ SEND EMAIL WITH PASSWORD
+//     // -------------------------------------
+//     if (email) {
+//       const transporter = nodemailer.createTransport({
+//         host: process.env.SMTP_HOST,
+//         port: process.env.SMTP_PORT,
+//         secure: process.env.SMTP_SECURE === "true",
+//         auth: {
+//           user: process.env.SMTP_USER,
+//           pass: process.env.SMTP_PASS,
+//         },
+//       });
+
+//       const mailOptions = {
+//         from: process.env.SMTP_USER,
+//         to: email,
+//         subject: "🎉 Employee Login Credentials | Ambarsariya Mall",
+//         html: `
+//           <h2>Hello ${name},</h2>
+//           <p>Your employee profile has been created successfully.</p>
+//           <p><strong>Login Details:</strong></p>
+//           <p><b>Username:</b> ${username}</p>
+//           <p><b>Password:</b> ${password}</p>
+//           <br />
+//           <p>Regards,<br>Ambarsariya Mall Team</p>
+//         `,
+//       };
+
+//       await transporter.sendMail(mailOptions);
+//     }
+
+//     // -------------------------------------
+//     // 5️⃣ SUCCESS RESPONSE
+//     // -------------------------------------
+//     return resp.status(201).json({
+//       message: "Role & Employee created successfully",
+//       employee_id: employeeId,
+//     });
+//   } catch (err) {
+//     console.error("Error creating role employee:", err);
+//     return resp.status(500).json({
+//       message: "Internal Server Error",
+//       error: err.message,
+//     });
+//   }
+// };
+
+
 const create_role_employee = async (req, resp) => {
-  console.log(req.body);
   const {
+    credentials_id,
     department,
     role_name,
     rights,
@@ -187,52 +295,90 @@ const create_role_employee = async (req, resp) => {
   } = req.body;
 
   try {
-    // -------------------------------------
-    // 1️⃣ VALIDATION: Check required fields
-    // -------------------------------------
-    if (!department || !role_name || !rights || !username || !password) {
+    // -----------------------------
+    // 1️⃣ Validation
+    // -----------------------------
+    if (
+      !credentials_id ||
+      !department ||
+      !role_name ||
+      !rights ||
+      !username ||
+      !password ||
+      !name ||
+      !email
+    ) {
       return resp.status(400).json({ message: "Missing required fields" });
     }
 
-    // -------------------------------------
-    // 2️⃣ HASH PASSWORD
-    // -------------------------------------
+    // -----------------------------
+    // 2️⃣ Hash password
+    // -----------------------------
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // -------------------------------------
-    // 3️⃣ INSERT DATA INTO admin.employees TABLE
-    // -------------------------------------
-    const result = await ambarsariyaPool.query(
-      `INSERT INTO admin.employees
-        (department_id, role_name, permission_id, username, password, name, phone, email, age, start_date)
-       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id`,
+    // -----------------------------
+    // 3️⃣ Begin Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("BEGIN");
+
+    // -----------------------------
+    // 4️⃣ Update auth_credentials
+    // -----------------------------
+    const credResult = await ambarsariyaPool.query(
+      `
+      UPDATE admin.auth_credentials
+      SET
+        username = $1,
+        password = $2,
+        phone = $3
+      WHERE id = $4
+        AND email_verified = true
+      RETURNING id
+      `,
+      [username, hashedPassword, phone, credentials_id]
+    );
+
+    if (credResult.rowCount === 0) {
+      throw new Error("Credentials not found or email not verified");
+    }
+
+    // -----------------------------
+    // 5️⃣ Create employee
+    // -----------------------------
+    const employeeResult = await ambarsariyaPool.query(
+      `
+      INSERT INTO admin.employees
+        (credentials, department_id, role_name, permission_id,
+         name, age, start_date)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+      `,
       [
+        credentials_id,
         department,
         role_name,
         rights,
-        username,
-        hashedPassword,
         name,
-        phone,
-        email,
         age,
         start_date,
       ]
     );
 
-    const employeeId = result.rows[0]?.id;
+    const employeeId = employeeResult.rows[0]?.id;
 
     if (!employeeId) {
-      return resp.status(500).json({
-        message: "Error creating employee entry",
-      });
+      throw new Error("Employee creation failed");
     }
 
-    // -------------------------------------
-    // 4️⃣ SEND EMAIL WITH PASSWORD
-    // -------------------------------------
+    // -----------------------------
+    // 6️⃣ Commit Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("COMMIT");
+
+    // -----------------------------
+    // 7️⃣ Send Email (after commit)
+    // -----------------------------
     if (email) {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -244,124 +390,112 @@ const create_role_employee = async (req, resp) => {
         },
       });
 
-      const mailOptions = {
+      await transporter.sendMail({
         from: process.env.SMTP_USER,
         to: email,
         subject: "🎉 Employee Login Credentials | Ambarsariya Mall",
         html: `
           <h2>Hello ${name},</h2>
           <p>Your employee profile has been created successfully.</p>
+
           <p><strong>Login Details:</strong></p>
           <p><b>Username:</b> ${username}</p>
           <p><b>Password:</b> ${password}</p>
+
+          <p>Please log in to your dashboard using this link:</p>
+          <p><a href="https://ambarsariyamall.com">
+            https://ambarsariyamall.com
+          </a></p>
+
           <br />
-          <p>Regards,<br>Ambarsariya Mall Team</p>
+          <p>Regards,<br/>Ambarsariya Mall Team</p>
         `,
-      };
-
-      await transporter.sendMail(mailOptions);
-    }
-
-    // -------------------------------------
-    // 5️⃣ SUCCESS RESPONSE
-    // -------------------------------------
-    return resp.status(201).json({
-      message: "Role & Employee created successfully",
-      employee_id: employeeId,
-    });
-  } catch (err) {
-    console.error("Error creating role employee:", err);
-    return resp.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
-    });
-  }
-};
-
-const store_staff_email_otp = async (req, resp) => {
-  console.log(req.body);
-  const { manager_id, email, email_otp } = req.body;
-
-  try {
-    // -------------------------------------
-    // VALIDATION: Check required fields
-    // -------------------------------------
-    if (!manager_id || !email || !email_otp) {
-      return resp.status(400).json({ message: "Missing required fields" });
-    }
-
-    // -------------------------------------
-    // INSERT DATA INTO admin.employees TABLE
-    // -------------------------------------
-    const result = await ambarsariyaPool.query(
-      `INSERT INTO admin.staff
-        (manager_id,
-        email,
-        email_otp)
-       VALUES
-        ($1, $2, $3)
-       RETURNING id`,
-      [manager_id, email, email_otp]
-    );
-
-    const staffId = result.rows[0]?.id;
-
-    if (!staffId) {
-      return resp.status(500).json({
-        message: "Error storing staff otp",
       });
     }
 
-    // -------------------------------------
-    // SUCCESS RESPONSE
-    // -------------------------------------
+    // -----------------------------
+    // 8️⃣ Success Response
+    // -----------------------------
     return resp.status(201).json({
       success: true,
-      staff_id: staffId,
+      message: "Employee created and credentials updated successfully",
+      employee_id: employeeId,
     });
+
   } catch (err) {
-    console.error("Error storing OTP:", err);
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Transaction failed:", err.message);
+
     return resp.status(500).json({
-      message: "Internal Server Error",
+      message: "Failed to create employee",
       error: err.message,
     });
+  } 
+};
+
+const store_email_otp = async (req, res) => {
+  const { email, email_otp } = req.body;
+
+  if (!email || !email_otp) {
+    return res.status(400).json({ message: "Email & OTP required" });
+  }
+
+  try {
+    const result = await ambarsariyaPool.query(
+      `
+      INSERT INTO admin.auth_credentials (email, email_otp)
+      VALUES ($1, $2)
+      RETURNING id
+      `,
+      [email, email_otp]
+    );
+
+    res.status(201).json({
+      success: true,
+      credentials_id: result.rows[0].id,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to store OTP" });
   }
 };
 
+
 const verifyStaffEmailOtp = async (req, res) => {
-  const { staff_id, manager_id, email, email_otp } = req.body;
+  const { email, email_otp } = req.body;
 
   try {
     const result = await ambarsariyaPool.query(
       `
       SELECT id, email_otp
-      FROM admin.staff
-      WHERE id = $1 AND manager_id = $2 AND email = $3
+      FROM admin.auth_credentials
+      WHERE email = $1
       `,
-      [staff_id, manager_id, email]
+      [email]
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Staff record not found" });
+      return res.status(404).json({ message: "Email not found" });
     }
 
     if (result.rows[0].email_otp !== email_otp) {
-      return res.status(400).json({ message: "OTP does not match" });
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
     // Mark verified & clear OTP
     await ambarsariyaPool.query(
       `
-      UPDATE admin.staff
+      UPDATE admin.auth_credentials
       SET email_verified = true
-      WHERE id = $1
+      WHERE email = $1
       `,
-      [staff_id]
+      [email]
     );
 
     return res.json({
       success: true,
       message: "Email verified successfully",
+      credentials_id: result.rows[0].id 
     });
   } catch (err) {
     console.error(err);
@@ -369,102 +503,253 @@ const verifyStaffEmailOtp = async (req, res) => {
   }
 };
 
+
 const create_staff = async (req, resp) => {
   const {
-    staff_id,
+    credentials_id,
     manager_id,
     staff_type_id,
-    username,
-    password,
     name,
-    phone,
-    email,
     age,
     start_date,
     assign_area,
     assign_area_name,
+    username,
+    password,
+    phone,
+    email,
   } = req.body;
 
   try {
-    if (!staff_id || !manager_id || !username || !password) {
-      return resp.status(400).json({ message: "Missing required fields" });
-    }
 
+    // -----------------------------
+    // 2️⃣ Hash password
+    // -----------------------------
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await ambarsariyaPool.query(
+    // -----------------------------
+    // 3️⃣ Begin Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("BEGIN");
+
+    // -----------------------------
+    // 4️⃣ Update auth_credentials
+    // -----------------------------
+    const credResult = await ambarsariyaPool.query(
       `
-      UPDATE admin.staff
+      UPDATE admin.auth_credentials
       SET
-        staff_type_id = $1,
-        name = $2,
-        phone = $3,
-        email = $4,
-        username = $5,
-        password = $6,
-        assign_area = $7,
-        assign_area_name = $8,
-        start_date = $9,
-        age = $10
-      WHERE id = $11
-        AND manager_id = $12
+        username = $1,
+        password = $2,
+        phone = $3
+      WHERE id = $4
         AND email_verified = true
       RETURNING id
       `,
-      [
+      [username, hashedPassword, phone, credentials_id]
+    );
+
+    if (credResult.rowCount === 0) {
+      throw new Error("Credentials not found or email not verified");
+    }
+
+    // -----------------------------
+    // 5️⃣ Create employee
+    // -----------------------------
+    const staffResult = await ambarsariyaPool.query(
+      `
+      INSERT INTO admin.staff
+        (credentials, manager_id,
         staff_type_id,
         name,
-        phone,
-        email,
-        username,
-        hashedPassword,
-        JSON.stringify(assign_area),
-        assign_area_name,
-        start_date,
         age,
-        staff_id,
+        start_date,
+        assign_area,
+        assign_area_name)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id
+      `,
+      [
+        credentials_id,
         manager_id,
+        staff_type_id,
+        name,
+        age,
+        start_date,
+        assign_area, 
+        assign_area_name
       ]
     );
 
-    if (result.rowCount === 0) {
-      return resp.status(400).json({
-        message: "Email not verified or invalid staff record",
-      });
+    const staffId = staffResult.rows[0]?.id;
+
+    if (!staffId) {
+      throw new Error("staff creation failed");
     }
 
-    // Send credentials mail
+    // -----------------------------
+    // 6️⃣ Commit Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("COMMIT");
+
+    // -----------------------------
+    // 7️⃣ Send Email (after commit)
+    // -----------------------------
     if (email) {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
         secure: process.env.SMTP_SECURE === "true",
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
       });
-      const mailOptions = {
+
+      await transporter.sendMail({
         from: process.env.SMTP_USER,
         to: email,
         subject: "🎉 Staff Login Credentials | Ambarsariya Mall",
         html: `
-          <h2>Hello ${name},</h2> 
-          <p>Your sale staff profile has been created successfully.</p> <p><strong>Login Details:</strong></p> 
-          <p><b>Username:</b> ${username}</p> 
-          <p><b>Password:</b> ${password}</p> <br /> 
-          <p>Regards,<br>Ambarsariya Mall Team</p>`,
-      };
-      await transporter.sendMail(mailOptions);
+          <h2>Hello ${name},</h2>
+          <p>Your staff profile has been created successfully.</p>
+
+          <p><strong>Login Details:</strong></p>
+          <p><b>Username:</b> ${username}</p>
+          <p><b>Password:</b> ${password}</p>
+
+          <p>Please log in to your dashboard using this link:</p>
+          <p><a href="https://ambarsariyamall.com">
+            https://ambarsariyamall.com
+          </a></p>
+
+          <br />
+          <p>Regards,<br/>Ambarsariya Mall Team</p>
+        `,
+      });
     }
 
+    // -----------------------------
+    // 8️⃣ Success Response
+    // -----------------------------
     return resp.status(201).json({
       success: true,
       message: "Staff created successfully",
-      staff_id,
+      staff_id: staffId,
     });
+
   } catch (err) {
-    console.error(err);
-    resp.status(500).json({ message: "Internal Server Error" });
-  }
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Transaction failed:", err.message);
+
+    return resp.status(500).json({
+      message: "Failed to create staff",
+      error: err.message,
+    });
+  } 
 };
+
+// const create_staff = async (req, resp) => {
+//   const {
+//     manager_id,
+//     staff_type_id,
+//     name,
+//     age,
+//     start_date,
+//     assign_area,
+//     assign_area_name,
+//     credentials_id
+//   } = req.body;
+
+//   try {
+//     // 1️⃣ Fetch credentials
+//     const credResult = await ambarsariyaPool.query(
+//       `
+//       SELECT email, username, password
+//       FROM admin.auth_credentials
+//       WHERE id = $1 AND email_verified = true
+//       `,
+//       [credentials_id]
+//     );
+
+//     if (credResult.rowCount === 0) {
+//       return resp.status(400).json({ message: "Email not verified" });
+//     }
+
+//     const { email, username, password } = credResult.rows[0];
+
+//     // 2️⃣ Insert staff
+//     const staffResult = await ambarsariyaPool.query(
+//       `
+//       INSERT INTO admin.staff
+//       (auth_id, manager_id, staff_type_id, name, age, start_date, assign_area, assign_area_name)
+//       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+//       RETURNING id
+//       `,
+//       [
+//         credentials_id,
+//         manager_id,
+//         staff_type_id,
+//         name,
+//         age,
+//         start_date,
+//         JSON.stringify(assign_area),
+//         assign_area_name
+//       ]
+//     );
+
+//     const staffId = staffResult.rows[0].id;
+
+//     // 3️⃣ Send email (password was generated earlier)
+//     const transporter = nodemailer.createTransport({
+//       host: process.env.SMTP_HOST,
+//       port: process.env.SMTP_PORT,
+//       secure: process.env.SMTP_SECURE === "true",
+//       auth: {
+//         user: process.env.SMTP_USER,
+//         pass: process.env.SMTP_PASS,
+//       },
+//     });
+
+//     await transporter.sendMail({
+//       from: process.env.SMTP_USER,
+//       to: email,
+//       subject: "🎉 Staff Login Credentials | Ambarsariya Mall",
+//       html: `
+//         <h2>Hello ${name},</h2>
+//         <p>Your staff profile has been created successfully.</p>
+
+//         <p><strong>Login Details:</strong></p>
+//         <p><b>Username:</b> ${username}</p>
+//         <p><b>Password:</b> ${password}</p>
+
+//         <p>
+//           Please log in to your dashboard using this link:<br/>
+//           <a href="https://ambarsariyamall.com">
+//             https://ambarsariyamall.com
+//           </a>
+//         </p>
+
+//         <br/>
+//         <p>Regards,<br/>Ambarsariya Mall Team</p>
+//       `,
+//     });
+
+//     return resp.status(201).json({
+//       success: true,
+//       message: "Staff created successfully",
+//       staff_id: staffId,
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     resp.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
+
+
+
 
 const create_staff_task = async (req, resp) => {
   const {
@@ -596,7 +881,7 @@ module.exports = {
   get_role_employees,
   create_role_employee,
   get_staff,
-  store_staff_email_otp,
+  store_email_otp,
   verifyStaffEmailOtp,
   create_staff,
   get_staff_with_type,

@@ -5,22 +5,22 @@ const ambarsariyaPool = createDbPool();
 
 
 const post_authLogin = async (req, res) => {
-  const { email, password } = req.body;
+  const { username, password } = req.body;
 
   // Input validation
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required." });
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password are required." });
   }
 
   try {
     // Query user by email
     const result = await ambarsariyaPool.query(
-      "SELECT * FROM admin.employees WHERE email = $1",
-      [email]
+      "SELECT * FROM admin.auth_credentials WHERE username = $1",
+      [username]
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ message: "Email not found." });
+      return res.status(401).json({ message: "Username not found." });
     }
 
     const user = result.rows[0];
@@ -54,16 +54,17 @@ const get_userByToken = async (req, res) => {
         e.name, 
         e.role_name,
         rp.permission_name,
-        e.email, 
-        e.username, 
+        ac.email, 
+        ac.username, 
         e.age, 
         e.start_date, 
-        e.phone, 
+        ac.phone, 
         d.department_name 
       FROM admin.employees e
+      LEFT JOIN admin.auth_credentials ac ON ac.id = e.credentials
       LEFT JOIN admin.departments d ON d.id = e.department_id
       LEFT JOIN admin.permissions rp ON rp.id = e.permission_id
-      WHERE e.access_token = $1
+      WHERE ac.access_token = $1
     `;
 
     const result = await ambarsariyaPool.query(query, [token]);
