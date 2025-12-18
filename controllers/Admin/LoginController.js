@@ -28,7 +28,7 @@ const post_authLogin = async (req, res) => {
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials." });
+      return res.status(401).json({ message: "Invalid Password." });
     }
 
     // Return token and optional user info
@@ -38,7 +38,7 @@ const post_authLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Error logging in:", error);
-    return res.status(500).json({ message: "Internal server error." });
+    return res.status(500).json({ message: "Invalid username or Password." });
   }
 };
 
@@ -50,21 +50,48 @@ const get_userByToken = async (req, res) => {
   try {
     const query = `
       SELECT 
+        'employee' AS user_type,
         e.id,
-        e.name, 
+        e.name,
         e.role_name,
-        rp.permission_name,
-        ac.email, 
-        ac.username, 
-        e.age, 
-        e.start_date, 
-        ac.phone, 
-        d.department_name 
+        p.permission_name,
+        ac.email,
+        ac.username,
+        e.age,
+        e.start_date,
+        ac.phone,
+        d.department_name,
+        NULL AS staff_type_id
       FROM admin.employees e
-      LEFT JOIN admin.auth_credentials ac ON ac.id = e.credentials
+      JOIN admin.auth_credentials ac ON ac.id = e.credentials
       LEFT JOIN admin.departments d ON d.id = e.department_id
-      LEFT JOIN admin.permissions rp ON rp.id = e.permission_id
+      LEFT JOIN admin.permissions p ON p.id = e.permission_id
       WHERE ac.access_token = $1
+
+      UNION ALL
+
+      -- STAFF
+      SELECT 
+        'staff' AS user_type,
+        s.id,
+        s.name,
+        st.staff_type_name AS role_name,
+        NULL AS permission_name,
+        ac.email,
+        ac.username,
+        s.age,
+        s.start_date,
+        ac.phone,
+        d.department_name,
+        s.staff_type_id
+      FROM admin.staff s
+      JOIN admin.auth_credentials ac ON ac.id = s.credentials
+      LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
+	  LEFT JOIN admin.employees e ON e.id = s.manager_id
+	  LEFT JOIN admin.departments d ON d.id = e.department_id
+      WHERE ac.access_token = $1
+
+      LIMIT 1;
     `;
 
     const result = await ambarsariyaPool.query(query, [token]);

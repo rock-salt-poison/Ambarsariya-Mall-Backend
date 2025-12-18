@@ -119,7 +119,6 @@ const get_staff = async (req, res) => {
   }
 };
 
-
 const get_staff_with_type = async (req, res) => {
   try {
     const token = req.params.token;
@@ -132,9 +131,10 @@ const get_staff_with_type = async (req, res) => {
     // 1️⃣ Get logged-in employee
     const employeeResult = await ambarsariyaPool.query(
       `
-      SELECT id, department_id
-      FROM admin.employees
-      WHERE access_token = $1
+      SELECT e.id, e.department_id
+      FROM admin.auth_credentials ac
+      LEFT JOIN admin.employees e ON e.credentials = ac.id 
+      WHERE ac.access_token = $1
       `,
       [token]
     );
@@ -152,17 +152,18 @@ const get_staff_with_type = async (req, res) => {
         s.id,
         s.name,
         st.staff_type_name,
-        s.email,
-        s.username,
+        ac.email,
+        ac.username,
         s.age,
         s.start_date,
         s.assign_area,
         s.assign_area_name,
-        s.phone
+        ac.phone
       FROM admin.staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
-      WHERE s.manager_id = $1 and s.username is not null and s.assign_area is not null and st.staff_type_name = $2
+      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null and st.staff_type_name = $2
       `,
       [employeeId, staff_type]
     );
@@ -174,112 +175,32 @@ const get_staff_with_type = async (req, res) => {
   }
 };
 
-// const create_role_employee = async (req, resp) => {
-//   console.log(req.body);
-//   const {
-//     department,
-//     role_name,
-//     rights,
-//     username,
-//     password,
-//     name,
-//     phone,
-//     email,
-//     age,
-//     start_date,
-//   } = req.body;
+const get_staff_tasks = async (req, res) => {
+  const { token } = req.params;
 
-//   try {
-//     // -------------------------------------
-//     // 1️⃣ VALIDATION: Check required fields
-//     // -------------------------------------
-//     if (!department || !role_name || !rights || !username || !password) {
-//       return resp.status(400).json({ message: "Missing required fields" });
-//     }
+  if (!token) {
+    return res.status(400).json({ message: "Token is required" });
+  }
 
-//     // -------------------------------------
-//     // 2️⃣ HASH PASSWORD
-//     // -------------------------------------
-//     const hashedPassword = await bcrypt.hash(password, 10);
+  try {
+    const query = `
+      SELECT st.*
+      FROM admin.staff_tasks st
+      JOIN admin.staff s 
+        ON s.id = st.assigned_to
+      JOIN admin.auth_credentials ac 
+        ON ac.id = s.credentials
+      WHERE ac.access_token = $1
+    `;
 
-//     // -------------------------------------
-//     // 3️⃣ INSERT DATA INTO admin.employees TABLE
-//     // -------------------------------------
-//     const result = await ambarsariyaPool.query(
-//       `INSERT INTO admin.employees
-//         (department_id, role_name, permission_id, username, password, name, phone, email, age, start_date)
-//        VALUES
-//         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-//        RETURNING id`,
-//       [
-//         department,
-//         role_name,
-//         rights,
-//         username,
-//         hashedPassword,
-//         name,
-//         phone,
-//         email,
-//         age,
-//         start_date,
-//       ]
-//     );
+    const result = await ambarsariyaPool.query(query, [token]);
 
-//     const employeeId = result.rows[0]?.id;
-
-//     if (!employeeId) {
-//       return resp.status(500).json({
-//         message: "Error creating employee entry",
-//       });
-//     }
-
-//     // -------------------------------------
-//     // 4️⃣ SEND EMAIL WITH PASSWORD
-//     // -------------------------------------
-//     if (email) {
-//       const transporter = nodemailer.createTransport({
-//         host: process.env.SMTP_HOST,
-//         port: process.env.SMTP_PORT,
-//         secure: process.env.SMTP_SECURE === "true",
-//         auth: {
-//           user: process.env.SMTP_USER,
-//           pass: process.env.SMTP_PASS,
-//         },
-//       });
-
-//       const mailOptions = {
-//         from: process.env.SMTP_USER,
-//         to: email,
-//         subject: "🎉 Employee Login Credentials | Ambarsariya Mall",
-//         html: `
-//           <h2>Hello ${name},</h2>
-//           <p>Your employee profile has been created successfully.</p>
-//           <p><strong>Login Details:</strong></p>
-//           <p><b>Username:</b> ${username}</p>
-//           <p><b>Password:</b> ${password}</p>
-//           <br />
-//           <p>Regards,<br>Ambarsariya Mall Team</p>
-//         `,
-//       };
-
-//       await transporter.sendMail(mailOptions);
-//     }
-
-//     // -------------------------------------
-//     // 5️⃣ SUCCESS RESPONSE
-//     // -------------------------------------
-//     return resp.status(201).json({
-//       message: "Role & Employee created successfully",
-//       employee_id: employeeId,
-//     });
-//   } catch (err) {
-//     console.error("Error creating role employee:", err);
-//     return resp.status(500).json({
-//       message: "Internal Server Error",
-//       error: err.message,
-//     });
-//   }
-// };
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching tasks:", err);
+    return res.status(500).json({ error: "Failed to fetch tasks" });
+  }
+};
 
 
 const create_role_employee = async (req, resp) => {
@@ -777,7 +698,10 @@ const create_staff_task = async (req, resp) => {
 
     // 1️⃣ Fetch staff details
     const staffRes = await ambarsariyaPool.query(
-      `SELECT name, email FROM admin.staff WHERE id = $1`,
+      `SELECT s.name, ac.email 
+       FROM admin.staff s
+       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
+       WHERE s.id = $1 `,
       [assigned_to]
     );
 
@@ -845,7 +769,7 @@ const create_staff_task = async (req, resp) => {
           <p>A new task has been assigned to you.</p>
 
           <p><strong>Task:</strong> ${assigned_task}</p>
-          <p><strong>Duration:</strong> ${start_date} to ${end_date}</p>
+          <p><strong>Duration:</strong> ${start_date.split('T')?.[0]} to ${end_date?.split('T')?.[0]}</p>
 
           <p>
             Please log in to your dashboard using this link:<br/>
@@ -888,5 +812,6 @@ module.exports = {
   verifyStaffEmailOtp,
   create_staff,
   get_staff_with_type,
-  create_staff_task
+  create_staff_task,
+  get_staff_tasks
 };
