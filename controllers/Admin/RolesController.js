@@ -46,19 +46,20 @@ const get_role_employees = async (req, res) => {
         e.name, 
         e.role_name,
         rp.permission_name,
-        e.email, 
-        e.username, 
+        ac.email, 
+        ac.username, 
         e.age, 
         e.start_date, 
-        e.phone, 
+        ac.phone, 
         d.department_name 
     FROM admin.employees e
+    LEFT JOIN admin.auth_credentials ac ON ac.id = e.credentials
     LEFT JOIN admin.departments d ON d.id = e.department_id
     LEFT JOIN admin.permissions rp ON rp.id = e.permission_id`);
     res.json(result.rows);
   } catch (err) {
-    console.error("Error fetching staff types:", err);
-    res.status(500).json({ error: "Failed to fetch staff types" });
+    console.error("Error fetching employee:", err);
+    res.status(500).json({ error: "Failed to fetch employee" });
   }
 };
 
@@ -73,9 +74,10 @@ const get_staff = async (req, res) => {
     // 1️⃣ Get logged-in employee
     const employeeResult = await ambarsariyaPool.query(
       `
-      SELECT id, department_id
-      FROM admin.employees
-      WHERE access_token = $1
+      SELECT e.id, e.department_id
+      FROM admin.auth_credentials ac
+      LEFT JOIN admin.employees e ON e.credentials = ac.id
+      WHERE ac.access_token = $1
       `,
       [token]
     );
@@ -92,19 +94,20 @@ const get_staff = async (req, res) => {
       SELECT 
         s.name,
         st.staff_type_name,
-        s.email,
-        s.username,
+        ac.email,
+        ac.username,
         s.age,
         s.start_date,
         s.assign_area,
         s.assign_area_name,
-        s.phone,
+        ac.phone,
         d.department_name
       FROM admin.staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
       LEFT JOIN admin.departments d ON d.id = e.department_id
-      WHERE s.manager_id = $1 and s.username is not null and s.assign_area is not null
+      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null
       `,
       [employeeId]
     );
