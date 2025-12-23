@@ -184,10 +184,12 @@ const get_staff_tasks = async (req, res) => {
 
   try {
     const query = `
-      SELECT st.*
+      SELECT st.*, e.name as "assigned_by_name"
       FROM admin.staff_tasks st
       JOIN admin.staff s 
         ON s.id = st.assigned_to
+      JOIN admin.employees e 
+        ON e.id = st.assigned_by
       JOIN admin.auth_credentials ac 
         ON ac.id = s.credentials
       WHERE ac.access_token = $1
@@ -828,6 +830,25 @@ const create_task_report = async (req, res) => {
   }
 };
 
+const get_staff_member_tasks = async (req, res) => {
+  const { assigned_by, assigned_to } = req.params;
+
+  try {
+    const query = `
+      SELECT st.*
+      FROM admin.staff_tasks st
+      WHERE st.assigned_to = $1 and st.assigned_by = $2
+    `;
+
+    const result = await ambarsariyaPool.query(query, [assigned_by, assigned_to]);
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching tasks:", err);
+    return res.status(500).json({ error: "Failed to fetch tasks" });
+  }
+};
+
 
 module.exports = {
   get_departments,
@@ -843,5 +864,6 @@ module.exports = {
   create_staff_task,
   get_staff_tasks,
   get_staff_task_with_token,
-  create_task_report
+  create_task_report,
+  get_staff_member_tasks
 };
