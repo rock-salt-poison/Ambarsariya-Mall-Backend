@@ -202,6 +202,29 @@ const get_staff_tasks = async (req, res) => {
   }
 };
 
+const get_staff_task_with_token = async (req, res) => {
+  const { token } = req.params;
+
+  if (!token) {
+    return res.status(400).json({ message: "Token is required" });
+  }
+
+  try {
+    const query = `
+      SELECT st.*
+      FROM admin.staff_tasks st
+      WHERE st.access_token = $1
+    `;
+
+    const result = await ambarsariyaPool.query(query, [token]);
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching task details:", err);
+    return res.status(500).json({ error: "Failed to fetch task details" });
+  }
+};
+
 
 const create_role_employee = async (req, resp) => {
   const {
@@ -384,7 +407,6 @@ const store_email_otp = async (req, res) => {
   }
 };
 
-
 const verifyStaffEmailOtp = async (req, res) => {
   const { email, email_otp } = req.body;
 
@@ -426,7 +448,6 @@ const verifyStaffEmailOtp = async (req, res) => {
     res.status(500).json({ message: "OTP verification failed" });
   }
 };
-
 
 const create_staff = async (req, resp) => {
   const {
@@ -574,107 +595,6 @@ const create_staff = async (req, resp) => {
   } 
 };
 
-// const create_staff = async (req, resp) => {
-//   const {
-//     manager_id,
-//     staff_type_id,
-//     name,
-//     age,
-//     start_date,
-//     assign_area,
-//     assign_area_name,
-//     credentials_id
-//   } = req.body;
-
-//   try {
-//     // 1️⃣ Fetch credentials
-//     const credResult = await ambarsariyaPool.query(
-//       `
-//       SELECT email, username, password
-//       FROM admin.auth_credentials
-//       WHERE id = $1 AND email_verified = true
-//       `,
-//       [credentials_id]
-//     );
-
-//     if (credResult.rowCount === 0) {
-//       return resp.status(400).json({ message: "Email not verified" });
-//     }
-
-//     const { email, username, password } = credResult.rows[0];
-
-//     // 2️⃣ Insert staff
-//     const staffResult = await ambarsariyaPool.query(
-//       `
-//       INSERT INTO admin.staff
-//       (auth_id, manager_id, staff_type_id, name, age, start_date, assign_area, assign_area_name)
-//       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-//       RETURNING id
-//       `,
-//       [
-//         credentials_id,
-//         manager_id,
-//         staff_type_id,
-//         name,
-//         age,
-//         start_date,
-//         JSON.stringify(assign_area),
-//         assign_area_name
-//       ]
-//     );
-
-//     const staffId = staffResult.rows[0].id;
-
-//     // 3️⃣ Send email (password was generated earlier)
-//     const transporter = nodemailer.createTransport({
-//       host: process.env.SMTP_HOST,
-//       port: process.env.SMTP_PORT,
-//       secure: process.env.SMTP_SECURE === "true",
-//       auth: {
-//         user: process.env.SMTP_USER,
-//         pass: process.env.SMTP_PASS,
-//       },
-//     });
-
-//     await transporter.sendMail({
-//       from: process.env.SMTP_USER,
-//       to: email,
-//       subject: "🎉 Staff Login Credentials | Ambarsariya Mall",
-//       html: `
-//         <h2>Hello ${name},</h2>
-//         <p>Your staff profile has been created successfully.</p>
-
-//         <p><strong>Login Details:</strong></p>
-//         <p><b>Username:</b> ${username}</p>
-//         <p><b>Password:</b> ${password}</p>
-
-//         <p>
-//           Please log in to your dashboard using this link:<br/>
-//           <a href="https://ambarsariyamall.com">
-//             https://ambarsariyamall.com
-//           </a>
-//         </p>
-
-//         <br/>
-//         <p>Regards,<br/>Ambarsariya Mall Team</p>
-//       `,
-//     });
-
-//     return resp.status(201).json({
-//       success: true,
-//       message: "Staff created successfully",
-//       staff_id: staffId,
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     resp.status(500).json({ message: "Internal Server Error" });
-//   }
-// };
-
-
-
-
 const create_staff_task = async (req, resp) => {
   const {
     assigned_by,
@@ -799,6 +719,114 @@ const create_staff_task = async (req, resp) => {
   }
 };
 
+const create_task_report = async (req, res) => {
+  try {
+    console.log(req.body);
+    
+    const { formData, clientSummaries } = req.body;
+
+    // 1️⃣ Insert task_report_details
+    const taskReportQuery = `
+      INSERT INTO admin.task_report_details (
+        task_id,
+        task_reporting_date,
+        visits,
+        joined,
+        in_pipeline,
+        total_leads,
+        daily_leads,
+        total_capture,
+        daily_capture,
+        lead_suggestions,
+        lead_suggestions_after_confirmation,
+        total_confirmation,
+        daily_confirmation
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      RETURNING id
+    `;
+
+    const taskReportValues = [
+      formData.task_id,
+      formData.task_reporting_date,
+      formData.visits || 0,
+      formData.joined || 0,
+      formData.in_pipeline || 0,
+      formData.total_leads || 0,
+      formData.daily_leads || 0,
+      formData.total_capture || 0,
+      formData.daily_capture || 0,
+      formData.lead_suggestions || '',
+      formData.lead_suggestions_after_confirmation || '',
+      formData.total_confirmation || 0,
+      formData.Daily_confirmation || 0
+    ];
+
+    const { rows } = await ambarsariyaPool.query(taskReportQuery, taskReportValues);
+    const task_report_id = rows[0].id;
+
+    // 2️⃣ Insert clientSummaries
+    let summary_group_counter = 1;
+
+    for (const group of clientSummaries) {
+      const group_id = summary_group_counter++;
+      let parent_id_map = {};
+
+      for (const stage of group.stages) {
+        let parent_summary_id = null;
+        if (stage.type === 'Lead Summary') parent_summary_id = parent_id_map['Client Summary'];
+        else if (stage.type === 'Capture Summary') parent_summary_id = parent_id_map['Lead Summary'];
+
+        const stageData = stage.data || {};
+
+        const insertStageQuery = `
+          INSERT INTO admin.task_summaries (
+            task_report_id,
+            summary_group_id,
+            parent_summary_id,
+            summary_type,
+            status,
+            name,
+            phone,
+            email,
+            shop_name,
+            shop_domain,
+            shop_sector,
+            lead_select,
+            shop_no,
+            location
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          RETURNING id
+        `;
+
+        const stageValues = [
+          task_report_id,
+          group_id,
+          parent_summary_id,
+          stage.type.replace(' Summary','').toUpperCase(),
+          stage.status,
+          stageData.name || '',
+          stageData.phone || '',
+          stageData.email || '',
+          stageData.shop || '',
+          stageData.domain || '',
+          stageData.sector || '',
+          stageData.lead_select || '',
+          stageData.shop_no || '',
+          stageData.location 
+        ];
+
+        const { rows: stageRows } = await ambarsariyaPool.query(insertStageQuery, stageValues);
+        parent_id_map[stage.type] = stageRows[0].id;
+      }
+    }
+
+    res.status(201).json({ success: true, task_report_id });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
 
 
 module.exports = {
@@ -813,5 +841,7 @@ module.exports = {
   create_staff,
   get_staff_with_type,
   create_staff_task,
-  get_staff_tasks
+  get_staff_tasks,
+  get_staff_task_with_token,
+  create_task_report
 };
