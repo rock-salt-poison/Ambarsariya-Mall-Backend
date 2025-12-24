@@ -735,12 +735,12 @@ const create_task_report = async (req, res) => {
         visits,
         joined,
         in_pipeline,
-        total_leads,
-        daily_leads,
-        total_capture,
-        daily_capture,
-        lead_suggestions,
-        lead_suggestions_after_confirmation,
+        total_leads_summary,
+        daily_leads_summary,
+        total_client_summary,
+        daily_client_summary,
+        total_capture_summary,
+        daily_capture_summary,
         total_confirmation,
         daily_confirmation
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
@@ -755,10 +755,10 @@ const create_task_report = async (req, res) => {
       formData.in_pipeline || 0,
       formData.total_leads || 0,
       formData.daily_leads || 0,
+      formData.total_client || 0,
+      formData.daily_client || 0,
       formData.total_capture || 0,
       formData.daily_capture || 0,
-      formData.lead_suggestions || '',
-      formData.lead_suggestions_after_confirmation || '',
       formData.total_confirmation || 0,
       formData.Daily_confirmation || 0
     ];
@@ -775,8 +775,8 @@ const create_task_report = async (req, res) => {
 
       for (const stage of group.stages) {
         let parent_summary_id = null;
-        if (stage.type === 'Lead Summary') parent_summary_id = parent_id_map['Client Summary'];
-        else if (stage.type === 'Capture Summary') parent_summary_id = parent_id_map['Lead Summary'];
+        if (stage.type === 'Capture Summary') parent_summary_id = parent_id_map['Client Summary'];
+        else if (stage.type === 'Confirm Summary') parent_summary_id = parent_id_map['Capture Summary'];
 
         const stageData = stage.data || {};
 
@@ -814,7 +814,7 @@ const create_task_report = async (req, res) => {
           stageData.sector || '',
           stageData.lead_select || '',
           stageData.shop_no || '',
-          stageData.location 
+          stageData.location || null
         ];
 
         const { rows: stageRows } = await ambarsariyaPool.query(insertStageQuery, stageValues);
