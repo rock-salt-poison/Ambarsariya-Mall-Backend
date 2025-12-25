@@ -40,6 +40,30 @@ const get_staff_types = async (req, res) => {
   }
 };
 
+const check_email_exists = async (req, res) => {
+  const { email } = req.params;
+
+  try {
+    const result = await ambarsariyaPool.query(
+      `SELECT id FROM admin.auth_credentials WHERE email = $1`,
+      [email]
+    );
+
+    return res.status(200).json({
+      success: true,
+      exists: result.rowCount === 1, 
+    });
+
+  } catch (error) {
+    console.error("Check email error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check email",
+    });
+  }
+};
+
 const get_role_employees = async (req, res) => {
   try {
     const result = await ambarsariyaPool.query(`SELECT 
@@ -935,6 +959,33 @@ CROSS JOIN task_summary_list tsl;
   }
 };
 
+const delete_auth_credentials = async (req, res) => {
+  const { credentials_id } = req.params;
+
+  try {
+    const result = await ambarsariyaPool.query(
+      `DELETE FROM admin.auth_credentials WHERE id = $1`,
+      [credentials_id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      deleted: result.rowCount > 0,
+      message:
+         "Auth credentials cleaned up successfully"
+    });
+
+  } catch (error) {
+    console.error("Delete credentials error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete auth credentials",
+    });
+  }
+};
+
+
 module.exports = {
   get_departments,
   get_permissions,
@@ -951,5 +1002,7 @@ module.exports = {
   get_staff_task_with_token,
   create_task_report,
   get_staff_member_tasks,  
-  get_staff_task_report_details
+  get_staff_task_report_details,
+  delete_auth_credentials,
+  check_email_exists
 };

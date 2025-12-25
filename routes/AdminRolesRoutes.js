@@ -6,6 +6,7 @@ const rolesController = require('../controllers/Admin/RolesController');
 router.get('/departments', rolesController.get_departments);
 router.get('/permissions', rolesController.get_permissions);
 router.get('/staff-types', rolesController.get_staff_types);
+router.get('/check-email/:email', rolesController.check_email_exists);
 router.get('/employees', rolesController.get_role_employees);
 router.get('/staff/:token', rolesController.get_staff);
 router.get('/staff-with-type/:token/:staff_type', rolesController.get_staff_with_type);
@@ -21,5 +22,7 @@ router.post('/create-staff_task', rolesController.create_staff_task);
 router.post('/task-report-details', rolesController.create_task_report);
 
 router.put('/create-staff', rolesController.create_staff);
+
+router.delete('/delete-credentials/:credentials_id', rolesController.delete_auth_credentials);
 
 module.exports = router;
