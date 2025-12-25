@@ -804,7 +804,7 @@ const create_task_report = async (req, res) => {
           task_report_id,
           group_id,
           parent_summary_id,
-          stage.type.replace(' Summary','').toUpperCase(),
+          stage.type,
           stage.status,
           stageData.name || '',
           stageData.phone || '',
@@ -849,6 +849,91 @@ const get_staff_member_tasks = async (req, res) => {
   }
 };
 
+const get_staff_task_report_details = async (req, res) => {
+  try {
+    const {task_id, task_reporting_date} = req.params;
+
+    const staffReportResult = await ambarsariyaPool.query(
+      `
+      WITH filtered_reports AS (
+  SELECT id, task_id, task_reporting_date
+  FROM admin.task_report_details
+  WHERE task_id = $1
+    AND task_reporting_date = $2
+),
+
+report_totals AS (
+  SELECT
+    trd.task_id,
+    trd.task_reporting_date,
+
+    SUM(visits)                AS visits,
+    SUM(joined)                AS joined,
+    SUM(in_pipeline)           AS in_pipeline,
+
+    SUM(total_leads_summary)   AS total_leads_summary,
+    SUM(daily_leads_summary)   AS daily_leads_summary,
+
+    SUM(total_client_summary)  AS total_client_summary,
+    SUM(daily_client_summary)  AS daily_client_summary,
+
+    SUM(total_capture_summary) AS total_capture_summary,
+    SUM(daily_capture_summary) AS daily_capture_summary,
+
+    SUM(total_confirmation)    AS total_confirmation,
+    SUM(daily_confirmation)    AS daily_confirmation
+  FROM filtered_reports fr
+  JOIN admin.task_report_details trd ON trd.id = fr.id
+  GROUP BY trd.task_id, trd.task_reporting_date
+),
+
+task_summary_list AS (
+  SELECT
+    json_agg(
+      json_build_object(
+        'id', ts.id,
+        'task_report_id', ts.task_report_id,
+        'summary_type', ts.summary_type,
+        'parent_summary_id', ts.parent_summary_id,
+        'status', ts.status,
+        'name', ts.name,
+        'phone', ts.phone,
+        'email', ts.email,
+        'shop_name', ts.shop_name,
+        'shop_domain', ts.shop_domain,
+        'shop_sector', ts.shop_sector,
+        'lead_select', ts.lead_select,
+        'shop_no', ts.shop_no,
+        'location', ts.location,
+        'created_at', ts.created_at
+      )
+      ORDER BY ts.id
+    ) AS summaries
+  FROM admin.task_summaries ts
+  WHERE ts.task_report_id IN (
+    SELECT id FROM filtered_reports
+  )
+)
+
+SELECT
+  rt.*,
+  tsl.summaries
+FROM report_totals rt
+CROSS JOIN task_summary_list tsl;
+      `,
+      [task_id, task_reporting_date]
+    );
+
+    if (staffReportResult.rows.length === 0) {
+      return res.json({ message: "No data exists." });
+    }
+
+    res.json(staffReportResult.rows);
+  } catch (err) {
+    console.error("Error fetching staff report:", err);
+    res.status(500).json({ error: "Failed to fetch staff report" });
+  }
+};
 
 module.exports = {
   get_departments,
@@ -865,5 +950,6 @@ module.exports = {
   get_staff_tasks,
   get_staff_task_with_token,
   create_task_report,
-  get_staff_member_tasks
+  get_staff_member_tasks,  
+  get_staff_task_report_details
 };
