@@ -43,10 +43,12 @@ const get_staff_types = async (req, res) => {
 const check_email_exists = async (req, res) => {
   const { email } = req.params;
 
+  const normalizedEmail = email.trim().toLowerCase();
+
   try {
     const result = await ambarsariyaPool.query(
       `SELECT id FROM admin.auth_credentials WHERE email = $1`,
-      [email]
+      [normalizedEmail]
     );
 
     return res.status(200).json({
@@ -251,7 +253,6 @@ const get_staff_task_with_token = async (req, res) => {
   }
 };
 
-
 const create_role_employee = async (req, resp) => {
   const {
     credentials_id,
@@ -412,6 +413,7 @@ const store_email_otp = async (req, res) => {
   if (!email || !email_otp) {
     return res.status(400).json({ message: "Email & OTP required" });
   }
+  const normalizedEmail = email.trim().toLowerCase();
 
   try {
     const result = await ambarsariyaPool.query(
@@ -420,7 +422,7 @@ const store_email_otp = async (req, res) => {
       VALUES ($1, $2)
       RETURNING id
       `,
-      [email, email_otp]
+      [normalizedEmail, email_otp]
     );
 
     res.status(201).json({
@@ -436,14 +438,16 @@ const store_email_otp = async (req, res) => {
 const verifyStaffEmailOtp = async (req, res) => {
   const { email, email_otp } = req.body;
 
+  const normalizedEmail = email.trim().toLowerCase();
   try {
+
     const result = await ambarsariyaPool.query(
       `
       SELECT id, email_otp
       FROM admin.auth_credentials
       WHERE email = $1
       `,
-      [email]
+      [normalizedEmail]
     );
 
     if (result.rowCount === 0) {
@@ -461,7 +465,7 @@ const verifyStaffEmailOtp = async (req, res) => {
       SET email_verified = true
       WHERE email = $1
       `,
-      [email]
+      [normalizedEmail]
     );
 
     return res.json({
