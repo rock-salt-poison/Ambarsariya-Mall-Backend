@@ -299,16 +299,10 @@ const create_role_employee = async (req, resp) => {
     // 4️⃣ Update auth_credentials
     // -----------------------------
     const credResult = await ambarsariyaPool.query(
-      `
-      UPDATE admin.auth_credentials
-      SET
-        username = $1,
-        password = $2,
-        phone = $3
-      WHERE id = $4
-        AND email_verified = true
-      RETURNING id
-      `,
+       `UPDATE admin.auth_credentials
+       SET username = $1, password = $2, phone = $3, email_is_registered = true
+       WHERE id = $4 AND email_verified = true
+       RETURNING id`,
       [username, hashedPassword, phone, credentials_id]
     );
 
@@ -407,77 +401,218 @@ const create_role_employee = async (req, resp) => {
   } 
 };
 
+// const store_email_otp = async (req, res) => {
+//   const { email, email_otp } = req.body;
+
+//   if (!email || !email_otp) {
+//     return res.status(400).json({ message: "Email & OTP required" });
+//   }
+//   const normalizedEmail = email.trim().toLowerCase();
+
+//   try {
+//     const result = await ambarsariyaPool.query(
+//       `
+//       INSERT INTO admin.auth_credentials (email, email_otp)
+//       VALUES ($1, $2)
+//       RETURNING id
+//       `,
+//       [normalizedEmail, email_otp]
+//     );
+
+//     res.status(201).json({
+//       success: true,
+//       credentials_id: result.rows[0].id,
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Failed to store OTP" });
+//   }
+// };
+
+// const verifyStaffEmailOtp = async (req, res) => {
+//   const { email, email_otp } = req.body;
+
+//   const normalizedEmail = email.trim().toLowerCase();
+//   try {
+
+//     const result = await ambarsariyaPool.query(
+//       `
+//       SELECT id, email_otp
+//       FROM admin.auth_credentials
+//       WHERE email = $1
+//       `,
+//       [normalizedEmail]
+//     );
+
+//     if (result.rowCount === 0) {
+//       return res.status(404).json({ message: "Email not found" });
+//     }
+
+//     if (result.rows[0].email_otp !== email_otp) {
+//       return res.status(400).json({ message: "Invalid OTP" });
+//     }
+
+//     // Mark verified & clear OTP
+//     await ambarsariyaPool.query(
+//       `
+//       UPDATE admin.auth_credentials
+//       SET email_verified = true
+//       WHERE email = $1
+//       `,
+//       [normalizedEmail]
+//     );
+
+//     return res.json({
+//       success: true,
+//       message: "Email verified successfully",
+//       credentials_id: result.rows[0].id 
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "OTP verification failed" });
+//   }
+// };
+
+
 const store_email_otp = async (req, res) => {
-  const { email, email_otp } = req.body;
+  const { email } = req.body;
 
-  if (!email || !email_otp) {
-    return res.status(400).json({ message: "Email & OTP required" });
+  if (!email) {
+    return res.status(400).json({ message: "Email required" });
   }
-  const normalizedEmail = email.trim().toLowerCase();
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
   try {
-    const result = await ambarsariyaPool.query(
-      `
-      INSERT INTO admin.auth_credentials (email, email_otp)
-      VALUES ($1, $2)
-      RETURNING id
-      `,
-      [normalizedEmail, email_otp]
+    const existing = await ambarsariyaPool.query(
+      `SELECT id, email_verified, otp_created_at AT TIME ZONE 'UTC' AS otp_created_at
+       FROM admin.auth_credentials
+       WHERE email = $1`,
+      [normalizedEmail]
     );
 
-    res.status(201).json({
+    const now = new Date();
+    let credentialsId;
+    let sendEmail = false;
+
+    if (existing.rowCount > 0) {
+      const row = existing.rows[0];
+
+      if (row.email_verified) {
+        return res.status(400).json({ message: "Email already registered" });
+      }
+
+      if (row.otp_created_at) {
+        const diffMinutes =
+          (now - new Date(row.otp_created_at)) / 1000 / 60;
+        console.log(diffMinutes, otp);
+        
+        if (diffMinutes <= 5) {
+          return res.status(200).json({
+            success: true,
+            message: "OTP already sent",
+            credentials_id: row.id,
+          });
+        }
+      }
+
+      await ambarsariyaPool.query(
+        `UPDATE admin.auth_credentials
+         SET email_otp = $1,
+             otp_created_at = NOW(),
+             email_verified = false
+         WHERE email = $2`,
+        [otp, normalizedEmail]
+      );
+
+      credentialsId = row.id;
+      sendEmail = true;
+    } else {
+      const insert = await ambarsariyaPool.query(
+        `INSERT INTO admin.auth_credentials
+         (email, email_otp, otp_created_at, email_verified)
+         VALUES ($1, $2, NOW(), false)
+         RETURNING id`,
+        [normalizedEmail, otp]
+      );
+
+      credentialsId = insert.rows[0].id;
+      sendEmail = true;
+    }
+
+    if (sendEmail) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: process.env.SMTP_USER,
+        to: normalizedEmail,
+        subject: "Email OTP",
+        html: `<p>Your OTP is <b>${otp}</b>. Valid for 5 minutes.</p>`,
+      });
+    }
+
+    res.json({
       success: true,
-      credentials_id: result.rows[0].id,
+      credentials_id: credentialsId,
+      message: sendEmail ? "OTP sent" : "OTP already valid",
     });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to store OTP" });
+    res.status(500).json({ message: "OTP error" });
   }
 };
 
+
+
+
 const verifyStaffEmailOtp = async (req, res) => {
   const { email, email_otp } = req.body;
-
   const normalizedEmail = email.trim().toLowerCase();
-  try {
 
+  try {
     const result = await ambarsariyaPool.query(
-      `
-      SELECT id, email_otp
-      FROM admin.auth_credentials
-      WHERE email = $1
-      `,
+      `SELECT id, email_otp, otp_created_at AT TIME ZONE 'UTC' AS created_at
+       FROM admin.auth_credentials
+       WHERE email = $1`,
       [normalizedEmail]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: "Email not found" });
-    }
+    if (result.rowCount === 0) return res.status(404).json({ message: "Email not found" });
 
-    if (result.rows[0].email_otp !== email_otp) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
+    const row = result.rows[0];
+
+    // OTP expired check → 5 minutes
+    const otpAge = (new Date() - new Date(row.created_at)) / 1000 / 60; // minutes
+    if (otpAge > 5) return res.status(400).json({ message: "OTP expired" });
+    console.log(otpAge);
+    
+    if (row.email_otp !== email_otp) return res.status(400).json({ message: "Invalid OTP" });
 
     // Mark verified & clear OTP
     await ambarsariyaPool.query(
-      `
-      UPDATE admin.auth_credentials
-      SET email_verified = true
-      WHERE email = $1
-      `,
+      `UPDATE admin.auth_credentials
+       SET email_verified = true, email_otp = NULL
+       WHERE email = $1`,
       [normalizedEmail]
     );
 
-    return res.json({
-      success: true,
-      message: "Email verified successfully",
-      credentials_id: result.rows[0].id 
-    });
+    res.json({ success: true, message: "Email verified successfully", credentials_id: row.id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "OTP verification failed" });
   }
 };
+
 
 const create_staff = async (req, resp) => {
   const {
@@ -516,7 +651,8 @@ const create_staff = async (req, resp) => {
       SET
         username = $1,
         password = $2,
-        phone = $3
+        phone = $3,
+        email_is_registered = true
       WHERE id = $4
         AND email_verified = true
       RETURNING id
@@ -884,70 +1020,88 @@ const get_staff_task_report_details = async (req, res) => {
     const staffReportResult = await ambarsariyaPool.query(
       `
       WITH filtered_reports AS (
-  SELECT id, task_id, task_reporting_date
-  FROM admin.task_report_details
-  WHERE task_id = $1
-    AND task_reporting_date = $2
-),
+        SELECT id, task_id, task_reporting_date
+        FROM admin.task_report_details
+        WHERE task_id = $1
+          AND task_reporting_date = $2
+      ),
 
-report_totals AS (
-  SELECT
-    trd.task_id,
-    trd.task_reporting_date,
+      report_totals AS (
+        SELECT
+          trd.task_id,
+          trd.task_reporting_date,
 
-    SUM(visits)                AS visits,
-    SUM(joined)                AS joined,
-    SUM(in_pipeline)           AS in_pipeline,
+          SUM(visits)                AS visits,
+          SUM(joined)                AS joined,
+          SUM(in_pipeline)           AS in_pipeline,
 
-    SUM(total_leads_summary)   AS total_leads_summary,
-    SUM(daily_leads_summary)   AS daily_leads_summary,
+          SUM(total_leads_summary)   AS total_leads_summary,
+          SUM(daily_leads_summary)   AS daily_leads_summary,
 
-    SUM(total_client_summary)  AS total_client_summary,
-    SUM(daily_client_summary)  AS daily_client_summary,
+          SUM(total_client_summary)  AS total_client_summary,
+          SUM(daily_client_summary)  AS daily_client_summary,
 
-    SUM(total_capture_summary) AS total_capture_summary,
-    SUM(daily_capture_summary) AS daily_capture_summary,
+          SUM(total_capture_summary) AS total_capture_summary,
+          SUM(daily_capture_summary) AS daily_capture_summary,
 
-    SUM(total_confirmation)    AS total_confirmation,
-    SUM(daily_confirmation)    AS daily_confirmation
-  FROM filtered_reports fr
-  JOIN admin.task_report_details trd ON trd.id = fr.id
-  GROUP BY trd.task_id, trd.task_reporting_date
-),
+          SUM(total_confirmation)    AS total_confirmation,
+          SUM(daily_confirmation)    AS daily_confirmation
+        FROM filtered_reports fr
+        JOIN admin.task_report_details trd ON trd.id = fr.id
+        GROUP BY trd.task_id, trd.task_reporting_date
+      ),
 
-task_summary_list AS (
-  SELECT
-    json_agg(
-      json_build_object(
-        'id', ts.id,
-        'task_report_id', ts.task_report_id,
-        'summary_type', ts.summary_type,
-        'parent_summary_id', ts.parent_summary_id,
-        'status', ts.status,
-        'name', ts.name,
-        'phone', ts.phone,
-        'email', ts.email,
-        'shop_name', ts.shop_name,
-        'shop_domain', ts.shop_domain,
-        'shop_sector', ts.shop_sector,
-        'lead_select', ts.lead_select,
-        'shop_no', ts.shop_no,
-        'location', ts.location,
-        'created_at', ts.created_at
+      prioritized_summaries AS (
+        SELECT *
+        FROM (
+          SELECT 
+            ts.*,
+            ROW_NUMBER() OVER (
+              PARTITION BY ts.summary_group_id, ts.task_report_id
+              ORDER BY
+                CASE ts.summary_type
+                  WHEN 'client' THEN 1
+                  WHEN 'capture' THEN 2
+                  WHEN 'confirm' THEN 3
+                  ELSE 4
+                END DESC,  -- highest priority last
+                ts.id DESC
+            ) AS rn
+          FROM admin.task_summaries ts
+          WHERE ts.task_report_id IN (SELECT id FROM filtered_reports)
+        ) t
+        WHERE rn = 1
+      ),
+
+      task_summary_list AS (
+        SELECT json_agg(
+                 json_build_object(
+                   'id', ts.id,
+                   'task_report_id', ts.task_report_id,
+                   'summary_type', ts.summary_type,
+                   'parent_summary_id', ts.parent_summary_id,
+                   'status', ts.status,
+                   'name', ts.name,
+                   'phone', ts.phone,
+                   'email', ts.email,
+                   'shop_name', ts.shop_name,
+                   'shop_domain', ts.shop_domain,
+                   'shop_sector', ts.shop_sector,
+                   'lead_select', ts.lead_select,
+                   'shop_no', ts.shop_no,
+                   'location', ts.location,
+                   'created_at', ts.created_at
+                 )
+                 ORDER BY ts.id
+               ) AS summaries
+        FROM prioritized_summaries ts
       )
-      ORDER BY ts.id
-    ) AS summaries
-  FROM admin.task_summaries ts
-  WHERE ts.task_report_id IN (
-    SELECT id FROM filtered_reports
-  )
-)
 
-SELECT
-  rt.*,
-  tsl.summaries
-FROM report_totals rt
-CROSS JOIN task_summary_list tsl;
+      SELECT
+        rt.*,
+        tsl.summaries
+      FROM report_totals rt
+      CROSS JOIN task_summary_list tsl;
       `,
       [task_id, task_reporting_date]
     );
