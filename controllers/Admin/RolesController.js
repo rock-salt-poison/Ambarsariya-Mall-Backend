@@ -944,6 +944,19 @@ const create_task_report = async (req, res) => {
 
         const stageData = stage.data || {};
 
+        let action_value = null;
+
+        if (stage.type === "Client Summary") {
+          action_value = stageData.client_action || null;
+        } 
+        else if (stage.type === "Capture Summary") {
+          action_value = stageData.capture_action || null;
+        } 
+        else if (stage.type === "Confirm Summary") {
+          action_value = stageData.confirm_action || null;
+        }
+
+
         const insertStageQuery = `
           INSERT INTO admin.task_summaries (
             task_report_id,
@@ -957,7 +970,7 @@ const create_task_report = async (req, res) => {
             shop_name,
             shop_domain,
             shop_sector,
-            lead_select,
+            action,
             shop_no,
             location
           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
@@ -970,14 +983,14 @@ const create_task_report = async (req, res) => {
           parent_summary_id,
           stage.type,
           stage.status,
-          stageData.name || '',
-          stageData.phone || '',
-          stageData.email || '',
-          stageData.shop || '',
-          stageData.domain || '',
-          stageData.sector || '',
-          stageData.lead_select || '',
-          stageData.shop_no || '',
+          stageData.name || null,
+          stageData.phone || null,
+          stageData.email || null,
+          stageData.shop || null,
+          stageData.domain || null,
+          stageData.sector || null,
+          action_value || null,
+          stageData.shop_no || null,
           stageData.location || null
         ];
 
