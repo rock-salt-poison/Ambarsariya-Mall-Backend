@@ -1069,6 +1069,10 @@ const get_staff_task_report_details = async (req, res) => {
         FROM (
           SELECT 
             ts.*,
+
+            d.domain_name,
+            s.sector_name,
+
             ROW_NUMBER() OVER (
               PARTITION BY ts.summary_group_id, ts.task_report_id
               ORDER BY
@@ -1081,6 +1085,10 @@ const get_staff_task_report_details = async (req, res) => {
                 ts.id DESC
             ) AS rn
           FROM admin.task_summaries ts
+          LEFT JOIN public.domains d
+            ON ts.shop_domain = d.domain_id
+          LEFT JOIN public.sectors s
+            ON ts.shop_sector = s.sector_id
           WHERE ts.task_report_id IN (SELECT id FROM filtered_reports)
         ) t
         WHERE rn = 1
@@ -1098,9 +1106,9 @@ const get_staff_task_report_details = async (req, res) => {
                    'phone', ts.phone,
                    'email', ts.email,
                    'shop_name', ts.shop_name,
-                   'shop_domain', ts.shop_domain,
-                   'shop_sector', ts.shop_sector,
-                   'lead_select', ts.lead_select,
+                   'shop_domain', ts.domain_name,
+                   'shop_sector', ts.sector_name,
+                   'action', ts.action,
                    'shop_no', ts.shop_no,
                    'location', ts.location,
                    'created_at', ts.created_at
