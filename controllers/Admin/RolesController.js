@@ -69,6 +69,7 @@ const check_email_exists = async (req, res) => {
 const get_role_employees = async (req, res) => {
   try {
     const result = await ambarsariyaPool.query(`SELECT 
+        e.id,  
         e.name, 
         e.role_name,
         rp.permission_name,
@@ -88,6 +89,21 @@ const get_role_employees = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch employee" });
   }
 };
+
+
+const get_staff_members_by_manager_id = async (req, res) => {
+  const {id} = req.params;
+  try {
+    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials 
+where s.manager_id = $1`, [id]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching staff members:", err);
+    res.status(500).json({ error: "Failed to fetch staff members" });
+  }
+};
+
 
 const get_staff = async (req, res) => {
   try {
@@ -1430,31 +1446,57 @@ const get_staff_task_report_details = async (req, res) => {
   }
 };
 
-const delete_auth_credentials = async (req, res) => {
-  const { credentials_id } = req.params;
+const put_replaceManagerAndDeleteEmployee = async (req, res) => {
+  const { old_employee_id, assignments } = req.body;
+
+  if (!old_employee_id || !Array.isArray(assignments) || assignments.length === 0) {
+    return res.status(400).json({ message: "Invalid payload" });
+  }
 
   try {
-    const result = await ambarsariyaPool.query(
-      `DELETE FROM admin.auth_credentials WHERE id = $1`,
-      [credentials_id]
-    );
+    const query = `
+      WITH reassigned_staff AS (
+        UPDATE admin.staff s
+        SET manager_id = a.employee_id
+        FROM jsonb_to_recordset($1::jsonb)
+          AS a(staff_id INT, employee_id INT)
+        WHERE s.id = a.staff_id
+      ),
+      reassigned_tasks AS (
+        UPDATE admin.staff_tasks st
+        SET assigned_by = a.employee_id
+        FROM jsonb_to_recordset($1::jsonb)
+          AS a(staff_id INT, employee_id INT)
+        WHERE st.assigned_to = a.staff_id
+      ),
+      employee_creds AS (
+        SELECT credentials
+        FROM admin.employees
+        WHERE id = $2
+      ),
+      deleted_auth AS (
+        DELETE FROM admin.auth_credentials
+        WHERE id IN (SELECT credentials FROM employee_creds)
+      )
+      DELETE FROM admin.employees
+      WHERE id = $2;
+    `;
 
-    return res.status(200).json({
-      success: true,
-      deleted: result.rowCount > 0,
-      message:
-         "Auth credentials cleaned up successfully"
+    await ambarsariyaPool.query(query, [
+      JSON.stringify(assignments),
+      old_employee_id,
+    ]);
+
+    res.status(200).json({
+      message: "Staff reassigned and employee deleted successfully",
     });
-
   } catch (error) {
-    console.error("Delete credentials error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete auth credentials",
-    });
+    console.error("Replace manager failed:", error);
+    res.status(500).json({ message: "Operation failed" });
   }
 };
+
+
 
 
 module.exports = {
@@ -1476,6 +1518,7 @@ module.exports = {
   get_staff_member_tasks,  
   get_grouped_staff_task_report_details,
   get_staff_task_report_details,
-  delete_auth_credentials,
-  check_email_exists
+  put_replaceManagerAndDeleteEmployee,
+  check_email_exists,
+  get_staff_members_by_manager_id
 };

@@ -9,6 +9,7 @@ router.get('/staff-types', rolesController.get_staff_types);
 router.get('/check-email/:email', rolesController.check_email_exists);
 router.get('/employees', rolesController.get_role_employees);
 router.get('/staff/:token', rolesController.get_staff);
+router.get('/staff-members/:id', rolesController.get_staff_members_by_manager_id);
 router.get('/staff-with-type/:token/:staff_type', rolesController.get_staff_with_type);
 router.get('/staff-tasks/:token', rolesController.get_staff_tasks);
 router.get('/staff-tasks-by-date/:token/:task_reporting_date', rolesController.get_staff_tasks_by_reporting_date);
@@ -25,6 +26,6 @@ router.post('/task-report-details', rolesController.create_or_update_task_report
 
 router.put('/create-staff', rolesController.create_staff);
 
-router.delete('/delete-credentials/:credentials_id', rolesController.delete_auth_credentials);
+router.put('/replace-and-update-employee', rolesController.put_replaceManagerAndDeleteEmployee);
 
 module.exports = router;
