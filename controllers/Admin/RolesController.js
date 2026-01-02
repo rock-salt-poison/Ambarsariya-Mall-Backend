@@ -885,79 +885,249 @@ const create_staff_task = async (req, resp) => {
   }
 };
 
-const create_task_report = async (req, res) => {
-  try {
-    console.log(req.body);
+// const create_task_report = async (req, res) => {
+//   try {
+//     console.log(req.body);
     
+//     const { formData, clientSummaries } = req.body;
+
+//     // 1️⃣ Insert task_report_details
+//     const taskReportQuery = `
+//       INSERT INTO admin.task_report_details (
+//         task_id,
+//         task_reporting_date,
+//         visits,
+//         joined,
+//         in_pipeline,
+//         total_leads_summary,
+//         daily_leads_summary,
+//         total_client_summary,
+//         daily_client_summary,
+//         total_capture_summary,
+//         daily_capture_summary,
+//         total_confirmation,
+//         daily_confirmation
+//       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+//       RETURNING id
+//     `;
+
+//     const taskReportValues = [
+//       formData.task_id,
+//       formData.task_reporting_date,
+//       formData.visits || 0,
+//       formData.joined || 0,
+//       formData.in_pipeline || 0,
+//       formData.total_leads || 0,
+//       formData.daily_leads || 0,
+//       formData.total_client || 0,
+//       formData.daily_client || 0,
+//       formData.total_capture || 0,
+//       formData.daily_capture || 0,
+//       formData.total_confirmation || 0,
+//       formData.Daily_confirmation || 0
+//     ];
+
+//     const { rows } = await ambarsariyaPool.query(taskReportQuery, taskReportValues);
+//     const task_report_id = rows[0].id;
+
+//     // 2️⃣ Insert clientSummaries
+//     let summary_group_counter = 1;
+
+//     for (const group of clientSummaries) {
+//       const group_id = summary_group_counter++;
+//       let parent_id_map = {};
+
+//       for (const stage of group.stages) {
+//         let parent_summary_id = null;
+//         if (stage.type === 'Capture Summary') parent_summary_id = parent_id_map['Client Summary'];
+//         else if (stage.type === 'Confirm Summary') parent_summary_id = parent_id_map['Capture Summary'];
+
+//         const stageData = stage.data || {};
+
+//         let action_value = null;
+
+//         if (stage.type === "Client Summary") {
+//           action_value = stageData.client_action || null;
+//         } 
+//         else if (stage.type === "Capture Summary") {
+//           action_value = stageData.capture_action || null;
+//         } 
+//         else if (stage.type === "Confirm Summary") {
+//           action_value = stageData.confirm_action || null;
+//         }
+
+//         const insertStageQuery = `
+//           INSERT INTO admin.task_summaries (
+//             task_report_id,
+//             summary_group_id,
+//             parent_summary_id,
+//             summary_type,
+//             status,
+//             name,
+//             phone,
+//             email,
+//             shop_name,
+//             shop_domain,
+//             shop_sector,
+//             action,
+//             shop_no,
+//             location
+//           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+//           RETURNING id
+//         `;
+
+//         const stageValues = [
+//           task_report_id,
+//           group_id,
+//           parent_summary_id,
+//           stage.type,
+//           stage.status,
+//           stageData.name || null,
+//           stageData.phone || null,
+//           stageData.email || null,
+//           stageData.shop || null,
+//           stageData.domain || null,
+//           stageData.sector || null,
+//           action_value || null,
+//           stageData.shop_no || null,
+//           stageData.location || null
+//         ];
+
+//         const { rows: stageRows } = await ambarsariyaPool.query(insertStageQuery, stageValues);
+//         parent_id_map[stage.type] = stageRows[0].id;
+//       }
+//     }
+
+//     res.status(201).json({ success: true, task_report_id });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
+
+const create_or_update_task_report = async (req, res) => {
+  try {
     const { formData, clientSummaries } = req.body;
 
-    // 1️⃣ Insert task_report_details
-    const taskReportQuery = `
-      INSERT INTO admin.task_report_details (
-        task_id,
-        task_reporting_date,
-        visits,
-        joined,
-        in_pipeline,
-        total_leads_summary,
-        daily_leads_summary,
-        total_client_summary,
-        daily_client_summary,
-        total_capture_summary,
-        daily_capture_summary,
-        total_confirmation,
-        daily_confirmation
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      RETURNING id
+    // Check existing report
+    const checkQuery = `
+      SELECT id FROM admin.task_report_details
+      WHERE task_id = $1 AND task_reporting_date = $2
     `;
 
-    const taskReportValues = [
+    const existing = await ambarsariyaPool.query(checkQuery, [
       formData.task_id,
-      formData.task_reporting_date,
-      formData.visits || 0,
-      formData.joined || 0,
-      formData.in_pipeline || 0,
-      formData.total_leads || 0,
-      formData.daily_leads || 0,
-      formData.total_client || 0,
-      formData.daily_client || 0,
-      formData.total_capture || 0,
-      formData.daily_capture || 0,
-      formData.total_confirmation || 0,
-      formData.Daily_confirmation || 0
-    ];
+      formData.task_reporting_date
+    ]);
 
-    const { rows } = await ambarsariyaPool.query(taskReportQuery, taskReportValues);
-    const task_report_id = rows[0].id;
+    let task_report_id;
 
-    // 2️⃣ Insert clientSummaries
-    let summary_group_counter = 1;
+    if (existing.rows.length) {
+      // UPDATE
+      task_report_id = existing.rows[0].id;
+
+      await ambarsariyaPool.query(`
+        UPDATE admin.task_report_details
+        SET
+          visits=$3,
+          joined=$4,
+          in_pipeline=$5,
+          total_leads_summary=$6,
+          daily_leads_summary=$7,
+          total_client_summary=$8,
+          daily_client_summary=$9,
+          total_capture_summary=$10,
+          daily_capture_summary=$11,
+          total_confirmation=$12,
+          daily_confirmation=$13
+        WHERE id=$1 AND task_reporting_date=$2
+      `, [
+        task_report_id,
+        formData.task_reporting_date,
+        formData.visits || 0,
+        formData.joined || 0,
+        formData.in_pipeline || 0,
+        formData.total_leads || 0,
+        formData.daily_leads || 0,
+        formData.total_client || 0,
+        formData.daily_client || 0,
+        formData.total_capture || 0,
+        formData.daily_capture || 0,
+        formData.total_confirmation || 0,
+        formData.Daily_confirmation || 0
+      ]);
+
+      // Remove old summaries
+      await ambarsariyaPool.query(
+        `DELETE FROM admin.task_summaries WHERE task_report_id = $1`,
+        [task_report_id]
+      );
+
+    } else {
+      // INSERT
+      const insert = await ambarsariyaPool.query(`
+        INSERT INTO admin.task_report_details (
+          task_id,
+          task_reporting_date,
+          visits,
+          joined,
+          in_pipeline,
+          total_leads_summary,
+          daily_leads_summary,
+          total_client_summary,
+          daily_client_summary,
+          total_capture_summary,
+          daily_capture_summary,
+          total_confirmation,
+          daily_confirmation
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        RETURNING id
+      `, [
+        formData.task_id,
+        formData.task_reporting_date,
+        formData.visits || 0,
+        formData.joined || 0,
+        formData.in_pipeline || 0,
+        formData.total_leads || 0,
+        formData.daily_leads || 0,
+        formData.total_client || 0,
+        formData.daily_client || 0,
+        formData.total_capture || 0,
+        formData.daily_capture || 0,
+        formData.total_confirmation || 0,
+        formData.Daily_confirmation || 0
+      ]);
+
+      task_report_id = insert.rows[0].id;
+    }
+
+    // Insert summaries
+    let groupCounter = 1;
 
     for (const group of clientSummaries) {
-      const group_id = summary_group_counter++;
-      let parent_id_map = {};
+      const groupId = groupCounter++;
+      const parentMap = {};
 
       for (const stage of group.stages) {
-        let parent_summary_id = null;
-        if (stage.type === 'Capture Summary') parent_summary_id = parent_id_map['Client Summary'];
-        else if (stage.type === 'Confirm Summary') parent_summary_id = parent_id_map['Capture Summary'];
-
-        const stageData = stage.data || {};
-
-        let action_value = null;
-
-        if (stage.type === "Client Summary") {
-          action_value = stageData.client_action || null;
-        } 
-        else if (stage.type === "Capture Summary") {
-          action_value = stageData.capture_action || null;
-        } 
-        else if (stage.type === "Confirm Summary") {
-          action_value = stageData.confirm_action || null;
+        let parent_id = null;
+        if (stage.type === "Capture Summary") {
+          parent_id = parentMap["Client Summary"];
+        }
+        if (stage.type === "Confirm Summary") {
+          parent_id = parentMap["Capture Summary"];
         }
 
+        const d = stage.data || {};
 
-        const insertStageQuery = `
+        const actionValue =
+          stage.type === "Client Summary"
+            ? d.client_action
+            : stage.type === "Capture Summary"
+            ? d.capture_action
+            : d.confirm_action;
+
+        const result = await ambarsariyaPool.query(`
           INSERT INTO admin.task_summaries (
             task_report_id,
             summary_group_id,
@@ -975,37 +1145,35 @@ const create_task_report = async (req, res) => {
             location
           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
           RETURNING id
-        `;
-
-        const stageValues = [
+        `, [
           task_report_id,
-          group_id,
-          parent_summary_id,
+          groupId,
+          parent_id,
           stage.type,
           stage.status,
-          stageData.name || null,
-          stageData.phone || null,
-          stageData.email || null,
-          stageData.shop || null,
-          stageData.domain || null,
-          stageData.sector || null,
-          action_value || null,
-          stageData.shop_no || null,
-          stageData.location || null
-        ];
+          d.name || "",
+          d.phone || "",
+          d.email || "",
+          d.shop || "",
+          d.domain || null,
+          d.sector || null,
+          actionValue || "",
+          d.shop_no || "",
+          d.location || null
+        ]);
 
-        const { rows: stageRows } = await ambarsariyaPool.query(insertStageQuery, stageValues);
-        parent_id_map[stage.type] = stageRows[0].id;
+        parentMap[stage.type] = result.rows[0].id;
       }
     }
 
-    res.status(201).json({ success: true, task_report_id });
+    res.json({ success: true, task_report_id });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
+
 
 const get_staff_member_tasks = async (req, res) => {
   const { assigned_by, assigned_to } = req.params;
@@ -1026,7 +1194,7 @@ const get_staff_member_tasks = async (req, res) => {
   }
 };
 
-const get_staff_task_report_details = async (req, res) => {
+const get_grouped_staff_task_report_details = async (req, res) => {
   try {
     const {task_id, task_reporting_date} = req.params;
 
@@ -1138,6 +1306,99 @@ const get_staff_task_report_details = async (req, res) => {
   }
 };
 
+const get_staff_task_report_details = async (req, res) => {
+  try {
+    const {task_id, task_reporting_date} = req.params;
+
+    const staffReportResult = await ambarsariyaPool.query(
+      `
+      WITH filtered_reports AS (
+        SELECT id, task_id, task_reporting_date
+        FROM admin.task_report_details
+        WHERE task_id = $1
+          AND task_reporting_date = $2
+      ),
+
+      report_totals AS (
+        SELECT
+          trd.task_id,
+          trd.task_reporting_date,
+
+          SUM(visits)                AS visits,
+          SUM(joined)                AS joined,
+          SUM(in_pipeline)           AS in_pipeline,
+
+          SUM(total_leads_summary)   AS total_leads_summary,
+          SUM(daily_leads_summary)   AS daily_leads_summary,
+
+          SUM(total_client_summary)  AS total_client_summary,
+          SUM(daily_client_summary)  AS daily_client_summary,
+
+          SUM(total_capture_summary) AS total_capture_summary,
+          SUM(daily_capture_summary) AS daily_capture_summary,
+
+          SUM(total_confirmation)    AS total_confirmation,
+          SUM(daily_confirmation)    AS daily_confirmation
+        FROM filtered_reports fr
+        JOIN admin.task_report_details trd ON trd.id = fr.id
+        GROUP BY trd.task_id, trd.task_reporting_date
+      ),
+
+      task_summary_list AS (
+        SELECT
+          json_agg(
+            json_build_object(
+              'id', ts.id,
+              'task_report_id', ts.task_report_id,
+              'summary_type', ts.summary_type,
+              'summary_type', ts.summary_type,
+              'parent_summary_id', ts.parent_summary_id,
+              'status', ts.status,
+              'name', ts.name,
+              'phone', ts.phone,
+              'email', ts.email,
+              'shop_name', ts.shop_name,
+              'shop_domain', ts.shop_domain,
+              'shop_domain_name', d.domain_name,
+              'shop_sector', ts.shop_sector,
+              'shop_sector_name', s.sector_name,
+              'action', ts.action,
+              'shop_no', ts.shop_no,
+              'location', ts.location,
+              'created_at', ts.created_at
+            )
+            ORDER BY ts.id
+          ) AS summaries
+        FROM admin.task_summaries ts
+        LEFT JOIN public.domains d
+        ON ts.shop_domain = d.domain_id
+        LEFT JOIN public.sectors s
+        ON ts.shop_sector = s.sector_id
+        WHERE ts.task_report_id IN (
+          SELECT id FROM filtered_reports
+        )
+      )
+
+      SELECT
+        rt.*,
+        tsl.summaries
+      FROM report_totals rt
+      CROSS JOIN task_summary_list tsl;
+      `,
+      [task_id, task_reporting_date]
+    );
+
+    if (staffReportResult.rows.length === 0) {
+      return res.json({ message: "No data exists." });
+    }
+
+    res.json(staffReportResult.rows);
+  } catch (err) {
+    console.error("Error fetching staff report:", err);
+    res.status(500).json({ error: "Failed to fetch staff report" });
+  }
+};
+
 const delete_auth_credentials = async (req, res) => {
   const { credentials_id } = req.params;
 
@@ -1179,8 +1440,9 @@ module.exports = {
   create_staff_task,
   get_staff_tasks,
   get_staff_task_with_token,
-  create_task_report,
+  create_or_update_task_report,
   get_staff_member_tasks,  
+  get_grouped_staff_task_report_details,
   get_staff_task_report_details,
   delete_auth_credentials,
   check_email_exists
