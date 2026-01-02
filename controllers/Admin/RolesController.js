@@ -1449,20 +1449,20 @@ const get_staff_task_report_details = async (req, res) => {
 const put_replaceManagerAndDeleteEmployee = async (req, res) => {
   const { old_employee_id, assignments } = req.body;
 
-  if (!old_employee_id || !Array.isArray(assignments) || assignments.length === 0) {
+  if (!old_employee_id || !Array.isArray(assignments)) {
     return res.status(400).json({ message: "Invalid payload" });
   }
 
   try {
     const query = `
-      WITH reassigned_staff AS (
+      WITH update_staff AS (
         UPDATE admin.staff s
         SET manager_id = a.employee_id
         FROM jsonb_to_recordset($1::jsonb)
           AS a(staff_id INT, employee_id INT)
         WHERE s.id = a.staff_id
       ),
-      reassigned_tasks AS (
+      update_tasks AS (
         UPDATE admin.staff_tasks st
         SET assigned_by = a.employee_id
         FROM jsonb_to_recordset($1::jsonb)
@@ -1488,14 +1488,13 @@ const put_replaceManagerAndDeleteEmployee = async (req, res) => {
     ]);
 
     res.status(200).json({
-      message: "Staff reassigned and employee deleted successfully",
+      message: "Employee processed successfully",
     });
   } catch (error) {
     console.error("Replace manager failed:", error);
     res.status(500).json({ message: "Operation failed" });
   }
 };
-
 
 
 
