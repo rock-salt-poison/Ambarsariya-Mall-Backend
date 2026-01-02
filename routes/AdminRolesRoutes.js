@@ -11,6 +11,7 @@ router.get('/employees', rolesController.get_role_employees);
 router.get('/staff/:token', rolesController.get_staff);
 router.get('/staff-with-type/:token/:staff_type', rolesController.get_staff_with_type);
 router.get('/staff-tasks/:token', rolesController.get_staff_tasks);
+router.get('/staff-tasks-by-date/:token/:task_reporting_date', rolesController.get_staff_tasks_by_reporting_date);
 router.get('/staff-task-detail/:token', rolesController.get_staff_task_with_token);
 router.get('/tasks/:assigned_by/:assigned_to', rolesController.get_staff_member_tasks);
 router.get('/staff-task-report/:task_id/:task_reporting_date', rolesController.get_grouped_staff_task_report_details);

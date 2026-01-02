@@ -230,6 +230,37 @@ const get_staff_tasks = async (req, res) => {
   }
 };
 
+const get_staff_tasks_by_reporting_date = async (req, res) => {
+  const { token, task_reporting_date } = req.params;
+
+  if (!token) {
+    return res.status(400).json({ message: "Token is required" });
+  }
+
+  try {
+    const query = `
+      SELECT st.*, e.name as "assigned_by_name"
+      FROM admin.staff_tasks st
+      JOIN admin.staff s 
+        ON s.id = st.assigned_to
+      JOIN admin.employees e 
+        ON e.id = st.assigned_by
+      JOIN admin.auth_credentials ac 
+        ON ac.id = s.credentials
+	  JOIN admin.task_report_details trd 
+	  	ON trd.task_reporting_date = $2 and trd.task_id = st.id
+      WHERE ac.access_token = $1
+    `;
+
+    const result = await ambarsariyaPool.query(query, [token, task_reporting_date]);
+
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching tasks:", err);
+    return res.status(500).json({ error: "Failed to fetch tasks" });
+  }
+};
+
 const get_staff_task_with_token = async (req, res) => {
   const { token } = req.params;
 
@@ -1439,6 +1470,7 @@ module.exports = {
   get_staff_with_type,
   create_staff_task,
   get_staff_tasks,
+  get_staff_tasks_by_reporting_date,
   get_staff_task_with_token,
   create_or_update_task_report,
   get_staff_member_tasks,  
