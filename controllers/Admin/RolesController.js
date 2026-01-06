@@ -94,7 +94,7 @@ const get_role_employees = async (req, res) => {
 const get_staff_members_by_manager_id = async (req, res) => {
   const {id} = req.params;
   try {
-    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.staff s
+    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials 
 where s.manager_id = $1`, [id]);
     res.json(result.rows);
@@ -144,7 +144,7 @@ const get_staff = async (req, res) => {
         s.assign_area_name,
         ac.phone,
         d.department_name
-      FROM admin.staff s
+      FROM admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
@@ -201,7 +201,7 @@ const get_staff_with_type = async (req, res) => {
         s.assign_area,
         s.assign_area_name,
         ac.phone
-      FROM admin.staff s
+      FROM admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
@@ -228,7 +228,7 @@ const get_staff_tasks = async (req, res) => {
     const query = `
       SELECT st.*, e.name as "assigned_by_name"
       FROM admin.staff_tasks st
-      JOIN admin.staff s 
+      JOIN admin.marketing_staff s 
         ON s.id = st.assigned_to
       JOIN admin.employees e 
         ON e.id = st.assigned_by
@@ -257,7 +257,7 @@ const get_staff_tasks_by_reporting_date = async (req, res) => {
     const query = `
       SELECT st.*, e.name as "assigned_by_name"
       FROM admin.staff_tasks st
-      JOIN admin.staff s 
+      JOIN admin.marketing_staff s 
         ON s.id = st.assigned_to
       JOIN admin.employees e 
         ON e.id = st.assigned_by
@@ -716,7 +716,7 @@ const create_staff = async (req, resp) => {
     // -----------------------------
     const staffResult = await ambarsariyaPool.query(
       `
-      INSERT INTO admin.staff
+      INSERT INTO admin.marketing_staff
         (credentials, manager_id,
         staff_type_id,
         name,
@@ -832,7 +832,7 @@ const create_staff_task = async (req, resp) => {
     // 1️⃣ Fetch staff details
     const staffRes = await ambarsariyaPool.query(
       `SELECT s.name, ac.email 
-       FROM admin.staff s
+       FROM admin.marketing_staff s
        LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
        WHERE s.id = $1 `,
       [assigned_to]
@@ -1495,39 +1495,56 @@ const get_selected_staff_task_report = async (req, res) => {
   ),
 
   task_summary_list AS (
-      SELECT
-          json_agg(
-              json_build_object(
-                  'id', ts.id,
-                  'task_report_id', ts.task_report_id,
-                  'summary_type', ts.summary_type,
-                  'parent_summary_id', ts.parent_summary_id,
-                  'status', ts.status,
-                  'name', ts.name,
-                  'phone', ts.phone,
-                  'email', ts.email,
-                  'shop_name', ts.shop_name,
-                  'shop_domain', ts.shop_domain,
-                  'shop_domain_name', d.domain_name,
-                  'shop_sector', ts.shop_sector,
-                  'shop_sector_name', s.sector_name,
-                  'action', ts.action,
-                  'shop_no', ts.shop_no,
-                  'location', ts.location,
-                  'created_at', ts.created_at
-              )
-              ORDER BY ts.id
-          ) AS summaries
-      FROM admin.task_summaries ts
-      LEFT JOIN public.domains d
+    SELECT
+        json_agg(
+            CASE
+                /* ✅ SELECTED GROUP → FULL DATA */
+                WHEN ts.summary_group_id = $4 THEN
+                    json_build_object(
+                        'id', ts.id,
+                        'task_report_id', ts.task_report_id,
+                        'summary_type', ts.summary_type,
+                        'parent_summary_id', ts.parent_summary_id,
+                        'summary_group_id', ts.summary_group_id,
+                        'status', ts.status,
+                        'action', ts.action,
+
+                        'name', ts.name,
+                        'phone', ts.phone,
+                        'email', ts.email,
+                        'shop_name', ts.shop_name,
+                        'shop_domain', ts.shop_domain,
+                        'shop_domain_name', d.domain_name,
+                        'shop_sector', ts.shop_sector,
+                        'shop_sector_name', s.sector_name,
+                        'shop_no', ts.shop_no,
+                        'location', ts.location,
+                        'created_at', ts.created_at
+                    )
+
+                /* 🟡 OTHER GROUPS → ONLY STATUS & ACTION */
+                ELSE
+                    json_build_object(
+                        'id', ts.id,
+                        'summary_group_id', ts.summary_group_id,
+                        'summary_type', ts.summary_type,
+                        'parent_summary_id', ts.parent_summary_id,
+                        'status', ts.status,
+                        'action', ts.action
+                    )
+            END
+            ORDER BY ts.id
+        ) AS summaries
+    FROM admin.task_summaries ts
+    LEFT JOIN public.domains d
         ON ts.shop_domain = d.domain_id
-      LEFT JOIN public.sectors s
+    LEFT JOIN public.sectors s
         ON ts.shop_sector = s.sector_id
-      WHERE ts.task_report_id IN (
-          SELECT id FROM filtered_reports
-      )
-        AND ts.summary_group_id = $4
-  )
+    WHERE ts.task_report_id IN (
+        SELECT id FROM filtered_reports
+    )
+)
+
 
   SELECT
       rt.*,
@@ -1559,7 +1576,7 @@ const put_replaceManagerAndDeleteEmployee = async (req, res) => {
   try {
     const query = `
       WITH update_staff AS (
-        UPDATE admin.staff s
+        UPDATE admin.marketing_staff s
         SET manager_id = a.employee_id
         FROM jsonb_to_recordset($1::jsonb)
           AS a(staff_id INT, employee_id INT)

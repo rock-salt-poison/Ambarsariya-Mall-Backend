@@ -72,7 +72,7 @@ const get_userByToken = async (req, res) => {
 
       -- STAFF
       SELECT 
-        'staff' AS user_type,
+        'marketing_staff' AS user_type,
         s.id,
         s.name,
         st.staff_type_name AS role_name,
@@ -84,7 +84,7 @@ const get_userByToken = async (req, res) => {
         ac.phone,
         d.department_name,
         s.staff_type_id
-      FROM admin.staff s
+      FROM admin.marketing_staff s
       JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
 	  LEFT JOIN admin.employees e ON e.id = s.manager_id
