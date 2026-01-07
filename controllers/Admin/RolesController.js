@@ -1167,12 +1167,21 @@ const create_or_update_task_report = async (req, res) => {
 
         const d = stage.data || {};
 
-        const actionValue =
-          stage.type === "Client Summary"
-            ? d.client_action
-            : stage.type === "Capture Summary"
-            ? d.capture_action
-            : d.confirm_action;
+        const actionObject = {};
+
+if (Array.isArray(d.client_action) && d.client_action.length) {
+  actionObject.client_action = d.client_action;
+}
+if (Array.isArray(d.capture_action) && d.capture_action.length) {
+  actionObject.capture_action = d.capture_action;
+}
+if (Array.isArray(d.confirm_action) && d.confirm_action.length) {
+  actionObject.confirm_action = d.confirm_action;
+}
+
+const finalAction =
+  Object.keys(actionObject).length > 0 ? actionObject : null;
+
 
         const result = await ambarsariyaPool.query(`
           INSERT INTO admin.task_summaries (
@@ -1204,7 +1213,7 @@ const create_or_update_task_report = async (req, res) => {
           d.shop || "",
           d.domain || null,
           d.sector || null,
-          actionValue || "",
+          finalAction ? finalAction : null,
           d.shop_no || "",
           d.location || null
         ]);
