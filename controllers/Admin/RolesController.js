@@ -1181,8 +1181,6 @@ if (Array.isArray(d.confirm_action) && d.confirm_action.length) {
 
 const finalAction =
   Object.keys(actionObject).length > 0 ? actionObject : null;
-
-
         const result = await ambarsariyaPool.query(`
           INSERT INTO admin.task_summaries (
             task_report_id,
