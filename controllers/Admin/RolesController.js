@@ -1376,29 +1376,57 @@ const get_staff_task_report_details = async (req, res) => {
           AND task_reporting_date = $2
       ),
 
-      report_totals AS (
+      all_task_reports AS (
+        SELECT id, task_id, task_reporting_date
+        FROM admin.task_report_details
+        WHERE task_id = $1
+      ),
+
+      all_reports_daily_totals AS (
+        SELECT
+          SUM(trd.daily_leads_summary) AS total_leads_summary,
+          SUM(trd.daily_client_summary) AS total_client_summary,
+          SUM(trd.daily_capture_summary) AS total_capture_summary,
+          SUM(trd.daily_confirmation)  AS total_confirmation
+        FROM all_task_reports atr
+        JOIN admin.task_report_details trd
+          ON trd.id = atr.id
+      ),
+
+      daily_report_data AS (
         SELECT
           trd.task_id,
           trd.task_reporting_date,
-
-          SUM(visits)                AS visits,
-          SUM(joined)                AS joined,
-          SUM(in_pipeline)           AS in_pipeline,
-
-          SUM(total_leads_summary)   AS total_leads_summary,
-          SUM(daily_leads_summary)   AS daily_leads_summary,
-
-          SUM(total_client_summary)  AS total_client_summary,
-          SUM(daily_client_summary)  AS daily_client_summary,
-
-          SUM(total_capture_summary) AS total_capture_summary,
-          SUM(daily_capture_summary) AS daily_capture_summary,
-
-          SUM(total_confirmation)    AS total_confirmation,
-          SUM(daily_confirmation)    AS daily_confirmation
+          trd.visits,
+          trd.joined,
+          trd.in_pipeline,
+          trd.daily_leads_summary,
+          trd.daily_client_summary,
+          trd.daily_capture_summary,
+          trd.daily_confirmation
         FROM filtered_reports fr
-        JOIN admin.task_report_details trd ON trd.id = fr.id
-        GROUP BY trd.task_id, trd.task_reporting_date
+        JOIN admin.task_report_details trd
+          ON trd.id = fr.id
+        LIMIT 1
+      ),
+
+      report_totals AS (
+        SELECT
+          COALESCE(drd.task_id, $1::int) AS task_id,
+          COALESCE(drd.task_reporting_date, $2::date) AS task_reporting_date,
+          COALESCE(drd.visits, 0) AS visits,
+          COALESCE(drd.joined, 0) AS joined,
+          COALESCE(drd.in_pipeline, 0) AS in_pipeline,
+          COALESCE(art.total_leads_summary, 0) AS total_leads_summary,
+          COALESCE(art.total_client_summary, 0) AS total_client_summary,
+          COALESCE(art.total_capture_summary, 0) AS total_capture_summary,
+          COALESCE(art.total_confirmation, 0) AS total_confirmation,
+          COALESCE(drd.daily_leads_summary, 0) AS daily_leads_summary,
+          COALESCE(drd.daily_client_summary, 0) AS daily_client_summary,
+          COALESCE(drd.daily_capture_summary, 0) AS daily_capture_summary,
+          COALESCE(drd.daily_confirmation, 0) AS daily_confirmation
+        FROM all_reports_daily_totals art
+        LEFT JOIN daily_report_data drd ON TRUE
       ),
 
       task_summary_list AS (
@@ -1438,9 +1466,9 @@ const get_staff_task_report_details = async (req, res) => {
 
       SELECT
         rt.*,
-        tsl.summaries
+        COALESCE(tsl.summaries, '[]'::json) AS summaries
       FROM report_totals rt
-      CROSS JOIN task_summary_list tsl;
+      LEFT JOIN task_summary_list tsl ON TRUE;
       `,
       [task_id, task_reporting_date]
     );
@@ -1475,30 +1503,63 @@ const get_selected_staff_task_report = async (req, res) => {
         AND st.access_token = $3
   ),
 
-  report_totals AS (
+  all_task_reports AS (
+      SELECT
+          trd.id,
+          trd.task_id,
+          trd.task_reporting_date
+      FROM admin.task_report_details trd
+      JOIN admin.staff_tasks st
+        ON st.id = trd.task_id
+      WHERE trd.task_id = $1
+        AND st.access_token = $3
+  ),
+
+  all_reports_daily_totals AS (
+      SELECT
+          SUM(trd.daily_leads_summary) AS total_leads_summary,
+          SUM(trd.daily_client_summary) AS total_client_summary,
+          SUM(trd.daily_capture_summary) AS total_capture_summary,
+          SUM(trd.daily_confirmation)  AS total_confirmation
+      FROM all_task_reports atr
+      JOIN admin.task_report_details trd
+        ON trd.id = atr.id
+  ),
+
+  daily_report_data AS (
       SELECT
           trd.task_id,
           trd.task_reporting_date,
-
-          SUM(trd.visits)              AS visits,
-          SUM(trd.joined)              AS joined,
-          SUM(trd.in_pipeline)         AS in_pipeline,
-
-          SUM(trd.total_leads_summary) AS total_leads_summary,
-          SUM(trd.daily_leads_summary) AS daily_leads_summary,
-
-          SUM(trd.total_client_summary) AS total_client_summary,
-          SUM(trd.daily_client_summary) AS daily_client_summary,
-
-          SUM(trd.total_capture_summary) AS total_capture_summary,
-          SUM(trd.daily_capture_summary) AS daily_capture_summary,
-
-          SUM(trd.total_confirmation)  AS total_confirmation,
-          SUM(trd.daily_confirmation)  AS daily_confirmation
+          trd.visits,
+          trd.joined,
+          trd.in_pipeline,
+          trd.daily_leads_summary,
+          trd.daily_client_summary,
+          trd.daily_capture_summary,
+          trd.daily_confirmation
       FROM filtered_reports fr
       JOIN admin.task_report_details trd
         ON trd.id = fr.id
-      GROUP BY trd.task_id, trd.task_reporting_date
+      LIMIT 1
+  ),
+
+  report_totals AS (
+      SELECT
+          COALESCE(drd.task_id, $1::int) AS task_id,
+          COALESCE(drd.task_reporting_date, $2::date) AS task_reporting_date,
+          COALESCE(drd.visits, 0) AS visits,
+          COALESCE(drd.joined, 0) AS joined,
+          COALESCE(drd.in_pipeline, 0) AS in_pipeline,
+          COALESCE(art.total_leads_summary, 0) AS total_leads_summary,
+          COALESCE(art.total_client_summary, 0) AS total_client_summary,
+          COALESCE(art.total_capture_summary, 0) AS total_capture_summary,
+          COALESCE(art.total_confirmation, 0) AS total_confirmation,
+          COALESCE(drd.daily_leads_summary, 0) AS daily_leads_summary,
+          COALESCE(drd.daily_client_summary, 0) AS daily_client_summary,
+          COALESCE(drd.daily_capture_summary, 0) AS daily_capture_summary,
+          COALESCE(drd.daily_confirmation, 0) AS daily_confirmation
+      FROM all_reports_daily_totals art
+      LEFT JOIN daily_report_data drd ON TRUE
   ),
 
   task_summary_list AS (
