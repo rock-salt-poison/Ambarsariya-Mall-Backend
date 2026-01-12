@@ -1239,7 +1239,7 @@ const get_staff_member_tasks = async (req, res) => {
       WHERE st.assigned_to = $1 and st.assigned_by = $2
     `;
 
-    const result = await ambarsariyaPool.query(query, [assigned_by, assigned_to]);
+    const result = await ambarsariyaPool.query(query, [assigned_to, assigned_by]);
 
     return res.status(200).json(result.rows);
   } catch (err) {
