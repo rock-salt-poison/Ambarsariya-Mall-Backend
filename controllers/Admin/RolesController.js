@@ -1217,6 +1217,75 @@ const finalAction =
         ]);
 
         parentMap[stage.type] = result.rows[0].id;
+
+        // Send email if conditions are met: Capture Summary, status is confirm, action is Form 1, and email is not empty
+        let isForm1Action = false;
+        
+        // Check if capture_action is a string (from form submission)
+        if (d.capture_action && typeof d.capture_action === 'string') {
+          isForm1Action = d.capture_action.toLowerCase().trim() === "form 1";
+        }
+        // Check if capture_action is in the actionObject array format
+        else if (actionObject.capture_action && Array.isArray(actionObject.capture_action)) {
+          isForm1Action = actionObject.capture_action.some(action => {
+            if (typeof action === 'string') {
+              return action.toLowerCase().trim() === "form 1";
+            } else if (typeof action === 'object' && action.action) {
+              return action.action.toLowerCase().trim() === "form 1";
+            }
+            return false;
+          });
+        }
+
+        if (
+          stage.type === "Capture Summary" &&
+          stage.status &&
+          stage.status.toLowerCase() === "confirm" &&
+          isForm1Action &&
+          d.email &&
+          d.email.trim() !== ""
+        ) {
+          try {
+            const transporter = nodemailer.createTransport({
+              host: process.env.SMTP_HOST,
+              port: process.env.SMTP_PORT,
+              secure: process.env.SMTP_SECURE === "true",
+              auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+              },
+            });
+
+            const mailOptions = {
+              from: process.env.SMTP_USER,
+              to: d.email.trim(),
+              subject: "Welcome to Ambarsariya Mall",
+              html: `
+                <h2>Welcome to Ambarsariya Mall</h2>
+                
+                <p>You can create your shop in standard fit infrastructure in which you have to give 30 discount coupons per month + registration charges</p>
+                
+                <p>
+                  <a href="https://ambarsariyamall.shop/sell/coupon-offering" target="_blank">
+                    Coupon-offerings page link
+                  </a>
+                </p>
+                
+                <p>* You can skip coupon and registration fee for demo model</p>
+                
+                <br/>
+                <p>Regards,<br/>
+                <strong>Ambarsariya Mall Team</strong></p>
+              `,
+            };
+
+            await transporter.sendMail(mailOptions);
+            console.log(`Email sent successfully to ${d.email} for Form 1 action`);
+          } catch (emailError) {
+            console.error(`Error sending email to ${d.email}:`, emailError);
+            // Don't fail the entire request if email fails
+          }
+        }
       }
     }
 
