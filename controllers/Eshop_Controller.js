@@ -398,6 +398,89 @@ const post_book_eshop = async (req, resp) => {
 
       await ambarsariyaPool.query("COMMIT");
 
+      // Check if email matches a Capture Summary with confirm status and send notification to staff member
+      try {
+        const staffEmailQuery = `
+          SELECT ac.email as staff_email
+          FROM admin.task_summaries ts
+          JOIN admin.task_report_details trd ON trd.id = ts.task_report_id
+          JOIN admin.staff_tasks st ON st.id = trd.task_id
+          JOIN admin.marketing_staff ms ON ms.id = st.assigned_to
+          JOIN admin.auth_credentials ac ON ac.id = ms.credentials
+          WHERE ts.summary_type = 'Capture Summary'
+            AND ts.status = 'Confirm'
+            AND LOWER(ts.email) = LOWER($1)
+          LIMIT 1
+        `;
+
+        const staffEmailResult = await ambarsariyaPool.query(staffEmailQuery, [username]);
+
+        if (staffEmailResult.rows.length > 0 && staffEmailResult.rows[0].staff_email) {
+          const staffEmail = staffEmailResult.rows[0].staff_email;
+
+          // Fetch domain name and sector name
+          let domainName = domain_create || 'N/A';
+          let sectorName = sector_create || 'N/A';
+
+          if (domain) {
+            const domainResult = await ambarsariyaPool.query(
+              `SELECT domain_name FROM public.domains WHERE domain_id = $1`,
+              [domain]
+            );
+            if (domainResult.rows.length > 0) {
+              domainName = domainResult.rows[0].domain_name;
+            }
+          }
+
+          if (sector) {
+            const sectorResult = await ambarsariyaPool.query(
+              `SELECT sector_name FROM public.sectors WHERE sector_id = $1`,
+              [sector]
+            );
+            if (sectorResult.rows.length > 0) {
+              sectorName = sectorResult.rows[0].sector_name;
+            }
+          }
+          console.log(domainName, sectorName, staffEmail);
+          
+          const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === "true",
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS,
+            },
+          });
+
+          const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: staffEmail,
+            subject: "User Successfully Filled Book Eshop Form",
+            html: `
+              <h2>Hello,</h2>
+              
+              <p>A user has successfully filled the book eshop form.</p>
+              
+              <p><strong>User Email:</strong> ${username}</p>
+              <p><strong>Name:</strong> ${fullName}</p>
+              <p><strong>Domain:</strong> ${domainName}</p>
+              <p><strong>Sector:</strong> ${sectorName}</p>
+              
+              <br/>
+              <p>Regards,<br/>
+              <strong>Ambarsariya Mall Team</strong></p>
+            `,
+          };
+
+          await transporter.sendMail(mailOptions);
+          console.log(`Notification email sent successfully to staff member: ${staffEmail}`);
+        }
+      } catch (emailError) {
+        console.error("Error sending notification email to staff member:", emailError);
+        // Don't fail the request if email fails
+      }
+
       return resp.status(201).json({
         message: "E-shop data successfully created.",
         shop_access_token: newShopAccessToken,
@@ -835,11 +918,12 @@ const update_eshop = async (req, resp) => {
     }
 
     let qrFileUrl = existingShopQR;
+    let qrBuffer = null;
 
     // ✅ Only generate/send/store QR if not already set
     if (!existingShopQR) {
       const qrLink = `https://ambarsariyamall.shop/sell/support/shop/shop-detail/${shopAccessToken}`;
-      const qrBuffer = await QRCode.toBuffer(qrLink, { type: "png" });
+      qrBuffer = await QRCode.toBuffer(qrLink, { type: "png" });
 
       // Wrap buffer into a "file-like" object for uploadFileToGCS
       const qrFile = {
@@ -847,7 +931,7 @@ const update_eshop = async (req, resp) => {
         buffer: qrBuffer,
       };
 
-      const qrFileUrl = await uploadFileToGCS(qrFile, "eshop_qrcodes");
+      qrFileUrl = await uploadFileToGCS(qrFile, "eshop_qrcodes");
 
       // Store QR link in DB
       await ambarsariyaPool.query(
@@ -888,7 +972,109 @@ const update_eshop = async (req, resp) => {
       await transporter.sendMail(mailOptions);
     }
 
-
+    // Send notification email to staff member if there's a matching record
+    try {
+      // Get user details (name, domain, sector) and QR code from the database with JOINs
+      const userDetailsQuery = `
+        SELECT 
+          u.full_name,
+          COALESCE(d.domain_name, 'N/A') as domain_name,
+          COALESCE(s.sector_name, 'N/A') as sector_name,
+          ef.qr_code
+        FROM Sell.eshop_form ef
+        JOIN Sell.users u ON u.user_id = ef.user_id
+        LEFT JOIN public.domains d ON d.domain_id = ef.domain
+        LEFT JOIN public.sectors s ON s.sector_id = ef.sector
+        WHERE ef.shop_access_token = $1
+      `;
+      
+      const userDetailsResult = await ambarsariyaPool.query(userDetailsQuery, [shopAccessToken]);
+      
+      if (userDetailsResult.rows.length > 0) {
+        const userDetails = userDetailsResult.rows[0];
+        const userEmail = username;
+        const userName = userDetails.full_name || 'N/A';
+        const domainName = userDetails.domain_name || 'N/A';
+        const sectorName = userDetails.sector_name || 'N/A';
+        const qrCodeUrl = userDetails.qr_code || qrFileUrl; // Use existing QR or newly generated one
+        const qrLink = `https://ambarsariyamall.shop/sell/support/shop/shop-detail/${shopAccessToken}`;
+        
+        // Check if email matches a Capture Summary with confirm status and get staff member email
+        const staffEmailQuery = `
+          SELECT ac.email as staff_email
+          FROM admin.task_summaries ts
+          JOIN admin.task_report_details trd ON trd.id = ts.task_report_id
+          JOIN admin.staff_tasks st ON st.id = trd.task_id
+          JOIN admin.marketing_staff ms ON ms.id = st.assigned_to
+          JOIN admin.auth_credentials ac ON ac.id = ms.credentials
+          WHERE ts.summary_type = 'Capture Summary'
+            AND ts.status = 'Confirm'
+            AND LOWER(ts.email) = LOWER($1)
+          LIMIT 1
+        `;
+        
+        const staffEmailResult = await ambarsariyaPool.query(staffEmailQuery, [userEmail]);
+        
+        if (staffEmailResult.rows.length > 0 && staffEmailResult.rows[0].staff_email) {
+          const staffEmail = staffEmailResult.rows[0].staff_email;
+          
+          const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === "true",
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS,
+            },
+          });
+          
+          // Prepare QR code attachment if available
+          const attachments = [];
+          
+          // If QR code was just generated, use the buffer; otherwise we'll just use the URL in HTML
+          if (qrBuffer && qrCodeUrl) {
+            attachments.push({
+              filename: "shop_qr.png",
+              content: qrBuffer,
+            });
+          }
+          
+          const mailOptions = {
+            from: process.env.SMTP_USER,
+            to: staffEmail,
+            subject: "User Successfully Updated Eshop Form",
+            html: `
+              <h2>Hello,</h2>
+              
+              <p>A user has successfully updated the eshop form.</p>
+              
+              <p><strong>User Email:</strong> ${userEmail}</p>
+              <p><strong>Name:</strong> ${userName}</p>
+              <p><strong>Domain:</strong> ${domainName}</p>
+              <p><strong>Sector:</strong> ${sectorName}</p>
+              <p><strong>Shop Access Token:</strong> ${shopAccessToken}</p>
+              
+              ${qrCodeUrl ? `
+                <p><strong>Shop QR Code:</strong></p>
+                <img src="${qrCodeUrl}" alt="QR Code" style="max-width: 300px;" />
+                <p>Or click directly: <a href="${qrLink}">${qrLink}</a></p>
+              ` : ''}
+              
+              <br/>
+              <p>Regards,<br/>
+              <strong>Ambarsariya Mall Team</strong></p>
+            `,
+            attachments: attachments.length > 0 ? attachments : undefined,
+          };
+          
+          await transporter.sendMail(mailOptions);
+          console.log(`Notification email sent successfully to staff member: ${staffEmail}`);
+        }
+      }
+    } catch (emailError) {
+      console.error("Error sending notification email to staff member:", emailError);
+      // Don't fail the request if email fails
+    }
 
     resp.status(200).json({
       message: "E-shop data successfully updated.",

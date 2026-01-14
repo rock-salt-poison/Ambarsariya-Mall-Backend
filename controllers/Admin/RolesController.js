@@ -1246,6 +1246,30 @@ const finalAction =
           d.email.trim() !== ""
         ) {
           try {
+            // Fetch domain name and sector name
+            let domainName = 'N/A';
+            let sectorName = 'N/A';
+
+            if (d.domain) {
+              const domainResult = await ambarsariyaPool.query(
+                `SELECT domain_name FROM public.domains WHERE domain_id = $1`,
+                [d.domain]
+              );
+              if (domainResult.rows.length > 0) {
+                domainName = domainResult.rows[0].domain_name;
+              }
+            }
+
+            if (d.sector) {
+              const sectorResult = await ambarsariyaPool.query(
+                `SELECT sector_name FROM public.sectors WHERE sector_id = $1`,
+                [d.sector]
+              );
+              if (sectorResult.rows.length > 0) {
+                sectorName = sectorResult.rows[0].sector_name;
+              }
+            }
+
             const transporter = nodemailer.createTransport({
               host: process.env.SMTP_HOST,
               port: process.env.SMTP_PORT,
@@ -1264,6 +1288,11 @@ const finalAction =
                 <h2>Welcome to Ambarsariya Mall</h2>
                 
                 <p>You can create your shop in standard fit infrastructure in which you have to give 30 discount coupons per month + registration charges</p>
+                
+                <p><strong>Domain:</strong> ${domainName}</p>
+                <p><strong>Sector:</strong> ${sectorName}</p>
+                <p><strong>Shop Name:</strong> ${d.shop}</p>
+                <p><strong>Location:</strong> ${d.location.formatted_address}</p>
                 
                 <p>
                   <a href="https://ambarsariyamall.shop/sell/coupon-offering" target="_blank">
