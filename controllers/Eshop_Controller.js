@@ -1069,6 +1069,114 @@ const update_eshop = async (req, resp) => {
           
           await transporter.sendMail(mailOptions);
           console.log(`Notification email sent successfully to staff member: ${staffEmail}`);
+          
+          // Insert Confirm Summary record in task_summaries if Capture Summary exists
+          try {
+            // Get Capture Summary details to use as parent
+            const captureSummaryQuery = `
+              SELECT 
+                ts.id as capture_summary_id,
+                ts.task_report_id,
+                ts.summary_group_id,
+                ts.name,
+                ts.phone,
+                ts.email,
+                ts.shop_name,
+                ts.shop_domain,
+                ts.shop_sector,
+                ts.shop_no,
+                ts.location
+              FROM admin.task_summaries ts
+              JOIN admin.task_report_details trd ON trd.id = ts.task_report_id
+              JOIN admin.staff_tasks st ON st.id = trd.task_id
+              JOIN admin.marketing_staff ms ON ms.id = st.assigned_to
+              JOIN admin.auth_credentials ac ON ac.id = ms.credentials
+              WHERE ts.summary_type = 'Capture Summary'
+                AND ts.status = 'Confirm'
+                AND LOWER(ts.email) = LOWER($1)
+              ORDER BY ts.id DESC
+              LIMIT 1
+            `;
+            
+            const captureSummaryResult = await ambarsariyaPool.query(captureSummaryQuery, [userEmail]);
+            
+            if (captureSummaryResult.rows.length > 0) {
+              const captureSummary = captureSummaryResult.rows[0];
+              
+              // Get shop_no from eshop_form
+              const shopNoQuery = `
+                SELECT shop_no 
+                FROM Sell.eshop_form 
+                WHERE shop_access_token = $1
+              `;
+              const shopNoResult = await ambarsariyaPool.query(shopNoQuery, [shopAccessToken]);
+              const shopNo = shopNoResult.rows.length > 0 ? shopNoResult.rows[0].shop_no : null;
+              
+              // Check if Confirm Summary with "Joined" status already exists for this summary_group_id
+              const existingConfirmQuery = `
+                SELECT id 
+                FROM admin.task_summaries 
+                WHERE task_report_id = $1
+                  AND summary_group_id = $2
+                  AND summary_type = 'Confirm Summary'
+                  AND status = 'Joined'
+              `;
+              const existingConfirm = await ambarsariyaPool.query(existingConfirmQuery, [
+                captureSummary.task_report_id,
+                captureSummary.summary_group_id
+              ]);
+              
+              // Only insert if Confirm Summary with "Joined" status doesn't exist
+              if (existingConfirm.rows.length === 0) {
+                // Create action object for "Self Joined"
+                const actionObject = {
+                  confirm_action: [{ date: new Date().toISOString(), action: "Self Joined", status: "Joined", comment: "" }]
+                };
+                
+                // Insert Confirm Summary
+                await ambarsariyaPool.query(`
+                  INSERT INTO admin.task_summaries (
+                    task_report_id,
+                    summary_group_id,
+                    parent_summary_id,
+                    summary_type,
+                    status,
+                    name,
+                    phone,
+                    email,
+                    shop_name,
+                    shop_domain,
+                    shop_sector,
+                    action,
+                    shop_no,
+                    location
+                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                `, [
+                  captureSummary.task_report_id,
+                  captureSummary.summary_group_id,
+                  captureSummary.capture_summary_id, // parent_summary_id is the Capture Summary's id
+                  "Confirm Summary",
+                  "Joined",
+                  captureSummary.name || userName || "",
+                  captureSummary.phone || "",
+                  captureSummary.email || userEmail || "",
+                  captureSummary.shop_name || business_name || "",
+                  captureSummary.shop_domain || null,
+                  captureSummary.shop_sector || null,
+                  actionObject,
+                  shopNo || captureSummary.shop_no || "",
+                  captureSummary.location || null
+                ]);
+                
+                console.log(`Confirm Summary with "Joined" status created successfully for user: ${userEmail}`);
+              } else {
+                console.log(`Confirm Summary with "Joined" status already exists for this summary group`);
+              }
+            }
+          } catch (summaryError) {
+            console.error("Error creating Confirm Summary:", summaryError);
+            // Don't fail the request if summary creation fails
+          }
         }
       }
     } catch (emailError) {

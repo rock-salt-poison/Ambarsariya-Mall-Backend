@@ -1732,6 +1732,72 @@ const get_selected_staff_task_report = async (req, res) => {
   }
 };
 
+const get_marketing_staff_report_details_by_summary_id = async (req, res) => {
+  try {
+    const { summary_id } = req.params;
+
+    if (!summary_id) {
+      return res.status(400).json({ message: "Summary ID is required" });
+    }
+
+    // First, get the task_report_id from the summary
+    const summaryResult = await ambarsariyaPool.query(
+      `SELECT task_report_id FROM admin.task_summaries WHERE id = $1`,
+      [summary_id]
+    );
+
+    if (summaryResult.rows.length === 0) {
+      return res.status(404).json({ message: "Summary not found" });
+    }
+
+    const task_report_id = summaryResult.rows[0].task_report_id;
+
+    // Get task_report_details
+    const taskReportDetailsResult = await ambarsariyaPool.query(
+      `SELECT * FROM admin.task_report_details WHERE id = $1`,
+      [task_report_id]
+    );
+
+    if (taskReportDetailsResult.rows.length === 0) {
+      return res.status(404).json({ message: "Task report details not found" });
+    }
+
+    const task_id = taskReportDetailsResult.rows[0].task_id;
+    const task_reporting_date = taskReportDetailsResult.rows[0].task_reporting_date;
+
+    // Get staff_tasks
+    const staffTasksResult = await ambarsariyaPool.query(
+      `SELECT * FROM admin.staff_tasks WHERE id = $1`,
+      [task_id]
+    );
+
+    // Get all task_summaries for this task_report_id
+    const taskSummariesResult = await ambarsariyaPool.query(
+      `
+      SELECT 
+        ts.*,
+        d.domain_name,
+        s.sector_name
+      FROM admin.task_summaries ts
+      LEFT JOIN public.domains d ON ts.shop_domain = d.domain_id
+      LEFT JOIN public.sectors s ON ts.shop_sector = s.sector_id
+      WHERE ts.task_report_id = $1
+      ORDER BY ts.id
+      `,
+      [task_report_id]
+    );
+
+    res.json({
+      staff_task: staffTasksResult.rows[0] || null,
+      task_report_details: taskReportDetailsResult.rows[0] || null,
+      task_summaries: taskSummariesResult.rows || []
+    });
+  } catch (err) {
+    console.error("Error fetching marketing staff report details:", err);
+    res.status(500).json({ error: "Failed to fetch report details" });
+  }
+};
+
 const put_replaceManagerAndDeleteEmployee = async (req, res) => {
   const { old_employee_id, assignments } = req.body;
 
@@ -1804,6 +1870,7 @@ module.exports = {
   get_grouped_staff_task_report_details,
   get_staff_task_report_details,
   get_selected_staff_task_report,
+  get_marketing_staff_report_details_by_summary_id,
   put_replaceManagerAndDeleteEmployee,
   check_email_exists,
   get_staff_members_by_manager_id
