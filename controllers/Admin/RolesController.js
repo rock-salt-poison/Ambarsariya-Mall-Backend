@@ -1105,11 +1105,29 @@ const create_or_update_task_report = async (req, res) => {
         formData.Daily_confirmation || 0
       ]);
 
-      // Remove old summaries
-      await ambarsariyaPool.query(
-        `DELETE FROM admin.task_summaries WHERE task_report_id = $1`,
-        [task_report_id]
-      );
+      // Extract summary_group_id from clientSummaries
+      const summaryGroupIds = [];
+      for (const group of clientSummaries) {
+        // Check for summary_group_id first (from API data), then fallback to id (from UI)
+        const groupId = group.summary_group_id !== undefined && group.summary_group_id !== null
+          ? group.summary_group_id
+          : (group.id !== undefined && group.id !== null && typeof group.id === 'number')
+            ? group.id
+            : null;
+        
+        if (groupId !== null) {
+          summaryGroupIds.push(groupId);
+        }
+      }
+
+      // Remove old summaries only for the specific summary_group_ids being updated
+      if (summaryGroupIds.length > 0) {
+        await ambarsariyaPool.query(
+          `DELETE FROM admin.task_summaries 
+           WHERE task_report_id = $1 AND summary_group_id = ANY($2::int[])`,
+          [task_report_id, summaryGroupIds]
+        );
+      }
 
     } else {
       // INSERT
@@ -1153,7 +1171,12 @@ const create_or_update_task_report = async (req, res) => {
     let groupCounter = 1;
 
     for (const group of clientSummaries) {
-      const groupId = groupCounter++;
+      // Use summary_group_id first (from API data), then id (from UI), otherwise use counter
+      const groupId = group.summary_group_id !== undefined && group.summary_group_id !== null
+        ? group.summary_group_id
+        : (group.id !== undefined && group.id !== null && typeof group.id === 'number')
+          ? group.id
+          : groupCounter++;
       const parentMap = {};
 
       for (const stage of group.stages) {
