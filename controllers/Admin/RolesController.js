@@ -1375,100 +1375,20 @@ const get_grouped_staff_task_report_details = async (req, res) => {
 
     const staffReportResult = await ambarsariyaPool.query(
       `
-      WITH filtered_reports AS (
-        SELECT id, task_id, task_reporting_date
-        FROM admin.task_report_details
-        WHERE task_id = $1
-          AND task_reporting_date = $2
-      ),
-
-      report_totals AS (
-        SELECT
-          trd.task_id,
-          trd.task_reporting_date,
-          st.access_token,
-
-          SUM(visits)                AS visits,
-          SUM(joined)                AS joined,
-          SUM(in_pipeline)           AS in_pipeline,
-
-          SUM(total_leads_summary)   AS total_leads_summary,
-          SUM(daily_leads_summary)   AS daily_leads_summary,
-
-          SUM(total_client_summary)  AS total_client_summary,
-          SUM(daily_client_summary)  AS daily_client_summary,
-
-          SUM(total_capture_summary) AS total_capture_summary,
-          SUM(daily_capture_summary) AS daily_capture_summary,
-
-          SUM(total_confirmation)    AS total_confirmation,
-          SUM(daily_confirmation)    AS daily_confirmation
-        FROM filtered_reports fr
-        JOIN admin.task_report_details trd ON trd.id = fr.id
-        JOIN admin.staff_tasks st ON st.id = fr.task_id
-        GROUP BY trd.task_id, trd.task_reporting_date, st.access_token
-      ),
-
-      prioritized_summaries AS (
-        SELECT *
-        FROM (
-          SELECT 
-            ts.*,
-
-            d.domain_name,
-            s.sector_name,
-
-            ROW_NUMBER() OVER (
-              PARTITION BY ts.summary_group_id, ts.task_report_id
-              ORDER BY
-                CASE ts.summary_type
-                  WHEN 'client' THEN 1
-                  WHEN 'capture' THEN 2
-                  WHEN 'confirm' THEN 3
-                  ELSE 4
-                END DESC,  -- highest priority last
-                ts.id DESC
-            ) AS rn
-          FROM admin.task_summaries ts
-          LEFT JOIN public.domains d
-            ON ts.shop_domain = d.domain_id
-          LEFT JOIN public.sectors s
-            ON ts.shop_sector = s.sector_id
-          WHERE ts.task_report_id IN (SELECT id FROM filtered_reports)
-        ) t
-        WHERE rn = 1
-      ),
-
-      task_summary_list AS (
-        SELECT json_agg(
-                 json_build_object(
-                   'id', ts.id,
-                   'task_report_id', ts.task_report_id,
-                   'summary_type', ts.summary_type,
-                   'summary_group_id', ts.summary_group_id,
-                   'parent_summary_id', ts.parent_summary_id,
-                   'status', ts.status,
-                   'name', ts.name,
-                   'phone', ts.phone,
-                   'email', ts.email,
-                   'shop_name', ts.shop_name,
-                   'shop_domain', ts.domain_name,
-                   'shop_sector', ts.sector_name,
-                   'action', ts.action,
-                   'shop_no', ts.shop_no,
-                   'location', ts.location,
-                   'created_at', ts.created_at
-                 )
-                 ORDER BY ts.id
-               ) AS summaries
-        FROM prioritized_summaries ts
-      )
-
-      SELECT
-        rt.*,
-        tsl.summaries
-      FROM report_totals rt
-      CROSS JOIN task_summary_list tsl;
+      SELECT 
+        trd.id as task_report_id,
+        trd.task_id,
+        trd.task_reporting_date,
+        st.assigned_task,
+        e.name as assigned_by,
+        st.start_date,
+        st.end_date,
+        st.access_token
+      FROM admin.task_report_details trd
+      JOIN admin.staff_tasks st ON st.id = trd.task_id
+      JOIN admin.employees e ON e.id = st.assigned_by
+      WHERE trd.task_id = $1
+        AND trd.task_reporting_date = $2
       `,
       [task_id, task_reporting_date]
     );
@@ -1869,25 +1789,13 @@ const get_selected_staff_task_report = async (req, res) => {
   }
 };
 
-const get_marketing_staff_report_details_by_summary_id = async (req, res) => {
+const get_marketing_staff_report_details_by_task_report_id = async (req, res) => {
   try {
-    const { summary_id } = req.params;
+    const { task_report_id } = req.params;
 
-    if (!summary_id) {
-      return res.status(400).json({ message: "Summary ID is required" });
+    if (!task_report_id) {
+      return res.status(400).json({ message: "Task Report ID is required" });
     }
-
-    // First, get the task_report_id from the summary
-    const summaryResult = await ambarsariyaPool.query(
-      `SELECT task_report_id FROM admin.task_summaries WHERE id = $1`,
-      [summary_id]
-    );
-
-    if (summaryResult.rows.length === 0) {
-      return res.status(404).json({ message: "Summary not found" });
-    }
-
-    const task_report_id = summaryResult.rows[0].task_report_id;
 
     // Get task_report_details
     const taskReportDetailsResult = await ambarsariyaPool.query(
@@ -1932,6 +1840,44 @@ const get_marketing_staff_report_details_by_summary_id = async (req, res) => {
   } catch (err) {
     console.error("Error fetching marketing staff report details:", err);
     res.status(500).json({ error: "Failed to fetch report details" });
+  }
+};
+
+const get_all_reports_by_staff_and_type = async (req, res) => {
+  try {
+    const { staff_id, staff_type_id } = req.query;
+
+    if (!staff_id || !staff_type_id) {
+      return res.status(400).json({ message: "Staff ID and Staff Type ID are required" });
+    }
+
+    // Fetch all reports
+    const reportsResult = await ambarsariyaPool.query(
+      `
+      SELECT 
+        trd.id as task_report_id,
+        trd.task_id,
+        trd.task_reporting_date,
+        st.assigned_task,
+        e.name as assigned_by,
+        st.start_date,
+        st.end_date,
+        st.access_token
+      FROM admin.task_report_details trd
+      JOIN admin.staff_tasks st ON st.id = trd.task_id
+      JOIN admin.marketing_staff ms ON ms.id = st.assigned_to
+      JOIN admin.employees e ON e.id = st.assigned_by
+      JOIN admin.staff_types mst ON mst.id = $2
+      WHERE st.assigned_to = $1 
+      ORDER BY trd.task_reporting_date DESC
+      `,
+      [staff_id, staff_type_id]
+    );
+
+    res.json(reportsResult.rows);
+  } catch (err) {
+    console.error("Error fetching reports by staff and type:", err);
+    res.status(500).json({ error: "Failed to fetch reports" });
   }
 };
 
@@ -2008,7 +1954,8 @@ module.exports = {
   get_staff_task_report_details,
   get_all_staff_reports_by_token,
   get_selected_staff_task_report,
-  get_marketing_staff_report_details_by_summary_id,
+  get_marketing_staff_report_details_by_task_report_id,
+  get_all_reports_by_staff_and_type,
   put_replaceManagerAndDeleteEmployee,
   check_email_exists,
   get_staff_members_by_manager_id
