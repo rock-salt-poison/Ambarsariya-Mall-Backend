@@ -1605,6 +1605,120 @@ const get_staff_task_report_details = async (req, res) => {
   }
 };
 
+const get_all_staff_reports_by_token = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ message: "Token is required" });
+    }
+
+    const staffReportResult = await ambarsariyaPool.query(
+      `
+      WITH staff_tasks_filtered AS (
+        SELECT st.id as task_id, st.access_token
+        FROM admin.staff_tasks st
+        JOIN admin.marketing_staff s ON s.id = st.assigned_to
+        JOIN admin.auth_credentials ac ON ac.id = s.credentials
+        WHERE ac.access_token = $1
+      ),
+
+      all_reports AS (
+        SELECT 
+          trd.id as task_report_id,
+          trd.task_id,
+          trd.task_reporting_date,
+          stf.access_token
+        FROM admin.task_report_details trd
+        JOIN staff_tasks_filtered stf ON stf.task_id = trd.task_id
+        ORDER BY trd.task_reporting_date DESC
+      ),
+
+      prioritized_summaries AS (
+        SELECT *
+        FROM (
+          SELECT 
+            ts.*,
+            d.domain_name,
+            s.sector_name,
+            ROW_NUMBER() OVER (
+              PARTITION BY ts.summary_group_id, ts.task_report_id
+              ORDER BY
+                CASE LOWER(ts.summary_type)
+                  WHEN 'client summary' THEN 1
+                  WHEN 'capture summary' THEN 2
+                  WHEN 'confirm summary' THEN 3
+                  WHEN 'client' THEN 1
+                  WHEN 'capture' THEN 2
+                  WHEN 'confirm' THEN 3
+                  ELSE 4
+                END DESC,  -- highest priority last
+                ts.id DESC
+            ) AS rn
+          FROM admin.task_summaries ts
+          LEFT JOIN public.domains d
+            ON ts.shop_domain = d.domain_id
+          LEFT JOIN public.sectors s
+            ON ts.shop_sector = s.sector_id
+          WHERE ts.task_report_id IN (SELECT task_report_id FROM all_reports)
+        ) t
+        WHERE rn = 1
+      ),
+
+      task_summary_list AS (
+        SELECT
+          ts.task_report_id,
+          json_agg(
+            json_build_object(
+              'id', ts.id,
+              'task_report_id', ts.task_report_id,
+              'summary_type', ts.summary_type,
+              'summary_group_id', ts.summary_group_id,
+              'parent_summary_id', ts.parent_summary_id,
+              'status', ts.status,
+              'name', ts.name,
+              'phone', ts.phone,
+              'email', ts.email,
+              'shop_name', ts.shop_name,
+              'shop_domain', ts.shop_domain,
+              'shop_domain_name', ts.domain_name,
+              'shop_sector', ts.shop_sector,
+              'shop_sector_name', ts.sector_name,
+              'action', ts.action,
+              'shop_no', ts.shop_no,
+              'location', ts.location,
+              'created_at', ts.created_at
+            )
+            ORDER BY ts.id
+          ) AS summaries
+        FROM prioritized_summaries ts
+        GROUP BY ts.task_report_id
+      )
+
+      SELECT
+        ar.task_report_id,
+        ar.task_id,
+        ar.task_reporting_date,
+        ar.access_token,
+        COALESCE(tsl.summaries, '[]'::json) AS summaries
+      FROM all_reports ar
+      LEFT JOIN task_summary_list tsl ON tsl.task_report_id = ar.task_report_id
+      ORDER BY ar.task_reporting_date DESC
+      `,
+      [token]
+    );
+
+    if (staffReportResult.rows.length === 0) {
+      return res.json([]);
+    }
+
+    res.json(staffReportResult.rows);
+  } catch (err) {
+    console.error("Error fetching all staff reports:", err);
+    res.status(500).json({ error: "Failed to fetch staff reports" });
+  }
+};
+
 const get_selected_staff_task_report = async (req, res) => {
   try {
     const {task_id, task_reporting_date, summary_group_id, access_token} = req.params;
@@ -1892,6 +2006,7 @@ module.exports = {
   get_staff_member_tasks,  
   get_grouped_staff_task_report_details,
   get_staff_task_report_details,
+  get_all_staff_reports_by_token,
   get_selected_staff_task_report,
   get_marketing_staff_report_details_by_summary_id,
   put_replaceManagerAndDeleteEmployee,

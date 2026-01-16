@@ -18,6 +18,7 @@ router.get('/tasks/:assigned_by/:assigned_to', rolesController.get_staff_member_
 router.get('/staff-task-report/:task_id/:task_reporting_date', rolesController.get_grouped_staff_task_report_details);
 router.get('/staff-member-task-report-details/:task_id/:task_reporting_date', rolesController.get_staff_task_report_details);
 router.get('/staff-member-reported-task/:task_id/:task_reporting_date/:access_token/:summary_group_id', rolesController.get_selected_staff_task_report);
+router.get('/all-staff-reports/:token', rolesController.get_all_staff_reports_by_token);
 router.get('/marketing-staff-report-details/:summary_id', rolesController.get_marketing_staff_report_details_by_summary_id);
 
 router.post('/create-role', rolesController.create_role_employee);
