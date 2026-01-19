@@ -70,7 +70,7 @@ const get_userByToken = async (req, res) => {
 
       UNION ALL
 
-      -- STAFF
+      -- MARKETING STAFF
       SELECT 
         'marketing_staff' AS user_type,
         s.id,
@@ -85,6 +85,29 @@ const get_userByToken = async (req, res) => {
         d.department_name,
         s.staff_type_id
       FROM admin.marketing_staff s
+      JOIN admin.auth_credentials ac ON ac.id = s.credentials
+      LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
+	  LEFT JOIN admin.employees e ON e.id = s.manager_id
+	  LEFT JOIN admin.departments d ON d.id = e.department_id
+      WHERE ac.access_token = $1
+
+      UNION ALL
+
+      -- SALES STAFF
+      SELECT 
+        'sales_staff' AS user_type,
+        s.id,
+        s.name,
+        st.staff_type_name AS role_name,
+        NULL AS permission_name,
+        ac.email,
+        ac.username,
+        s.age,
+        s.start_date,
+        ac.phone,
+        d.department_name,
+        s.staff_type_id
+      FROM admin.sales_staff s
       JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
 	  LEFT JOIN admin.employees e ON e.id = s.manager_id

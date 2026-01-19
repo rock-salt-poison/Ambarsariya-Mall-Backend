@@ -104,6 +104,19 @@ where s.manager_id = $1`, [id]);
   }
 };
 
+const get_sales_staff_members_by_manager_id = async (req, res) => {
+  const {id} = req.params;
+  try {
+    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.sales_staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials 
+where s.manager_id = $1`, [id]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching sales staff members:", err);
+    res.status(500).json({ error: "Failed to fetch sales staff members" });
+  }
+};
+
 
 const get_staff = async (req, res) => {
   try {
@@ -161,6 +174,62 @@ const get_staff = async (req, res) => {
   }
 };
 
+const get_sales_staff = async (req, res) => {
+  try {
+    const token = req.params.token;
+
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
+    }
+
+    // 1️⃣ Get logged-in employee
+    const employeeResult = await ambarsariyaPool.query(
+      `
+      SELECT e.id, e.department_id
+      FROM admin.auth_credentials ac
+      LEFT JOIN admin.employees e ON e.credentials = ac.id
+      WHERE ac.access_token = $1
+      `,
+      [token]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    const employeeId = employeeResult.rows[0].id;
+
+    // 2️⃣ Fetch staff under this employee
+    const staffResult = await ambarsariyaPool.query(
+      `
+      SELECT 
+        s.name,
+        st.staff_type_name,
+        ac.email,
+        ac.username,
+        s.age,
+        s.start_date,
+        s.assign_area,
+        s.assign_area_name,
+        ac.phone,
+        d.department_name
+      FROM admin.sales_staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
+      LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
+      LEFT JOIN admin.employees e ON e.id = s.manager_id
+      LEFT JOIN admin.departments d ON d.id = e.department_id
+      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null
+      `,
+      [employeeId]
+    );
+
+    res.json(staffResult.rows);
+  } catch (err) {
+    console.error("Error fetching sales staff:", err);
+    res.status(500).json({ error: "Failed to fetch sales staff" });
+  }
+};
+
 const get_staff_with_type = async (req, res) => {
   try {
     const token = req.params.token;
@@ -214,6 +283,110 @@ const get_staff_with_type = async (req, res) => {
   } catch (err) {
     console.error("Error fetching staff:", err);
     res.status(500).json({ error: "Failed to fetch staff" });
+  }
+};
+
+const get_sales_staff_with_type = async (req, res) => {
+  try {
+    const token = req.params.token;
+    const staff_type = req.params.staff_type;
+
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
+    }
+
+    // 1️⃣ Get logged-in employee
+    const employeeResult = await ambarsariyaPool.query(
+      `
+      SELECT e.id, e.department_id
+      FROM admin.auth_credentials ac
+      LEFT JOIN admin.employees e ON e.credentials = ac.id 
+      WHERE ac.access_token = $1
+      `,
+      [token]
+    );
+
+    if (employeeResult.rows.length === 0) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    const employeeId = employeeResult.rows[0].id;
+
+    // 2️⃣ Fetch staff under this employee
+    const staffResult = await ambarsariyaPool.query(
+      `
+      SELECT 
+        s.id,
+        s.name,
+        st.staff_type_name,
+        ac.email,
+        ac.username,
+        s.age,
+        s.start_date,
+        s.assign_area,
+        s.assign_area_name,
+        ac.phone
+      FROM admin.sales_staff s
+      LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
+      LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
+      LEFT JOIN admin.employees e ON e.id = s.manager_id
+      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null and st.staff_type_name = $2
+      `,
+      [employeeId, staff_type]
+    );
+
+    res.json(staffResult.rows);
+  } catch (err) {
+    console.error("Error fetching sales staff:", err);
+    res.status(500).json({ error: "Failed to fetch sales staff" });
+  }
+};
+
+const get_staff_confirm_summaries = async (req, res) => {
+  try {
+    const { staff_id } = req.params;
+
+    if (!staff_id) {
+      return res.status(400).json({ message: "Staff ID is required" });
+    }
+
+    // Get all task summaries with Confirm Summary and Joined status for this staff member
+    const result = await ambarsariyaPool.query(
+      `
+      SELECT DISTINCT
+        ts.id,
+        ts.task_report_id,
+        ts.summary_type,
+        ts.status,
+        ts.name,
+        ts.phone,
+        ts.email,
+        ts.shop_name,
+        ts.shop_domain,
+        ts.shop_sector,
+        ts.action,
+        ts.shop_no,
+        ts.location,
+        ts.created_at,
+        trd.task_id,
+        st.assigned_task,
+        st.start_date as task_start_date,
+        st.end_date as task_end_date
+      FROM admin.task_summaries ts
+      JOIN admin.task_report_details trd ON trd.id = ts.task_report_id
+      JOIN admin.staff_tasks st ON st.id = trd.task_id
+      WHERE st.assigned_to = $1
+        AND ts.summary_type = 'Confirm Summary'
+        AND ts.status = 'Joined'
+      ORDER BY ts.created_at DESC
+      `,
+      [staff_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching confirm summaries:", err);
+    res.status(500).json({ error: "Failed to fetch confirm summaries" });
   }
 };
 
@@ -803,6 +976,153 @@ const create_staff = async (req, resp) => {
 
     return resp.status(500).json({
       message: "Failed to create staff",
+      error: err.message,
+    });
+  } 
+};
+
+const create_sales_staff = async (req, resp) => {
+  const {
+    credentials_id,
+    manager_id,
+    staff_type_id,
+    name,
+    age,
+    start_date,
+    assign_area,
+    assign_area_name,
+    username,
+    password,
+    phone,
+    email,
+  } = req.body;
+
+  try {
+
+    // -----------------------------
+    // 2️⃣ Hash password
+    // -----------------------------
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // -----------------------------
+    // 3️⃣ Begin Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("BEGIN");
+
+    // -----------------------------
+    // 4️⃣ Update auth_credentials
+    // -----------------------------
+    const credResult = await ambarsariyaPool.query(
+      `
+      UPDATE admin.auth_credentials
+      SET
+        username = $1,
+        password = $2,
+        phone = $3,
+        email_is_registered = true
+      WHERE id = $4
+        AND email_verified = true
+      RETURNING id
+      `,
+      [username, hashedPassword, phone, credentials_id]
+    );
+
+    if (credResult.rowCount === 0) {
+      throw new Error("Credentials not found or email not verified");
+    }
+
+    // -----------------------------
+    // 5️⃣ Create employee
+    // -----------------------------
+    const staffResult = await ambarsariyaPool.query(
+      `
+      INSERT INTO admin.sales_staff
+        (credentials, manager_id,
+        staff_type_id,
+        name,
+        age,
+        start_date,
+        assign_area,
+        assign_area_name)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id
+      `,
+      [
+        credentials_id,
+        manager_id,
+        staff_type_id,
+        name,
+        age,
+        start_date,
+        assign_area, 
+        assign_area_name
+      ]
+    );
+
+    const staffId = staffResult.rows[0]?.id;
+
+    if (!staffId) {
+      throw new Error("staff creation failed");
+    }
+
+    // -----------------------------
+    // 6️⃣ Commit Transaction
+    // -----------------------------
+    await ambarsariyaPool.query("COMMIT");
+
+    // -----------------------------
+    // 7️⃣ Send Email (after commit)
+    // -----------------------------
+    if (email) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: process.env.SMTP_USER,
+        to: email,
+        subject: "🎉 Staff Login Credentials | Ambarsariya Mall",
+        html: `
+          <h2>Hello ${name},</h2>
+          <p>Your staff profile has been created successfully.</p>
+
+          <p><strong>Login Details:</strong></p>
+          <p><b>Username:</b> ${username}</p>
+          <p><b>Password:</b> ${password}</p>
+
+          <p>Please log in to your dashboard using this link:</p>
+          <p><a href="https://ambarsariyamall.com">
+            https://ambarsariyamall.com
+          </a></p>
+
+          <br />
+          <p>Regards,<br/>Ambarsariya Mall Team</p>
+        `,
+      });
+    }
+
+    // -----------------------------
+    // 8️⃣ Success Response
+    // -----------------------------
+    return resp.status(201).json({
+      success: true,
+      message: "Sales staff created successfully",
+      staff_id: staffId,
+    });
+
+  } catch (err) {
+    await ambarsariyaPool.query("ROLLBACK");
+    console.error("Transaction failed:", err.message);
+
+    return resp.status(500).json({
+      message: "Failed to create sales staff",
       error: err.message,
     });
   } 
@@ -1940,10 +2260,14 @@ module.exports = {
   get_role_employees,
   create_role_employee,
   get_staff,
+  get_sales_staff,
+  get_staff_with_type,
+  get_sales_staff_with_type,
+  get_staff_confirm_summaries,
   store_email_otp,
   verifyStaffEmailOtp,
   create_staff,
-  get_staff_with_type,
+  create_sales_staff,
   create_staff_task,
   get_staff_tasks,
   get_staff_tasks_by_reporting_date,
@@ -1958,5 +2282,6 @@ module.exports = {
   get_all_reports_by_staff_and_type,
   put_replaceManagerAndDeleteEmployee,
   check_email_exists,
-  get_staff_members_by_manager_id
+  get_staff_members_by_manager_id,
+  get_sales_staff_members_by_manager_id
 };
