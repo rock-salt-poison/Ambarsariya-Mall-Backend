@@ -90,13 +90,125 @@ const get_role_employees = async (req, res) => {
   }
 };
 
+const get_managers_by_department = async (req, res) => {
+  try {
+    const { department_name } = req.params; // 'Sales Manager' or 'Marketing Manager'
+    const token = req.query.token; // Get token from query params
+    
+    if (!department_name) {
+      return res.status(400).json({ error: "Department name is required" });
+    }
+
+    let isAdmin = false;
+    let adminId = null;
+
+    // Check if user is admin (if token is provided)
+    if (token) {
+      const employeeResult = await ambarsariyaPool.query(
+        `
+        SELECT e.id, e.department_id, d.department_name
+        FROM admin.auth_credentials ac
+        LEFT JOIN admin.employees e ON e.credentials = ac.id
+        LEFT JOIN admin.departments d ON d.id = e.department_id
+        WHERE ac.access_token = $1
+        `,
+        [token]
+      );
+      
+      if (employeeResult.rows.length > 0) {
+        isAdmin = employeeResult.rows[0].department_name === 'Admin';
+        adminId = employeeResult.rows[0].id;
+      }
+    }
+
+    // If admin, fetch employees in the department OR employees assigned under the admin
+    // Otherwise, just fetch employees in the department
+    const result = await ambarsariyaPool.query(
+      `SELECT 
+        e.id,  
+        e.name, 
+        e.role_name,
+        ac.email, 
+        ac.username, 
+        ac.access_token,
+        d.department_name 
+      FROM admin.employees e
+      LEFT JOIN admin.auth_credentials ac ON ac.id = e.credentials
+      LEFT JOIN admin.departments d ON d.id = e.department_id
+      WHERE ${isAdmin && adminId 
+        ? `(d.department_name = $1 OR e.id = $2)` 
+        : `d.department_name = $1`}`,
+      isAdmin && adminId ? [department_name, adminId] : [department_name]
+    );
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching managers:", err);
+    res.status(500).json({ error: "Failed to fetch managers" });
+  }
+};
+
+const get_manager_token_by_id = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "Manager ID is required" });
+    }
+
+    const result = await ambarsariyaPool.query(
+      `SELECT ac.access_token
+      FROM admin.employees e
+      LEFT JOIN admin.auth_credentials ac ON ac.id = e.credentials
+      WHERE e.id = $1`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Manager not found" });
+    }
+    
+    res.json({ access_token: result.rows[0].access_token });
+  } catch (err) {
+    console.error("Error fetching manager token:", err);
+    res.status(500).json({ error: "Failed to fetch manager token" });
+  }
+};
+
 
 const get_staff_members_by_manager_id = async (req, res) => {
   const {id} = req.params;
+  const token = req.query.token; // Get token from query params if provided
+  
   try {
-    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.marketing_staff s
+    let isAdmin = false;
+    
+    // Check if admin (if token is provided)
+    if (token) {
+      const employeeResult = await ambarsariyaPool.query(
+        `
+        SELECT e.id, e.department_id, d.department_name
+        FROM admin.auth_credentials ac
+        LEFT JOIN admin.employees e ON e.credentials = ac.id
+        LEFT JOIN admin.departments d ON d.id = e.department_id
+        WHERE ac.access_token = $1
+        `,
+        [token]
+      );
+      
+      if (employeeResult.rows.length > 0) {
+        isAdmin = employeeResult.rows[0].department_name === 'Admin';
+      }
+    }
+    
+    const result = await ambarsariyaPool.query(
+      `select s.*, ac.username, ac.email, manager.name as manager_name 
+      from admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials 
-where s.manager_id = $1`, [id]);
+      LEFT JOIN admin.employees manager ON manager.id = s.manager_id
+      where ${isAdmin ? '1=1' : 's.manager_id = $1'}`,
+      isAdmin ? [] : [id]
+    );
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching staff members:", err);
@@ -106,10 +218,37 @@ where s.manager_id = $1`, [id]);
 
 const get_sales_staff_members_by_manager_id = async (req, res) => {
   const {id} = req.params;
+  const token = req.query.token; // Get token from query params if provided
+  
   try {
-    const result = await ambarsariyaPool.query(`select s.*, ac.username, ac.email from admin.sales_staff s
+    let isAdmin = false;
+    
+    // Check if admin (if token is provided)
+    if (token) {
+      const employeeResult = await ambarsariyaPool.query(
+        `
+        SELECT e.id, e.department_id, d.department_name
+        FROM admin.auth_credentials ac
+        LEFT JOIN admin.employees e ON e.credentials = ac.id
+        LEFT JOIN admin.departments d ON d.id = e.department_id
+        WHERE ac.access_token = $1
+        `,
+        [token]
+      );
+      
+      if (employeeResult.rows.length > 0) {
+        isAdmin = employeeResult.rows[0].department_name === 'Admin';
+      }
+    }
+    
+    const result = await ambarsariyaPool.query(
+      `select s.*, ac.username, ac.email, manager.name as manager_name 
+      from admin.sales_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials 
-where s.manager_id = $1`, [id]);
+      LEFT JOIN admin.employees manager ON manager.id = s.manager_id
+      where ${isAdmin ? '1=1' : 's.manager_id = $1'}`,
+      isAdmin ? [] : [id]
+    );
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching sales staff members:", err);
@@ -129,9 +268,10 @@ const get_staff = async (req, res) => {
     // 1️⃣ Get logged-in employee
     const employeeResult = await ambarsariyaPool.query(
       `
-      SELECT e.id, e.department_id
+      SELECT e.id, e.department_id, d.department_name
       FROM admin.auth_credentials ac
       LEFT JOIN admin.employees e ON e.credentials = ac.id
+      LEFT JOIN admin.departments d ON d.id = e.department_id
       WHERE ac.access_token = $1
       `,
       [token]
@@ -142,8 +282,10 @@ const get_staff = async (req, res) => {
     }
 
     const employeeId = employeeResult.rows[0].id;
+    const departmentName = employeeResult.rows[0].department_name;
+    const isAdmin = departmentName === 'Admin';
 
-    // 2️⃣ Fetch staff under this employee
+    // 2️⃣ Fetch staff - all if admin, filtered by manager_id if not admin
     const staffResult = await ambarsariyaPool.query(
       `
       SELECT 
@@ -156,18 +298,26 @@ const get_staff = async (req, res) => {
         s.assign_area,
         s.assign_area_name,
         ac.phone,
-        d.department_name
+        d.department_name,
+        manager.name as manager_name
       FROM admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
       LEFT JOIN admin.departments d ON d.id = e.department_id
-      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null
+      LEFT JOIN admin.employees manager ON manager.id = s.manager_id
+      WHERE ${isAdmin ? '1=1' : 's.manager_id = $1'} and ac.username is not null and s.assign_area is not null
       `,
-      [employeeId]
+      isAdmin ? [] : [employeeId]
     );
 
-    res.json(staffResult.rows);
+    // Add is_admin flag to each row
+    const resultWithAdminFlag = staffResult.rows.map(row => ({
+      ...row,
+      is_admin: isAdmin
+    }));
+
+    res.json(resultWithAdminFlag);
   } catch (err) {
     console.error("Error fetching staff:", err);
     res.status(500).json({ error: "Failed to fetch staff" });
@@ -185,9 +335,10 @@ const get_sales_staff = async (req, res) => {
     // 1️⃣ Get logged-in employee
     const employeeResult = await ambarsariyaPool.query(
       `
-      SELECT e.id, e.department_id
+      SELECT e.id, e.department_id, d.department_name
       FROM admin.auth_credentials ac
       LEFT JOIN admin.employees e ON e.credentials = ac.id
+      LEFT JOIN admin.departments d ON d.id = e.department_id
       WHERE ac.access_token = $1
       `,
       [token]
@@ -198,8 +349,10 @@ const get_sales_staff = async (req, res) => {
     }
 
     const employeeId = employeeResult.rows[0].id;
+    const departmentName = employeeResult.rows[0].department_name;
+    const isAdmin = departmentName === 'Admin';
 
-    // 2️⃣ Fetch staff under this employee
+    // 2️⃣ Fetch staff - all if admin, filtered by manager_id if not admin
     const staffResult = await ambarsariyaPool.query(
       `
       SELECT 
@@ -212,18 +365,26 @@ const get_sales_staff = async (req, res) => {
         s.assign_area,
         s.assign_area_name,
         ac.phone,
-        d.department_name
+        d.department_name,
+        manager.name as manager_name
       FROM admin.sales_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
       LEFT JOIN admin.departments d ON d.id = e.department_id
-      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null
+      LEFT JOIN admin.employees manager ON manager.id = s.manager_id
+      WHERE ${isAdmin ? '1=1' : 's.manager_id = $1'} and ac.username is not null and s.assign_area is not null
       `,
-      [employeeId]
+      isAdmin ? [] : [employeeId]
     );
 
-    res.json(staffResult.rows);
+    // Add is_admin flag to each row
+    const resultWithAdminFlag = staffResult.rows.map(row => ({
+      ...row,
+      is_admin: isAdmin
+    }));
+
+    res.json(resultWithAdminFlag);
   } catch (err) {
     console.error("Error fetching sales staff:", err);
     res.status(500).json({ error: "Failed to fetch sales staff" });
@@ -242,9 +403,10 @@ const get_staff_with_type = async (req, res) => {
     // 1️⃣ Get logged-in employee
     const employeeResult = await ambarsariyaPool.query(
       `
-      SELECT e.id, e.department_id
+      SELECT e.id, e.department_id, d.department_name
       FROM admin.auth_credentials ac
       LEFT JOIN admin.employees e ON e.credentials = ac.id 
+      LEFT JOIN admin.departments d ON d.id = e.department_id
       WHERE ac.access_token = $1
       `,
       [token]
@@ -255,8 +417,10 @@ const get_staff_with_type = async (req, res) => {
     }
 
     const employeeId = employeeResult.rows[0].id;
+    const departmentName = employeeResult.rows[0].department_name;
+    const isAdmin = departmentName === 'Admin';
 
-    // 2️⃣ Fetch staff under this employee
+    // 2️⃣ Fetch staff - all if admin, filtered by manager_id if not admin
     const staffResult = await ambarsariyaPool.query(
       `
       SELECT 
@@ -269,17 +433,25 @@ const get_staff_with_type = async (req, res) => {
         s.start_date,
         s.assign_area,
         s.assign_area_name,
-        ac.phone
+        ac.phone,
+        manager.name as manager_name
       FROM admin.marketing_staff s
       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
       LEFT JOIN admin.staff_types st ON st.id = s.staff_type_id
       LEFT JOIN admin.employees e ON e.id = s.manager_id
-      WHERE s.manager_id = $1 and ac.username is not null and s.assign_area is not null and st.staff_type_name = $2
+      LEFT JOIN admin.employees manager ON manager.id = s.manager_id
+      WHERE ${isAdmin ? '1=1' : 's.manager_id = $1'} and ac.username is not null and s.assign_area is not null and st.staff_type_name = $2
       `,
-      [employeeId, staff_type]
+      isAdmin ? [staff_type] : [employeeId, staff_type]
     );
 
-    res.json(staffResult.rows);
+    // Add is_admin flag to each row
+    const resultWithAdminFlag = staffResult.rows.map(row => ({
+      ...row,
+      is_admin: isAdmin
+    }));
+
+    res.json(resultWithAdminFlag);
   } catch (err) {
     console.error("Error fetching staff:", err);
     res.status(500).json({ error: "Failed to fetch staff" });
@@ -344,13 +516,7 @@ const get_sales_staff_with_type = async (req, res) => {
 
 const get_staff_confirm_summaries = async (req, res) => {
   try {
-    const { staff_id } = req.params;
-
-    if (!staff_id) {
-      return res.status(400).json({ message: "Staff ID is required" });
-    }
-
-    // Get all task summaries with Confirm Summary and Joined status for this staff member
+    // Get all task summaries with Confirm Summary and Joined status (no staff_id filter)
     const result = await ambarsariyaPool.query(
       `
       SELECT DISTINCT
@@ -375,12 +541,10 @@ const get_staff_confirm_summaries = async (req, res) => {
       FROM admin.task_summaries ts
       JOIN admin.task_report_details trd ON trd.id = ts.task_report_id
       JOIN admin.staff_tasks st ON st.id = trd.task_id
-      WHERE st.assigned_to = $1
-        AND ts.summary_type = 'Confirm Summary'
+      WHERE ts.summary_type = 'Confirm Summary'
         AND ts.status = 'Joined'
       ORDER BY ts.created_at DESC
-      `,
-      [staff_id]
+      `
     );
 
     res.json(result.rows);
@@ -2258,6 +2422,8 @@ module.exports = {
   get_permissions,
   get_staff_types,
   get_role_employees,
+  get_managers_by_department,
+  get_manager_token_by_id,
   create_role_employee,
   get_staff,
   get_sales_staff,
