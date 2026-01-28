@@ -13,6 +13,7 @@ const saleController = require("../controllers/SaleOrder_Controller");
 const invoiceController = require("../controllers/Invoice_Controller");
 const mouController = require("../controllers/MoU_Controller");
 const coHelperController = require("../controllers/CoHelper_Controller");
+const bannerController = require("../controllers/Banner_Controller");
 const UploadFiles = require("../Middleware/UploadFiles");
 const multer = require("multer");
 
@@ -404,5 +405,13 @@ router.put(
   "/sell/shop-review/:id/:visible",
   eshopController.disable_shop_review
 );
+
+// Banner notification routes
+router.post("/sell/banner-notification", bannerController.createBannerNotification);
+router.get("/sell/banner-notifications/nearby", bannerController.getNearbyBanners);
+router.get("/sell/banner-notifications/shop/:shop_access_token", bannerController.getShopBanners);
+router.put("/sell/banner-notification/:banner_id", bannerController.updateBannerNotification);
+router.delete("/sell/banner-notification/:banner_id", bannerController.deleteBannerNotification);
+router.post("/sell/banner-notification/:banner_id/send-notifications", bannerController.sendBannerNotifications);
 
 module.exports = router;
