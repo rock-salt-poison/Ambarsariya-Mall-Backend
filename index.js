@@ -10,6 +10,9 @@ const multer = require('multer');
 // Import WebSocket functions
 const { initializeWebSocket } = require('./webSocket');
 
+// Import Banner Scheduler
+const bannerScheduler = require('./services/BannerScheduler');
+
 // Import routes
 const ambarsariyaRoutes = require('./routes/AmbarsariyaMall_Routes');
 const adminRoutes = require('./routes/AdminRoutes');
@@ -51,8 +54,17 @@ const server = http.createServer(app);
 initializeWebSocket(server);   // Attach the Socket.IO server to the HTTP server
 
 // Start the server
-server.listen(process.env.PORT || 4000, () => {
+server.listen(process.env.PORT || 4000, async () => {
   console.log(`Server running on port ${process.env.PORT || 4000}`);
+  
+  // Initialize banner scheduler and load existing future banners
+  try {
+    console.log('[Server] Initializing banner notification scheduler...');
+    await bannerScheduler.loadAndRescheduleBanners();
+    console.log('[Server] Banner notification scheduler initialized');
+  } catch (error) {
+    console.error('[Server] Error initializing banner scheduler:', error);
+  }
 });
 
 // Use a custom error handler

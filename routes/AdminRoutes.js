@@ -6,6 +6,8 @@ const eshopController = require('../controllers/Eshop_Controller');
 const bannerController = require('../controllers/Banner_Controller');
 const UploadFiles = require('../Middleware/UploadFiles');
 const multer = require('multer');
+const queueService = require('../services/QueueService');
+const bannerScheduler = require('../services/BannerScheduler');
 
 // get routes for AmbarsariyaMall
 router.get('/employee/:token', loginController.get_userByToken);
@@ -20,6 +22,31 @@ router.get('/advt/:advt_page', adminController.get_advt);
 router.get('/famous-areas', adminController.get_support_page_famous_areas);
 router.get('/sell/famous-areas/:token', eshopController.get_nearby_shops);
 router.get('/banner-notifications', bannerController.getAllBanners);
+router.get('/banner-queue/status', (req, res) => {
+  try {
+    const stats = queueService.getStats();
+    const allJobs = queueService.getAllJobs();
+    const bannerJobs = allJobs.filter(job => job.jobId.startsWith('banner_notification_'));
+    
+    res.json({
+      queue: {
+        totalJobs: stats.totalJobs,
+        isRunning: stats.isRunning,
+        checkIntervalMs: stats.checkIntervalMs,
+      },
+      bannerJobs: bannerJobs.map(job => ({
+        jobId: job.jobId,
+        scheduledTime: job.scheduledTime,
+        timeUntilExecution: job.timeUntilExecution,
+        timeUntilExecutionFormatted: `${Math.round(job.timeUntilExecution / 1000)}s`,
+        jobData: job.jobData,
+      })),
+      totalBannerJobs: bannerJobs.length,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 // post routes for AmbarsariyaMall

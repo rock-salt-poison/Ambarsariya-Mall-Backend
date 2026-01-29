@@ -2,6 +2,8 @@ const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
 const nodemailer = require("nodemailer");
 const axios = require("axios");
+const bannerScheduler = require("../services/BannerScheduler");
+const dayjs = require("dayjs");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -74,12 +76,20 @@ const createBannerNotification = async (req, res) => {
       business_name, // For admin-created banners
       created_by_admin, // Flag to indicate admin creation
       user_id, // User ID of the creator (to exclude from notifications)
+      banner_type = 'regular', // 'regular' or 'famous_area'
+      famous_area_id, // ID of famous area from admin.famous_areas
     } = req.body;
 
-    // Validate required fields
-    if (!area_name || !radius || !start_time || !end_time) {
+    // Validate required fields (area_name not required for famous_area if famous_area_id is provided)
+    // For famous_area banners, area_name will be set from famous area data
+    if (banner_type !== 'famous_area' && !area_name) {
       return res.status(400).json({
-        message: "Missing required fields: area_name, radius, start_time, end_time",
+        message: "Missing required field: area_name",
+      });
+    }
+    if (!start_time || !end_time) {
+      return res.status(400).json({
+        message: "Missing required fields: start_time, end_time",
       });
     }
 
@@ -90,9 +100,54 @@ const createBannerNotification = async (req, res) => {
     let actualShopNo = shop_no || null;
     let actualShopAccessToken = shop_access_token || null;
     let finalBusinessName = business_name;
+    let finalRadius = radius;
+    let finalFamousAreaId = null;
+    let finalAreaName = area_name;
 
-    // If address is provided (can be string or object from FormField)
-    if (address) {
+    // Handle famous area banner
+    if (banner_type === 'famous_area') {
+      if (!famous_area_id) {
+        return res.status(400).json({
+          message: "famous_area_id is required for famous_area banner type",
+        });
+      }
+
+      // Fetch famous area data
+      const famousAreaQuery = await ambarsariyaPool.query(
+        `SELECT * FROM admin.famous_areas WHERE id = $1`,
+        [famous_area_id]
+      );
+
+      if (famousAreaQuery.rows.length === 0) {
+        return res.status(404).json({
+          message: "Famous area not found",
+        });
+      }
+
+      const famousArea = famousAreaQuery.rows[0];
+      finalLatitude = parseFloat(famousArea.latitude);
+      finalLongitude = parseFloat(famousArea.longitude);
+      finalAddress = famousArea.area_address;
+      // Use provided radius if given, otherwise fall back to famous area's length_in_km, or default to 1
+      finalRadius = radius ? parseFloat(radius) : (parseFloat(famousArea.length_in_km) || 1);
+      finalFamousAreaId = famous_area_id;
+      
+      // Use famous area title as area_name if not provided
+      if (!finalAreaName) {
+        finalAreaName = famousArea.area_title;
+      }
+    } else {
+      // Regular banner - validate radius
+      if (!radius) {
+        return res.status(400).json({
+          message: "Missing required field: radius",
+        });
+      }
+      finalRadius = radius;
+    }
+
+    // If address is provided (can be string or object from FormField) - only for regular banners
+    if (banner_type !== 'famous_area' && address) {
       // Handle address as object (from FormField address type)
       if (typeof address === 'object' && address !== null) {
         if (address.latitude && address.longitude) {
@@ -185,37 +240,59 @@ const createBannerNotification = async (req, res) => {
     // Create banner notification
     const result = await ambarsariyaPool.query(
       `INSERT INTO Sell.banner_notifications 
-       (shop_no, shop_access_token, area_name, address, latitude, longitude, radius, start_time, end_time, offer_message, business_name, created_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW()) 
+       (shop_no, shop_access_token, area_name, address, latitude, longitude, radius, start_time, end_time, offer_message, business_name, banner_type, famous_area_id, created_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()) 
        RETURNING *`,
       [
         actualShopNo,
         actualShopAccessToken,
-        area_name,
+        finalAreaName,
         finalAddress,
         finalLatitude,
         finalLongitude,
-        radius,
+        finalRadius,
         start_time,
         end_time,
-        offer_message || `Visit ${finalBusinessName || area_name} to avail special offers!`,
+        offer_message || `Visit ${finalBusinessName || finalAreaName} to avail special offers!`,
         finalBusinessName,
+        banner_type,
+        finalFamousAreaId,
       ]
     );
 
     const banner = result.rows[0];
 
-    // Auto-send email notifications to nearby users (excluding the creator)
-    try {
-      await sendBannerNotificationsToUsers(banner.id, creatorUserId);
-    } catch (emailError) {
-      console.error("Error sending initial email notifications:", emailError);
-      // Don't fail the request if email sending fails
+    // Check if banner is scheduled for the future using dayjs
+    // Parse timestamp_without time zone from database
+    const startTime = dayjs(banner.start_time);
+    const now = dayjs();
+    const isFutureBanner = startTime.isAfter(now);
+
+    if (isFutureBanner) {
+      // Schedule notification for future start time
+      try {
+        bannerScheduler.scheduleStartNotification(banner.id, banner.start_time, creatorUserId);
+        console.log(`Banner ${banner.id} scheduled for future notification at ${startTime.toISOString()}`);
+      } catch (scheduleError) {
+        console.error("Error scheduling future banner notification:", scheduleError);
+        // Don't fail the request if scheduling fails
+      }
+    } else {
+      // Banner starts now or in the past - send notifications immediately
+      try {
+        await sendBannerNotificationsToUsers(banner.id, creatorUserId);
+      } catch (emailError) {
+        console.error("Error sending initial email notifications:", emailError);
+        // Don't fail the request if email sending fails
+      }
     }
 
     res.status(201).json({
-      message: "Banner notification created successfully",
+      message: isFutureBanner 
+        ? "Banner notification created successfully. Notifications will be sent when the banner starts."
+        : "Banner notification created successfully. Nearby users have been notified.",
       banner: banner,
+      scheduled: isFutureBanner,
     });
   } catch (error) {
     console.error("Error creating banner notification:", error);
@@ -248,9 +325,13 @@ const getNearbyBanners = async (req, res) => {
         COALESCE(ef.address, bn.address) as address,
         ef.shop_access_token,
         ef.latitude as shop_latitude,
-        ef.longitude as shop_longitude
+        ef.longitude as shop_longitude,
+        fa.area_title as famous_area_title,
+        fa.area_address as famous_area_address,
+        fa.length_in_km as famous_area_length
        FROM Sell.banner_notifications bn
        LEFT JOIN Sell.eshop_form ef ON ef.shop_no = bn.shop_no
+       LEFT JOIN admin.famous_areas fa ON fa.id = bn.famous_area_id
        WHERE bn.start_time <= NOW() 
          AND bn.end_time >= NOW()
          AND bn.is_active = true
@@ -400,9 +481,38 @@ const updateBannerNotification = async (req, res) => {
       return res.status(404).json({ message: "Banner notification not found" });
     }
 
+    const updatedBanner = result.rows[0];
+
+    // If start_time was updated, reschedule the notification
+    if (start_time !== undefined) {
+      // Cancel existing scheduled notification
+      bannerScheduler.cancelBannerNotifications(banner_id);
+      
+      // Get creator user_id
+      let creatorUserId = null;
+      if (updatedBanner.shop_access_token) {
+        const userQuery = await ambarsariyaPool.query(
+          `SELECT ef.user_id 
+           FROM Sell.eshop_form ef 
+           WHERE ef.shop_access_token = $1`,
+          [updatedBanner.shop_access_token]
+        );
+        if (userQuery.rows.length > 0) {
+          creatorUserId = userQuery.rows[0].user_id;
+        }
+      }
+
+      // Schedule new notification if start_time is in the future using dayjs
+      const newStartTime = dayjs(updatedBanner.start_time);
+      const now = dayjs();
+      if (newStartTime.isAfter(now)) {
+        bannerScheduler.scheduleStartNotification(updatedBanner.id, updatedBanner.start_time, creatorUserId);
+      }
+    }
+
     res.json({
       message: "Banner notification updated successfully",
-      banner: result.rows[0],
+      banner: updatedBanner,
     });
   } catch (error) {
     console.error("Error updating banner notification:", error);
@@ -417,6 +527,9 @@ const updateBannerNotification = async (req, res) => {
 const deleteBannerNotification = async (req, res) => {
   try {
     const { banner_id } = req.params;
+
+    // Cancel any scheduled notifications for this banner
+    bannerScheduler.cancelBannerNotifications(banner_id);
 
     const result = await ambarsariyaPool.query(
       `DELETE FROM Sell.banner_notifications 
@@ -441,7 +554,7 @@ const deleteBannerNotification = async (req, res) => {
   }
 };
 
-// Helper function to send email notifications (used internally)
+// Helper function to send email notifications (used internally and by scheduler)
 const sendBannerNotificationsToUsers = async (bannerId, excludeUserId = null) => {
   const bannerResult = await ambarsariyaPool.query(
     `SELECT bn.*, 
@@ -552,7 +665,7 @@ const sendBannerNotificationsToUsers = async (bannerId, excludeUserId = null) =>
             </div>
             <p><strong>Location:</strong> ${banner.address || banner.area_name}</p>
             <p><strong>Distance:</strong> ${user.distance.toFixed(2)} km away</p>
-            <p style="color: #666; font-size: 14px;">This offer is valid until ${new Date(banner.end_time).toLocaleString()}.</p>
+            <p style="color: #666; font-size: 14px;">This offer is valid until ${dayjs(banner.end_time).format('MMMM DD, YYYY [at] hh:mm A')}.</p>
             <p style="margin-top: 30px; color: #999; font-size: 12px;">Best regards,<br>Ambarsariya Mall Team</p>
           </div>
         `,
@@ -627,4 +740,5 @@ module.exports = {
   updateBannerNotification,
   deleteBannerNotification,
   sendBannerNotifications,
+  sendBannerNotificationsToUsers, // Export for use by scheduler
 };
