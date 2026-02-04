@@ -4,6 +4,9 @@ const ambarsariyaController = require("../controllers/AmbarsariyaMall_Controller
 const eshopController = require("../controllers/Eshop_Controller");
 const otpController = require("../controllers/Otp_Controller");
 const usernameOtpController = require("../controllers/UserNameOtp_controller");
+const phoneOtpController = require("../controllers/PhoneOtp_controller");
+const memberOtpController = require("../controllers/MemberOtp_Controller");
+const memberPhoneOtpController = require("../controllers/MemberPhoneOtp_Controller");
 const productController = require("../controllers/Product_Controller");
 const purchaseController = require("../controllers/PurchaseOrder_Controller");
 const itemController = require("../controllers/Item_Controller");
@@ -377,6 +380,11 @@ router.put("/sell/support", (req, res, next) => {
 
 router.put("/sell/send-otp", otpController.sendOTP);
 router.post("/sell/username-otp", usernameOtpController.sendOTP);
+router.post("/sell/phone-otp", phoneOtpController.sendOTP);
+router.post("/sell/member-email-otp", memberOtpController.sendEmailOtp);
+router.post("/sell/member-verify-email-otp", memberOtpController.verifyEmailOtp);
+router.post("/sell/member-phone-otp", memberPhoneOtpController.sendPhoneOtp);
+router.post("/sell/member-verify-phone-otp", memberPhoneOtpController.verifyPhoneOtp);
 router.post("/sell/shop-review", eshopController.post_shop_review);
 router.post("/sell/shop-comment", eshopController.post_shop_comment);
 router.post("/sell/shop-comment-reply", eshopController.post_shop_comment_reply);
