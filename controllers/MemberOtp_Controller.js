@@ -70,7 +70,6 @@ const sendEmailOtp = async (req, res) => {
          WHERE username = $2`,
         [otp, normalizedUsername]
       );
-      credentialsId = row.id;
     } else {
       // Create new user_credentials record (user_id will be set later during registration)
       // Use SQL to calculate expiry time to ensure timezone consistency

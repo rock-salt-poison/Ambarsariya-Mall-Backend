@@ -172,6 +172,58 @@ const get_checkIfMemberIsMerchant = async (req, res) => {
   }
 };
 
+const get_checkIfPhoneExists = async (req, res) => {
+  const { phoneNumber, user_type } = req.query;
+
+  if (!phoneNumber) {
+    return res.status(400).json({
+      exists: false,
+      message: "Phone number is required",
+    });
+  }
+
+  try {
+    // Normalize phone number to last 10 digits
+    const normalizedPhone = phoneNumber.replace(/\D/g, "").slice(-10);
+
+    // Check if phone number exists in phone_no_1 or phone_no_2 for the given user_type
+    const phoneQuery = `
+      SELECT u.user_id, u.phone_no_1, u.phone_no_2, u.user_type
+      FROM Sell.users u
+      WHERE u.user_type = $1
+        AND (
+          RIGHT(REGEXP_REPLACE(u.phone_no_1, '[^0-9]', '', 'g'), 10) = $2
+          OR RIGHT(REGEXP_REPLACE(u.phone_no_2, '[^0-9]', '', 'g'), 10) = $2
+        )
+      LIMIT 1
+    `;
+
+    const result = await ambarsariyaPool.query(phoneQuery, [
+      user_type || 'member',
+      normalizedPhone,
+    ]);
+
+    if (result.rows.length > 0) {
+      return res.status(200).json({
+        exists: true,
+        message: "This mobile number is already used. Try with different one.",
+      });
+    }
+
+    return res.status(200).json({
+      exists: false,
+      message: "Phone number is available",
+    });
+  } catch (error) {
+    console.error("Error checking phone number existence:", error);
+    return res.status(500).json({
+      exists: false,
+      message: "Internal server error.",
+      error: error.message,
+    });
+  }
+};
+
 const get_checkIfPaidShopExists = async (req, res) => {
   const { username } = req.query;
 
@@ -5189,5 +5241,6 @@ module.exports = {
   post_shop_comment_reply,
   get_shop_comments_with_replies,
   get_shop_details_with_shop_access_token,
-  get_coupons
+  get_coupons,
+  get_checkIfPhoneExists
 };

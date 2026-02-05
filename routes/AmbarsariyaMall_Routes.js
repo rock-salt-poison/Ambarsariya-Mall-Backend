@@ -42,6 +42,10 @@ router.get(
   "/sell/check-paid-shop-exists",
   eshopController.get_checkIfPaidShopExists
 );
+router.get(
+  "/sell/check-phone-exists",
+  eshopController.get_checkIfPhoneExists
+);
 
 router.post("/sell/eshop", eshopController.post_book_eshop);
 // router.put('/sell/buyeshop/:shopAccessToken', eshopController.update_eshop);
