@@ -1365,6 +1365,45 @@ const update_shop_parking_status = async (req, resp) => {
   }
 };
 
+const update_shop_service_types = async (req, resp) => {
+  const { type_of_service, shop_access_token } = req.body;
+
+  try {
+    if (!shop_access_token) {
+      return resp.status(400).json({ message: "Shop access token is required." });
+    }
+
+    if (!Array.isArray(type_of_service)) {
+      return resp.status(400).json({ message: "type_of_service must be an array." });
+    }
+
+    const updateResult = await ambarsariyaPool.query(
+      `UPDATE Sell.eshop_form
+       SET type_of_service = $1
+       WHERE shop_access_token = $2`,
+      [type_of_service, shop_access_token]
+    );
+
+    // Optional: check if row was actually updated
+    if (updateResult.rowCount === 0) {
+      return resp.json({ message: "No matching shop found to update." });
+    }
+
+    return resp.status(200).json({
+      message: "E-shop service types updated successfully.",
+      updated: type_of_service,
+    });
+  } catch (err) {
+    console.error("Error updating service types:", err);
+    return resp
+      .status(500)
+      .json({
+        message: "Server error updating service types.",
+        error: err.message,
+      });
+  }
+};
+
 const get_shopUserData = async (req, res) => {
   try {
     const { shop_access_token } = req.query;
@@ -5220,6 +5259,7 @@ module.exports = {
   post_member_community,
   update_shop_is_open_status,
   update_shop_parking_status,
+  update_shop_service_types,
   put_near_by_shops,
   get_nearby_areas_for_shop,
   get_near_by_area,
