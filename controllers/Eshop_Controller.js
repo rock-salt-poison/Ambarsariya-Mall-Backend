@@ -5209,6 +5209,156 @@ const disable_shop_review = async (req, res) => {
   }
 };
 
+const get_shop_pickup_settings = async (req, res) => {
+  const { shop_no } = req.params;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    // Fetch pickup settings
+    const result = await ambarsariyaPool.query(
+      `SELECT 
+        shop_no,
+        pickup_availability,
+        pickup_location,
+        pickup_start_time,
+        pickup_end_time,
+        pickup_confirmation,
+        created_at,
+        updated_at
+      FROM sell.shop_pickup_settings 
+      WHERE shop_no = $1`,
+      [shop_no]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({ 
+        exists: false,
+        message: "No pickup settings found for this shop.",
+        data: null
+      });
+    }
+
+    const settings = result.rows[0];
+
+    // Transform data for frontend
+    const transformedData = {
+      availability: settings.pickup_availability ? "Yes" : "No",
+      location: settings.pickup_location || "",
+      hours: settings.pickup_start_time && settings.pickup_end_time 
+        ? [settings.pickup_start_time, settings.pickup_end_time] 
+        : null,
+      confirmation: settings.pickup_confirmation ? "Yes" : "No"
+    };
+
+    res.status(200).json({
+      exists: true,
+      message: "Pickup settings retrieved successfully.",
+      data: transformedData
+    });
+  } catch (error) {
+    console.error("Error fetching pickup settings:", error);
+    res.status(500).json({
+      message: "Error fetching pickup settings",
+      error: error.message
+    });
+  }
+};
+
+const post_shop_pickup_settings = async (req, res) => {
+  const { shop_no, availability, location, hours, confirmation } = req.body;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    // Verify shop exists
+    const shopResult = await ambarsariyaPool.query(
+      `SELECT shop_no FROM sell.eshop_form WHERE shop_no = $1`,
+      [shop_no]
+    );
+
+    if (shopResult.rows.length === 0) {
+      return res.status(404).json({ message: "Shop not found." });
+    }
+
+    // Parse the data
+    const pickup_availability = availability === "Yes" ? true : false;
+    const pickup_location = location || null;
+    const pickup_confirmation = confirmation === "Yes" ? true : false;
+
+    // Extract start_time and end_time from hours (time-range)
+    // hours should be an array [startDate, endDate] from DateRangePicker
+    let pickup_start_time = null;
+    let pickup_end_time = null;
+
+    if (hours && Array.isArray(hours) && hours.length === 2 && hours[0] && hours[1]) {
+      try {
+        const startDate = new Date(hours[0]);
+        const endDate = new Date(hours[1]);
+        
+        // Validate dates are valid
+        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+          // Extract time portion (HH:MM:SS)
+          pickup_start_time = startDate.toTimeString().slice(0, 8); // HH:MM:SS
+          pickup_end_time = endDate.toTimeString().slice(0, 8); // HH:MM:SS
+        }
+      } catch (error) {
+        console.error("Error parsing time range:", error);
+        // Leave as null if parsing fails
+      }
+    }
+
+    // Use UPSERT (INSERT ... ON CONFLICT ... UPDATE)
+    const upsertQuery = `
+      INSERT INTO sell.shop_pickup_settings (
+        shop_no,
+        pickup_availability,
+        pickup_location,
+        pickup_start_time,
+        pickup_end_time,
+        pickup_confirmation,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (shop_no)
+      DO UPDATE SET
+        pickup_availability = EXCLUDED.pickup_availability,
+        pickup_location = EXCLUDED.pickup_location,
+        pickup_start_time = EXCLUDED.pickup_start_time,
+        pickup_end_time = EXCLUDED.pickup_end_time,
+        pickup_confirmation = EXCLUDED.pickup_confirmation,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING shop_no
+    `;
+
+    const result = await ambarsariyaPool.query(upsertQuery, [
+      shop_no,
+      pickup_availability,
+      pickup_location,
+      pickup_start_time,
+      pickup_end_time,
+      pickup_confirmation
+    ]);
+
+    res.status(200).json({
+      message: "Pickup settings saved successfully.",
+      shop_no: result.rows[0].shop_no
+    });
+  } catch (error) {
+    console.error("Error saving pickup settings:", error);
+    res.status(500).json({
+      message: "Error saving pickup settings",
+      error: error.message
+    });
+  }
+};
 
 module.exports = {
   get_checkIfMemberExists,
@@ -5282,5 +5432,7 @@ module.exports = {
   get_shop_comments_with_replies,
   get_shop_details_with_shop_access_token,
   get_coupons,
-  get_checkIfPhoneExists
+  get_checkIfPhoneExists,
+  get_shop_pickup_settings,
+  post_shop_pickup_settings
 };

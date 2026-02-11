@@ -27,13 +27,13 @@ const post_purchaseOrder = async (req, res) => {
     const productQuery = `
       INSERT INTO Sell.purchase_order (
         buyer_id, buyer_type, seller_id, buyer_gst_number, seller_gst_number, 
-        products, subtotal, shipping_address, shipping_method, payment_method, 
+        products, subtotal, shipping_address, shipping_method, shipping_details, payment_method, 
         special_offers, discount_applied, taxes, co_helper, discount_amount, 
         pre_post_paid, extra_charges, total_amount, date_of_issue, 
         delivery_terms, additional_instructions, coupon_cost, buyer_name, buyer_contact_no
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 
-        $17, $18, $19, $20, $21, $22, $23, $24
+        $17, $18, $19, $20, $21, $22, $23, $24, $25
       ) 
       RETURNING po_access_token
     `;
@@ -41,7 +41,9 @@ const post_purchaseOrder = async (req, res) => {
     const purchase_order = await ambarsariyaPool.query(productQuery, [
       data.buyer_id, data.buyer_type, data.seller_id, data.buyer_gst_number, 
       data.seller_gst_number, JSON.stringify(data.products), data.subtotal, 
-      data.shipping_address, data.shipping_method, data.payment_method, 
+      data.shipping_address, data.shipping_method, 
+      data.shipping_details ? JSON.stringify(data.shipping_details) : null,
+      data.payment_method, 
       JSON.stringify(data.special_offers), JSON.stringify(data.discount_applied), 
       data.taxes, JSON.stringify(data.co_helper), data.discount_amount, data.pre_post_paid, 
       data.extra_charges, data.total_amount, data.date_of_issue, 
