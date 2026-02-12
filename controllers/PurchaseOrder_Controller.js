@@ -1,5 +1,18 @@
 const { createDbPool } = require("../db_config/db");
 const ambarsariyaPool = createDbPool();
+const nodemailer = require("nodemailer");
+require("dotenv").config();
+
+// SMTP setup
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: process.env.SMTP_PORT,
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 const post_purchaseOrder = async (req, res) => {
   const { data } = req.body;
@@ -104,6 +117,15 @@ const post_purchaseOrder = async (req, res) => {
     }
 
     await ambarsariyaPool.query("COMMIT"); // Commit transaction if all goes well
+    
+    // Send emails to buyer and seller (don't fail if email fails)
+    try {
+      await sendPurchaseOrderEmails(data, po_access_token);
+    } catch (emailError) {
+      console.error("Error sending purchase order emails:", emailError);
+      // Don't fail the request if email fails
+    }
+    
     res.status(201).json({
       message: "Purchase order created successfully",
       po_access_token,
@@ -486,6 +508,363 @@ const get_buyer_details = async (req, res) => {
     // console.error(e);
     res.status(500).json({ e: "Failed to fetch data" });
   }
+};
+
+// Function to send purchase order emails to buyer and seller
+const sendPurchaseOrderEmails = async (data, po_access_token) => {
+  try {
+    // Fetch buyer email
+    let buyerEmail = null;
+    if (data.buyer_type === "member" || data.buyer_type === "merchant") {
+      const buyerQuery = `
+        SELECT uc.username as email, u.full_name
+        FROM sell.member_profiles mp
+        JOIN sell.users u ON u.user_id = mp.user_id
+        JOIN sell.user_credentials uc ON uc.user_id = mp.user_id
+        WHERE mp.member_id = $1
+      `;
+      const buyerResult = await ambarsariyaPool.query(buyerQuery, [data.buyer_id]);
+      if (buyerResult.rows.length > 0) {
+        buyerEmail = buyerResult.rows[0].email;
+      }
+    } else if (data.buyer_type === "visitor") {
+      const buyerQuery = `
+        SELECT username as email, name as full_name
+        FROM sell.support
+        WHERE visitor_id = $1
+      `;
+      const buyerResult = await ambarsariyaPool.query(buyerQuery, [data.buyer_id]);
+      if (buyerResult.rows.length > 0) {
+        buyerEmail = buyerResult.rows[0].email;
+      }
+    }
+
+    // Fetch seller email and shop address
+    const sellerQuery = `
+      SELECT uc.username as email, ef.business_name, u.full_name, ef.address as shop_address
+      FROM sell.eshop_form ef
+      JOIN sell.users u ON u.user_id = ef.user_id
+      JOIN sell.user_credentials uc ON uc.user_id = ef.user_id
+      WHERE ef.shop_no = $1
+    `;
+    const sellerResult = await ambarsariyaPool.query(sellerQuery, [data.seller_id]);
+    const sellerEmail = sellerResult.rows.length > 0 ? sellerResult.rows[0].email : null;
+    const sellerBusinessName = sellerResult.rows.length > 0 ? sellerResult.rows[0].business_name : null;
+    const sellerFullName = sellerResult.rows.length > 0 ? sellerResult.rows[0].full_name : null;
+    const shopAddress = sellerResult.rows.length > 0 ? sellerResult.rows[0].shop_address : null;
+
+    // Fetch product images and details
+    const productIds = data.products.map(p => p.id);
+    const productsQuery = `
+      SELECT product_id, product_name, product_images
+      FROM sell.products
+      WHERE product_id = ANY($1::text[])
+    `;
+    const productsResult = await ambarsariyaPool.query(productsQuery, [productIds]);
+    const productsMap = {};
+    productsResult.rows.forEach(row => {
+      let images = [];
+      if (row.product_images) {
+        // Handle both JSONB arrays and string arrays
+        if (typeof row.product_images === 'string') {
+          try {
+            images = JSON.parse(row.product_images);
+          } catch (e) {
+            images = [row.product_images];
+          }
+        } else if (Array.isArray(row.product_images)) {
+          images = row.product_images;
+        }
+      }
+      productsMap[row.product_id] = {
+        name: row.product_name,
+        images: images
+      };
+    });
+
+    // Fetch service type name
+    let serviceTypeName = null;
+    if (data.shipping_method) {
+      const serviceQuery = `
+        SELECT service
+        FROM type_of_services
+        WHERE id = $1
+      `;
+      const serviceResult = await ambarsariyaPool.query(serviceQuery, [data.shipping_method]);
+      if (serviceResult.rows.length > 0) {
+        serviceTypeName = serviceResult.rows[0].service;
+      }
+    }
+
+    // Fetch pickup settings if service type is Pickup (id = 3)
+    let pickupSettings = null;
+    if (data.shipping_method === 3) { // Pickup service type
+      const pickupQuery = `
+        SELECT 
+          pickup_availability,
+          pickup_location,
+          pickup_start_time,
+          pickup_end_time,
+          pickup_confirmation
+        FROM sell.shop_pickup_settings
+        WHERE shop_no = $1
+      `;
+      const pickupResult = await ambarsariyaPool.query(pickupQuery, [data.seller_id]);
+      if (pickupResult.rows.length > 0) {
+        const row = pickupResult.rows[0];
+
+        pickupSettings = {
+          ...row,
+          pickup_location: row.pickup_location?.formatted_address ||
+          row.pickup_location?.description ||
+          null, // only description
+        };
+      } else {
+        // If no pickup settings found, use shop address as pickup location
+        pickupSettings = {
+          pickup_location: shopAddress,
+          pickup_availability: null,
+          pickup_start_time: null,
+          pickup_end_time: null,
+          pickup_confirmation: null
+        };
+      }
+    }
+
+    // Create email HTML
+    const emailHTML = createPurchaseOrderEmailHTML(data, productsMap, serviceTypeName, po_access_token, sellerBusinessName, pickupSettings);
+
+    // Send email to buyer
+    if (buyerEmail) {
+      const buyerMailOptions = {
+        from: process.env.SMTP_USER,
+        to: buyerEmail,
+        subject: `Purchase Order Confirmation - Order #${po_access_token}`,
+        html: emailHTML
+      };
+      await transporter.sendMail(buyerMailOptions);
+      console.log(`Purchase order email sent to buyer: ${buyerEmail}`);
+    }
+
+    // Send email to seller
+    if (sellerEmail) {
+      const sellerMailOptions = {
+        from: process.env.SMTP_USER,
+        to: sellerEmail,
+        subject: `New Purchase Order Received - Order #${po_access_token}`,
+        html: emailHTML
+      };
+      await transporter.sendMail(sellerMailOptions);
+      console.log(`Purchase order email sent to seller: ${sellerEmail}`);
+    }
+  } catch (error) {
+    console.error("Error in sendPurchaseOrderEmails:", error);
+    throw error;
+  }
+};
+
+// Function to create HTML email template
+const createPurchaseOrderEmailHTML = (data, productsMap, serviceTypeName, po_access_token, sellerBusinessName, pickupSettings) => {
+  const formatDate = (date) => {
+    if (!date) return "N/A";
+    const d = new Date(date);
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount) return "₹0.00";
+    return `₹${parseFloat(amount).toFixed(2)}`;
+  };
+
+  // Convert 24-hour time to 12-hour format (HH:MM or HH:MM:SS to hh:mm AM/PM)
+  const formatTime12Hour = (timeStr) => {
+    if (!timeStr) return "";
+    // Handle TIME format (HH:MM:SS) - extract HH:MM
+    const time = timeStr.substring(0, 5);
+    const [hours, minutes] = time.split(':');
+    const hour24 = parseInt(hours, 10);
+    const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // Build products HTML
+  let productsHTML = "";
+  data.products.forEach(product => {
+    const productInfo = productsMap[product.id] || {};
+    const productImages = productInfo.images || [];
+    const firstImage = Array.isArray(productImages) && productImages.length > 0 
+      ? productImages[0] 
+      : null;
+    
+    productsHTML += `
+      <tr style="border-bottom: 1px solid #ddd;">
+        <td style="padding: 15px;">
+          ${firstImage ? `<img src="${firstImage}" alt="${product.name}" style="max-width: 100px; height: auto; border-radius: 5px;">` : '<div style="width: 100px; height: 100px; background: #f0f0f0; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #999;">No Image</div>'}
+        </td>
+        <td style="padding: 15px;">
+          <strong>${product.name || productInfo.name || "N/A"}</strong><br>
+          ${product.description ? `<small style="color: #666;">${product.description}</small>` : ""}
+          ${product.selectedVariant ? `<br><small style="color: #666;">Variant: ${product.selectedVariant}</small>` : ""}
+        </td>
+        <td style="padding: 15px; text-align: center;">${product.quantity || 0}</td>
+        <td style="padding: 15px; text-align: right;">${formatCurrency(product.unit_price)}</td>
+        <td style="padding: 15px; text-align: right;">${formatCurrency(product.total_price)}</td>
+      </tr>
+    `;
+  });
+
+  // Service details HTML
+  let serviceDetailsHTML = "";
+  const isPickup = serviceTypeName === "Pickup";
+  
+  if (serviceTypeName) {
+    serviceDetailsHTML += `<p><strong>Service Type:</strong> ${serviceTypeName}</p>`;
+    
+    // Add pickup location and hours if service type is Pickup
+    if (isPickup && pickupSettings) {
+      if (pickupSettings.pickup_location) {
+        serviceDetailsHTML += `<p><strong>Pickup Location:</strong> ${pickupSettings.pickup_location}</p>`;
+      }
+      if (pickupSettings.pickup_start_time && pickupSettings.pickup_end_time) {
+        const startTime = formatTime12Hour(pickupSettings.pickup_start_time);
+        const endTime = formatTime12Hour(pickupSettings.pickup_end_time);
+        serviceDetailsHTML += `<p><strong>Pickup Availability Hours:</strong> ${startTime} - ${endTime}</p>`;
+      }
+    }
+    
+    if (data.shipping_details) {
+      const shippingDetails = typeof data.shipping_details === 'string' 
+        ? JSON.parse(data.shipping_details) 
+        : data.shipping_details;
+      
+      if (shippingDetails.instructions) {
+        serviceDetailsHTML += `<p><strong>Instructions:</strong> ${shippingDetails.instructions}</p>`;
+      }
+      if (shippingDetails.estimated_pickup_time) {
+        // Convert estimated pickup time to 12-hour format
+        const estimatedTime = shippingDetails.estimated_pickup_time;
+        let formattedEstimatedTime = estimatedTime;
+        
+        // Check if it's already in 12-hour format (contains AM/PM) or needs conversion
+        if (estimatedTime && !estimatedTime.match(/\s(AM|PM)/i)) {
+          // It's in 24-hour format, convert it
+          formattedEstimatedTime = formatTime12Hour(estimatedTime);
+        }
+        serviceDetailsHTML += `<p><strong>Estimated Pickup Time:</strong> ${formattedEstimatedTime}</p>`;
+      }
+      
+      // Show confirmation from member (buyer)
+      if (shippingDetails.confirmation) {
+        serviceDetailsHTML += `<p><strong>Member Confirmation:</strong> ${shippingDetails.confirmation}</p>`;
+      }
+    }
+    
+    // Show merchant confirmation from pickup settings (if pickup service)
+    if (isPickup && pickupSettings && pickupSettings.pickup_confirmation !== null) {
+      const merchantConfirmation = pickupSettings.pickup_confirmation ? "Yes" : "No";
+      serviceDetailsHTML += `<p><strong>Merchant Confirmation:</strong> ${merchantConfirmation}</p>`;
+    }
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Purchase Order Confirmation</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0;">Purchase Order Confirmation</h1>
+        <p style="color: white; margin: 10px 0 0 0;">Order #${po_access_token}</p>
+      </div>
+      
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        <h2 style="color: #667eea; margin-top: 0;">Order Details</h2>
+        
+        <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Order Information</h3>
+          <p><strong>Order Number:</strong> ${po_access_token}</p>
+          <p><strong>Date:</strong> ${formatDate(data.date_of_issue)}</p>
+          <p><strong>Buyer Name:</strong> ${data.buyer_name || "N/A"}</p>
+          <p><strong>Buyer Contact:</strong> ${data.buyer_contact_no || "N/A"}</p>
+          ${sellerBusinessName ? `<p><strong>Seller:</strong> ${sellerBusinessName}</p>` : ""}
+          <p><strong>Payment Method:</strong> ${data.payment_method || "N/A"}</p>
+          ${!isPickup && data.shipping_address ? `<p><strong>Shipping Address:</strong> ${data.shipping_address}</p>` : ""}
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Service Details</h3>
+          ${serviceDetailsHTML || "<p>No service details available</p>"}
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Products</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f0f0f0;">
+                <th style="padding: 15px; text-align: left;">Image</th>
+                <th style="padding: 15px; text-align: left;">Product</th>
+                <th style="padding: 15px; text-align: center;">Quantity</th>
+                <th style="padding: 15px; text-align: right;">Unit Price</th>
+                <th style="padding: 15px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${productsHTML}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Order Summary</h3>
+          <table style="width: 100%;">
+            <tr>
+              <td style="padding: 10px;"><strong>Subtotal:</strong></td>
+              <td style="padding: 10px; text-align: right;">${formatCurrency(data.subtotal)}</td>
+            </tr>
+            ${data.discount_amount > 0 ? `
+            <tr>
+              <td style="padding: 10px;"><strong>Discount:</strong></td>
+              <td style="padding: 10px; text-align: right; color: #28a745;">-${formatCurrency(data.discount_amount)}</td>
+            </tr>
+            ` : ""}
+            ${data.taxes ? `
+            <tr>
+              <td style="padding: 10px;"><strong>Taxes:</strong></td>
+              <td style="padding: 10px; text-align: right;">${formatCurrency(data.taxes)}</td>
+            </tr>
+            ` : ""}
+            ${data.extra_charges ? `
+            <tr>
+              <td style="padding: 10px;"><strong>Extra Charges:</strong></td>
+              <td style="padding: 10px; text-align: right;">${formatCurrency(data.extra_charges)}</td>
+            </tr>
+            ` : ""}
+            <tr style="border-top: 2px solid #667eea;">
+              <td style="padding: 10px;"><strong>Total Amount:</strong></td>
+              <td style="padding: 10px; text-align: right; font-size: 1.2em; color: #667eea;"><strong>${formatCurrency(data.total_amount)}</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        ${data.additional_instructions ? `
+        <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="margin-top: 0; color: #333;">Additional Instructions</h3>
+          <p>${data.additional_instructions}</p>
+        </div>
+        ` : ""}
+
+        <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f0f0f0; border-radius: 5px;">
+          <p style="margin: 0; color: #666;">Thank you for your order!</p>
+          <p style="margin: 10px 0 0 0; color: #666;">If you have any questions, please contact us.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 };
 
 
