@@ -1029,11 +1029,78 @@ const delete_user = async (req, res) => {
 
     const merchant = merchantResult.rows[0];
 
-    // delete files first
-    await deleteFilesFromTables();
+    // Check if this is a complete merchant deletion (via query parameter)
+    const deleteEntireMerchant = req.query.deleteEntireMerchant === 'true';
 
-    // 🔹 Case 2a: Shop user being deleted
-    if (user_type === "shop") {
+    // 🔹 Case 2a: Complete Merchant Deletion (delete both users and merchant record)
+    if (deleteEntireMerchant) {
+      // Get member_id for file deletion
+      const memberProfileResult = await ambarsariyaPool.query(
+        `SELECT member_id FROM sell.member_profiles WHERE user_id = $1`,
+        [merchant.member_user_id]
+      );
+      const member_id = memberProfileResult.rows[0]?.member_id;
+
+      // Delete files for member user
+      if (member_id) {
+        // member_events
+        const events = await ambarsariyaPool.query(
+          `SELECT uploaded_file_link FROM sell.member_events WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of events.rows) {
+          if (row.uploaded_file_link) await deleteFileFromGCS(row.uploaded_file_link);
+        }
+
+        // member_community
+        const community = await ambarsariyaPool.query(
+          `SELECT uploaded_file FROM sell.member_community WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of community.rows) {
+          if (row.uploaded_file) await deleteFileFromGCS(row.uploaded_file);
+        }
+
+        // member_profiles
+        const profile = await ambarsariyaPool.query(
+          `SELECT profile_img, bg_img FROM sell.member_profiles WHERE member_id = $1`,
+          [member_id]
+        );
+        for (const row of profile.rows) {
+          if (row.profile_img) await deleteFileFromGCS(row.profile_img);
+          if (row.bg_img) await deleteFileFromGCS(row.bg_img);
+        }
+      }
+
+      // Delete files for shop user
+      const shop = await ambarsariyaPool.query(
+        `SELECT usp_values_url FROM sell.eshop_form WHERE user_id = $1`,
+        [merchant.shop_user_id]
+      );
+      for (const row of shop.rows) {
+        if (row.usp_values_url) await deleteFileFromGCS(row.usp_values_url);
+      }
+
+      // Delete both users first (before merchant record to avoid foreign key issues)
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.users WHERE user_id IN ($1, $2)`,
+        [merchant.shop_user_id, merchant.member_user_id]
+      );
+
+      // Delete merchant record
+      await ambarsariyaPool.query(
+        `DELETE FROM sell.merchant WHERE merchant_id = $1`,
+        [merchant.merchant_id]
+      );
+      
+      await ambarsariyaPool.query("COMMIT");
+      return res.json({ message: "Merchant and associated users deleted successfully" });
+    }
+    // 🔹 Case 2b: Shop user being deleted (partial merchant deletion)
+    else if (user_type === "shop") {
+      // delete files first
+      await deleteFilesFromTables();
+      
       await ambarsariyaPool.query(
         `UPDATE sell.users SET is_merchant = false WHERE user_id = $1`,
         [merchant.member_user_id]
@@ -1049,9 +1116,11 @@ const delete_user = async (req, res) => {
         [userId]
       );
     }
-
-    // 🔹 Case 2b: Member user being deleted
+    // 🔹 Case 2c: Member user being deleted (partial merchant deletion)
     else if (user_type === "member") {
+      // delete files first
+      await deleteFilesFromTables();
+      
       await ambarsariyaPool.query(
         `UPDATE sell.users SET is_merchant = false WHERE user_id = $1`,
         [merchant.shop_user_id]
