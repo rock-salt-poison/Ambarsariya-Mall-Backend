@@ -5360,6 +5360,258 @@ const post_shop_pickup_settings = async (req, res) => {
   }
 };
 
+const get_shop_takeaway_settings = async (req, res) => {
+  const { shop_no } = req.params;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    // Fetch takeaway settings
+    const result = await ambarsariyaPool.query(
+      `SELECT 
+        id,
+        shop_id,
+        takeaway_available,
+        takeaway_start_time,
+        takeaway_end_time,
+        takeaway_slot_minutes,
+        takeaway_location,
+        takeaway_instruction,
+        created_at,
+        updated_at
+      FROM sell.shop_takeaway_settings 
+      WHERE shop_id = $1`,
+      [shop_no]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({ 
+        exists: false,
+        message: "No takeaway settings found for this shop.",
+        data: null
+      });
+    }
+
+    const settings = result.rows[0];
+
+    // Transform data for frontend
+    const transformedData = {
+      takeaway_available: settings.takeaway_available,
+      takeaway_start_time: settings.takeaway_start_time || "",
+      takeaway_end_time: settings.takeaway_end_time || "",
+      takeaway_slot_minutes: settings.takeaway_slot_minutes || null,
+      takeaway_location: settings.takeaway_location || "",
+      takeaway_instruction: settings.takeaway_instruction || ""
+    };
+
+    res.status(200).json({
+      exists: true,
+      message: "Takeaway settings retrieved successfully.",
+      data: transformedData
+    });
+  } catch (error) {
+    console.error("Error fetching takeaway settings:", error);
+    res.status(500).json({
+      message: "Error fetching takeaway settings",
+      error: error.message
+    });
+  }
+};
+
+const post_shop_takeaway_settings = async (req, res) => {
+  const { shop_no, takeaway_available, takeaway_start_time, takeaway_end_time, takeaway_slot_minutes, takeaway_location, takeaway_instruction } = req.body;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    // Verify shop exists
+    const shopResult = await ambarsariyaPool.query(
+      `SELECT shop_no FROM sell.eshop_form WHERE shop_no = $1`,
+      [shop_no]
+    );
+
+    if (shopResult.rows.length === 0) {
+      return res.status(404).json({ message: "Shop not found." });
+    }
+
+    // Validation
+    if (takeaway_available === true) {
+      if (!takeaway_start_time || !takeaway_end_time) {
+        return res.status(400).json({ message: "Start time and end time are required when takeaway is available." });
+      }
+      if (!takeaway_slot_minutes) {
+        return res.status(400).json({ message: "Slot minutes is required when takeaway is available." });
+      }
+      if (![5, 10, 20, 30].includes(takeaway_slot_minutes)) {
+        return res.status(400).json({ message: "Slot minutes must be 5, 10, 20, or 30." });
+      }
+
+      // Validate end time is greater than start time
+      const startTime = new Date(`2000-01-01T${takeaway_start_time}`);
+      const endTime = new Date(`2000-01-01T${takeaway_end_time}`);
+      
+      if (endTime <= startTime) {
+        return res.status(400).json({ message: "End time must be greater than start time." });
+      }
+    }
+
+    // Use UPSERT (INSERT ... ON CONFLICT ... UPDATE)
+    const upsertQuery = `
+      INSERT INTO sell.shop_takeaway_settings (
+        shop_id,
+        takeaway_available,
+        takeaway_start_time,
+        takeaway_end_time,
+        takeaway_slot_minutes,
+        takeaway_location,
+        takeaway_instruction,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (shop_id)
+      DO UPDATE SET
+        takeaway_available = EXCLUDED.takeaway_available,
+        takeaway_start_time = EXCLUDED.takeaway_start_time,
+        takeaway_end_time = EXCLUDED.takeaway_end_time,
+        takeaway_slot_minutes = EXCLUDED.takeaway_slot_minutes,
+        takeaway_location = EXCLUDED.takeaway_location,
+        takeaway_instruction = EXCLUDED.takeaway_instruction,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING shop_id
+    `;
+
+    const result = await ambarsariyaPool.query(upsertQuery, [
+      shop_no,
+      takeaway_available || false,
+      takeaway_start_time || null,
+      takeaway_end_time || null,
+      takeaway_slot_minutes || null,
+      takeaway_location || null,
+      takeaway_instruction || null
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Takeaway settings saved successfully",
+      shop_id: result.rows[0].shop_id
+    });
+  } catch (error) {
+    console.error("Error saving takeaway settings:", error);
+    res.status(500).json({
+      message: "Error saving takeaway settings",
+      error: error.message
+    });
+  }
+};
+
+const get_shop_takeaway_slots = async (req, res) => {
+  const { shop_no, selected_date } = req.query;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    if (!selected_date) {
+      return res.status(400).json({ message: "Selected date is required." });
+    }
+
+    // Fetch takeaway settings and parking capacity
+    const settingsResult = await ambarsariyaPool.query(
+      `SELECT 
+        sts.takeaway_available,
+        sts.takeaway_start_time,
+        sts.takeaway_end_time,
+        sts.takeaway_slot_minutes,
+        ef.parking_availability
+      FROM sell.shop_takeaway_settings sts
+      JOIN sell.eshop_form ef ON ef.shop_no = sts.shop_id
+      WHERE sts.shop_id = $1`,
+      [shop_no]
+    );
+
+    if (settingsResult.rows.length === 0) {
+      return res.status(404).json({ 
+        message: "Takeaway settings not found for this shop.",
+        available: false
+      });
+    }
+
+    const settings = settingsResult.rows[0];
+
+    if (!settings.takeaway_available) {
+      return res.status(200).json({ 
+        message: "Takeaway is not available for this shop.",
+        available: false
+      });
+    }
+
+    const parkingCapacity = settings.parking_availability || 0;
+
+    // Generate slots dynamically
+    const startTime = new Date(`2000-01-01T${settings.takeaway_start_time}`);
+    const endTime = new Date(`2000-01-01T${settings.takeaway_end_time}`);
+    const slotMinutes = settings.takeaway_slot_minutes;
+
+    // Calculate total minutes
+    const totalMinutes = (endTime - startTime) / (1000 * 60);
+    const numberOfSlots = Math.floor(totalMinutes / slotMinutes);
+
+    // Generate slots
+    const slots = [];
+    let currentTime = new Date(startTime);
+
+    for (let i = 0; i < numberOfSlots; i++) {
+      const slotStartTime = currentTime.toTimeString().slice(0, 5); // HH:mm format
+      
+      // Check capacity for this slot
+      const capacityCheck = await ambarsariyaPool.query(
+        `SELECT COUNT(*) as booked_count
+         FROM sell.orders
+         WHERE shop_no = $1
+         AND booking_date = $2
+         AND slot_start_time = $3
+         AND takeaway_confirm = true`,
+        [shop_no, selected_date, slotStartTime]
+      );
+
+      const bookedCount = parseInt(capacityCheck.rows[0].booked_count) || 0;
+      const isAvailable = bookedCount < parkingCapacity;
+
+      slots.push({
+        slot_start_time: slotStartTime,
+        available: isAvailable,
+        booked_count: bookedCount,
+        capacity: parkingCapacity
+      });
+
+      // Move to next slot
+      currentTime.setMinutes(currentTime.getMinutes() + slotMinutes);
+    }
+
+    res.status(200).json({
+      available: true,
+      slots: slots,
+      parking_capacity: parkingCapacity,
+      slot_minutes: slotMinutes
+    });
+  } catch (error) {
+    console.error("Error fetching takeaway slots:", error);
+    res.status(500).json({
+      message: "Error fetching takeaway slots",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   get_checkIfMemberExists,
   get_checkIfShopExists,
@@ -5434,5 +5686,8 @@ module.exports = {
   get_coupons,
   get_checkIfPhoneExists,
   get_shop_pickup_settings,
-  post_shop_pickup_settings
+  post_shop_pickup_settings,
+  get_shop_takeaway_settings,
+  post_shop_takeaway_settings,
+  get_shop_takeaway_slots
 };

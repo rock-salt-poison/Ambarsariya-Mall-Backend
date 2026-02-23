@@ -1098,9 +1098,9 @@ const delete_user = async (req, res) => {
     }
     // 🔹 Case 2b: Shop user being deleted (partial merchant deletion)
     else if (user_type === "shop") {
-      // delete files first
-      await deleteFilesFromTables();
-      
+    // delete files first
+    await deleteFilesFromTables();
+
       await ambarsariyaPool.query(
         `UPDATE sell.users SET is_merchant = false WHERE user_id = $1`,
         [merchant.member_user_id]

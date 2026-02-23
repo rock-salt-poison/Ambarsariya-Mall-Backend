@@ -398,6 +398,9 @@ router.post("/sell/shop-comment", eshopController.post_shop_comment);
 router.post("/sell/shop-comment-reply", eshopController.post_shop_comment_reply);
 router.get("/sell/shop-pickup-settings/:shop_no", eshopController.get_shop_pickup_settings);
 router.post("/sell/shop-pickup-settings", eshopController.post_shop_pickup_settings);
+router.get("/sell/shop-takeaway-settings/:shop_no", eshopController.get_shop_takeaway_settings);
+router.post("/sell/shop-takeaway-settings", eshopController.post_shop_takeaway_settings);
+router.get("/sell/shop-takeaway-slots", eshopController.get_shop_takeaway_slots);
 router.post(
   "/sell/identification-of-mou",
   mouController.post_identification_of_mou
