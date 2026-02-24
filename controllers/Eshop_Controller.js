@@ -5511,6 +5511,80 @@ const post_shop_takeaway_settings = async (req, res) => {
   }
 };
 
+const update_shop_takeaway_availability = async (req, res) => {
+  const { shop_no, takeaway_available } = req.body;
+
+  try {
+    // Validate shop_no
+    if (!shop_no) {
+      return res.status(400).json({ message: "Shop number is required." });
+    }
+
+    // Validate takeaway_available is a boolean
+    if (typeof takeaway_available !== 'boolean') {
+      return res.status(400).json({ message: "takeaway_available must be a boolean value." });
+    }
+
+    // Verify shop exists
+    const shopResult = await ambarsariyaPool.query(
+      `SELECT shop_no FROM sell.eshop_form WHERE shop_no = $1`,
+      [shop_no]
+    );
+
+    if (shopResult.rows.length === 0) {
+      return res.status(404).json({ message: "Shop not found." });
+    }
+
+    // Update only takeaway_available field
+    const updateQuery = `
+      UPDATE sell.shop_takeaway_settings
+      SET 
+        takeaway_available = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE shop_id = $2
+      RETURNING shop_id, takeaway_available
+    `;
+
+    const result = await ambarsariyaPool.query(updateQuery, [takeaway_available, shop_no]);
+
+    // If no row was updated, it means the record doesn't exist, so create it
+    if (result.rows.length === 0) {
+      const insertQuery = `
+        INSERT INTO sell.shop_takeaway_settings (
+          shop_id,
+          takeaway_available,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING shop_id, takeaway_available
+      `;
+      
+      const insertResult = await ambarsariyaPool.query(insertQuery, [shop_no, takeaway_available]);
+      
+      return res.status(200).json({
+        success: true,
+        message: "Takeaway availability updated successfully",
+        shop_id: insertResult.rows[0].shop_id,
+        takeaway_available: insertResult.rows[0].takeaway_available
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Takeaway availability updated successfully",
+      shop_id: result.rows[0].shop_id,
+      takeaway_available: result.rows[0].takeaway_available
+    });
+  } catch (error) {
+    console.error("Error updating takeaway availability:", error);
+    res.status(500).json({
+      message: "Error updating takeaway availability",
+      error: error.message
+    });
+  }
+};
+
 const get_shop_takeaway_slots = async (req, res) => {
   const { shop_no, selected_date } = req.query;
 
@@ -5689,5 +5763,6 @@ module.exports = {
   post_shop_pickup_settings,
   get_shop_takeaway_settings,
   post_shop_takeaway_settings,
+  update_shop_takeaway_availability,
   get_shop_takeaway_slots
 };

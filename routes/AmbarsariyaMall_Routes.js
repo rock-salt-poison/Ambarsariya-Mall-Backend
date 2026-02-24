@@ -400,6 +400,7 @@ router.get("/sell/shop-pickup-settings/:shop_no", eshopController.get_shop_picku
 router.post("/sell/shop-pickup-settings", eshopController.post_shop_pickup_settings);
 router.get("/sell/shop-takeaway-settings/:shop_no", eshopController.get_shop_takeaway_settings);
 router.post("/sell/shop-takeaway-settings", eshopController.post_shop_takeaway_settings);
+router.put("/sell/shop-takeaway-availability", eshopController.update_shop_takeaway_availability);
 router.get("/sell/shop-takeaway-slots", eshopController.get_shop_takeaway_slots);
 router.post(
   "/sell/identification-of-mou",
