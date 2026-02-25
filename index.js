@@ -21,6 +21,7 @@ const paymentRoutes = require('./routes/PaymentRoutes');
 const photosRoutes = require('./routes/GooglePhotos_Routes');
 const serveRoutes = require('./routes/ServeRoutes');
 const adminRolesRoutes = require('./routes/AdminRolesRoutes');
+const serveGeneralLedgerRoutes = require('./routes/Serve_GeneralLedger_Routes');
 
 // Middleware to parse incoming JSON requests
 app.use(cors({
@@ -48,7 +49,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/google-photo', photosRoutes);
 app.use('/api/ambarsariya/serve', serveRoutes);
 app.use('/admin/roles', adminRolesRoutes);
-
+app.use('/api/ambarsariya/serve/general-ledger', serveGeneralLedgerRoutes);
 // Create HTTP server and integrate it with Socket.IO
 const server = http.createServer(app);
 initializeWebSocket(server);   // Attach the Socket.IO server to the HTTP server
