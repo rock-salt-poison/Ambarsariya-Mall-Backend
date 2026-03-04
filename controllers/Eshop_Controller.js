@@ -2916,7 +2916,6 @@ const post_discount_coupons = async (req, res) => {
   const inputData = req.body;
   const shopNo = req.params.shop_no;
 
-  // Validate the input data structure
   if (!inputData || typeof inputData !== "object") {
     return res.status(400).json({ error: "Invalid input data" });
   }
@@ -2933,48 +2932,32 @@ const post_discount_coupons = async (req, res) => {
     await ambarsariyaPool.query("BEGIN");
 
     for (const [category, data] of Object.entries(inputData.data)) {
-      if (
-        !data ||
-        !data.id ||
-        !data.discounts ||
-        typeof data.discounts !== "object"
-      ) {
-        continue; // Skip categories with missing or invalid data
-      }
+      if (!data?.discounts) continue;
 
       const { discounts, no_of_coupons } = data;
 
       for (const [couponType, discountData] of Object.entries(discounts)) {
         if (!discountData.checked) continue;
-        console.log("discountData : ", discountData);
 
-        // Ensure the date_range is valid, if not set default values
-        const validityStart = inputData.validity_start || "2024-01-01"; // Default to a specific start date if missing
-        const validityEnd = inputData.validity_end || "2024-12-31"; // Default to a specific end date if missing
-
-        // Check if date_range values are still missing and return an error if so
-        if (!validityStart || !validityEnd) {
-          return res
-            .status(400)
-            .json({ error: "Validity start and end dates are required" });
-        }
+        const validityStart = inputData.validity_start || "2024-01-01";
+        const validityEnd = inputData.validity_end || "2024-12-31";
 
         const couponQuery = `
-            INSERT INTO sell.discount_coupons (coupon_type, discount_category, shop_no, validity_start, validity_end, no_of_coupons)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (coupon_type, shop_no)
-            DO UPDATE SET 
-                validity_start = EXCLUDED.validity_start,
-                validity_end = EXCLUDED.validity_end,
-                no_of_coupons = EXCLUDED.no_of_coupons
-            RETURNING id;
-          `;
+          INSERT INTO sell.discount_coupons 
+          (coupon_type, discount_category, shop_no, validity_start, validity_end, no_of_coupons)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (coupon_type, shop_no)
+          DO UPDATE SET 
+            validity_start = EXCLUDED.validity_start,
+            validity_end = EXCLUDED.validity_end,
+            no_of_coupons = EXCLUDED.no_of_coupons
+          RETURNING id;
+        `;
 
-        // Use shopNo instead of the undefined shop_no variable
         const couponResult = await ambarsariyaPool.query(couponQuery, [
           couponType,
           category,
-          shopNo, // Use shopNo here
+          shopNo,
           validityStart,
           validityEnd,
           no_of_coupons,
@@ -2982,22 +2965,43 @@ const post_discount_coupons = async (req, res) => {
 
         const couponId = couponResult.rows[0].id;
 
-        const conditionInsertQuery = `
-            INSERT INTO sell.discount_conditions (coupon_id, condition_type, condition_value)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (coupon_id, condition_type)
-            DO UPDATE SET 
-                condition_type = EXCLUDED.condition_type,
-                condition_value = EXCLUDED.condition_value;
-          `;
+        /* -------------------------------------------------- */
+        /* 🔥 IMPORTANT: Clear old conditions first */
+        /* -------------------------------------------------- */
+        await ambarsariyaPool.query(
+          `DELETE FROM sell.discount_conditions WHERE coupon_id = $1`,
+          [couponId]
+        );
+
+        /* -------------------------------------------------- */
+        /* 🔥 IMPORTANT: Clear old product mappings */
+        /* -------------------------------------------------- */
+        await ambarsariyaPool.query(
+          `DELETE FROM sell.coupon_products WHERE coupon_id = $1`,
+          [couponId]
+        );
 
         const conditions = [];
+        let productIds = [];
 
         for (const [key, value] of Object.entries(discountData)) {
-          if (key !== "checked" && key !== "date_range" && value) {
+          if (key === "checked" || key === "date_range") continue;
+
+          if (key === "product_ids" && Array.isArray(value)) {
+            productIds = value;
+          } else if (value) {
             conditions.push({ type: key, value });
           }
         }
+
+        /* -------------------------------------------------- */
+        /* Insert conditions */
+        /* -------------------------------------------------- */
+        const conditionInsertQuery = `
+          INSERT INTO sell.discount_conditions 
+          (coupon_id, condition_type, condition_value)
+          VALUES ($1, $2, $3);
+        `;
 
         for (const condition of conditions) {
           await ambarsariyaPool.query(conditionInsertQuery, [
@@ -3006,11 +3010,27 @@ const post_discount_coupons = async (req, res) => {
             condition.value,
           ]);
         }
+
+        /* -------------------------------------------------- */
+        /* Insert product_ids */
+        /* -------------------------------------------------- */
+        const productInsertQuery = `
+          INSERT INTO sell.coupon_products (coupon_id, product_id)
+          VALUES ($1, $2);
+        `;
+
+        for (const productId of productIds) {
+          await ambarsariyaPool.query(productInsertQuery, [
+            couponId,
+            String(productId),
+          ]);
+        }
       }
     }
 
     await ambarsariyaPool.query("COMMIT");
     res.status(200).json({ message: "Discounts upserted successfully" });
+
   } catch (error) {
     await ambarsariyaPool.query("ROLLBACK");
     console.error(error);
@@ -3023,34 +3043,53 @@ const get_discountCoupons = async (req, res) => {
 
   try {
     const query = `
-        SELECT 
-            c.id AS coupon_id,
-            c.coupon_type,
-            c.discount_category,
-            c.shop_no,
-            d.condition_type,
-            d.condition_value
-        FROM 
-            sell.discount_coupons c
-        JOIN 
-            sell.discount_conditions d ON c.id = d.coupon_id
-        WHERE c.shop_no=$1 AND c.no_of_coupons > 0
-        ORDER BY 
-            c.id, d.condition_type;
-        `;
+      SELECT 
+          c.id AS coupon_id,
+          c.coupon_type,
+          c.discount_category,
+          c.shop_no,
+
+          -- Aggregate conditions properly
+          COALESCE(
+              JSON_AGG(
+                  DISTINCT JSONB_BUILD_OBJECT(
+                      'type', d.condition_type,
+                      'value', d.condition_value
+                  )
+              ) FILTER (WHERE d.condition_type IS NOT NULL),
+              '[]'
+          ) AS conditions,
+
+          -- Aggregate product_ids properly
+          COALESCE(
+              ARRAY_AGG(DISTINCT cp.product_id)
+              FILTER (WHERE cp.product_id IS NOT NULL),
+              '{}'
+          ) AS product_ids
+
+      FROM sell.discount_coupons c
+      LEFT JOIN sell.discount_conditions d 
+          ON c.id = d.coupon_id
+      LEFT JOIN sell.coupon_products cp 
+          ON c.id = cp.coupon_id
+      WHERE c.shop_no = $1
+      AND c.no_of_coupons > 0
+      GROUP BY c.id, c.coupon_type, c.discount_category, c.shop_no
+      ORDER BY c.id;
+    `;
+
     const result = await ambarsariyaPool.query(query, [shopNo]);
 
     if (result.rowCount === 0) {
-      // If no rows are found, return an invalid response
-      res.json({ valid: false, message: "Invalid shop" });
-      return;
+      return res.json({ valid: false, message: "Invalid shop" });
     }
 
-    // Grouping Logic
+    // Group by discount_category
     const groupedData = result.rows.reduce((acc, row) => {
       let category = acc.find(
         (c) => c.discount_category === row.discount_category
       );
+
       if (!category) {
         category = {
           discount_category: row.discount_category,
@@ -3060,29 +3099,27 @@ const get_discountCoupons = async (req, res) => {
         acc.push(category);
       }
 
-      let coupon = category.coupons.find((c) => c.coupon_id === row.coupon_id);
-      if (!coupon) {
-        coupon = {
-          coupon_id: row.coupon_id,
-          coupon_type: row.coupon_type,
-          conditions: [],
-        };
-        category.coupons.push(coupon);
-      }
-
-      coupon.conditions.push({
-        type: row.condition_type,
-        value: row.condition_value,
+      category.coupons.push({
+        coupon_id: row.coupon_id,
+        coupon_type: row.coupon_type,
+        conditions: row.conditions || [],
+        product_ids: (row.product_ids || []).map((id) => {
+          const numId = Number(id);
+          return isNaN(numId) ? id : numId;
+        }),
       });
 
       return acc;
     }, []);
 
-    // Send grouped data
-    res.json({ valid: true, data: groupedData });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Failed to fetch discounts" });
+    return res.json({ valid: true, data: groupedData });
+
+  } catch (error) {
+    console.error("Error fetching discount coupons:", error);
+    return res.status(500).json({
+      valid: false,
+      error: "Failed to fetch discounts",
+    });
   }
 };
 
