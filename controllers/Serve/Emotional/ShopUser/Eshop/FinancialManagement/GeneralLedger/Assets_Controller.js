@@ -620,7 +620,7 @@ const get_supplier_shops = async (req, res) => {
         AND ef.shop_no IS NOT NULL
         AND ef.domain = $2
         AND ef.sector = $3
-        AND ef.category && $4::bigint[]
+        AND ef.category && $4::int[]
       ORDER BY ef.business_name
     `;
 
