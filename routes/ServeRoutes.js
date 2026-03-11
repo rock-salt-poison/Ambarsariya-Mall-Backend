@@ -8,5 +8,6 @@ router.get('/customer-records/:start_date/:end_date/:shop_no', crmController.get
 router.get('/completed-orders/:start_date/:end_date/:shop_no/:buyer_id', crmController.get_completed_orders);
 router.get('/pending-orders/:start_date/:end_date/:shop_no/:buyer_id', crmController.get_pending_orders);
 router.get('/purchased-total/:shop_no/:buyer_id', crmController.get_last_purchased_total);
+router.get('/supplier-shops', crmController.get_supplier_shops);
 
 module.exports = router;

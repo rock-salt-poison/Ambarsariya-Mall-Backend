@@ -186,12 +186,19 @@ const get_supplier_shops = async (req, res) => {
           SELECT c.category_name
           FROM categories c
           WHERE c.category_id = ANY(ef.category)
-        ) AS category_name
+        ) AS category_name,
+        ARRAY(
+          SELECT p.product_name
+          FROM sell.products p
+          WHERE p.shop_no = ef.shop_no
+          ORDER BY p.product_name
+          LIMIT 3
+        ) AS product_names
       FROM sell.eshop_form ef
       JOIN sell.users u ON u.user_id = ef.user_id
       LEFT JOIN domains d ON d.domain_id = ef.domain
       LEFT JOIN sectors s ON s.sector_id = ef.sector
-      WHERE ($1::bigint IS NULL OR ef.shop_no != $1)
+      WHERE ($1::text IS NULL OR ef.shop_no::text != $1::text)
         AND ef.shop_no IS NOT NULL
         AND ef.domain = $2
         AND ef.sector = $3
