@@ -126,66 +126,70 @@ const get_last_purchased_total = async (req, res) => {
   }
 };
 
-// Get supplier shops for CRM (shops/merchants that share domain, sector and any of the selected categories)
+// Get supplier shops for CRM (shops/merchants based on selected domains, sectors and categories)
 // Query params:
-//  - shop_no: current shop number (optional; if missing, domain/sector/category_ids must be provided)
-//  - domain_id: domain id (optional)
-//  - sector_id: sector id (optional)
-//  - category_ids: JSON-stringified array of category ids (optional)
+//  - domain_ids: JSON-stringified array of domain ids (required)
+//  - sector_ids: JSON-stringified array of sector ids (required)
+//  - category_ids: JSON-stringified array of category ids (required)
 const get_supplier_shops = async (req, res) => {
-  const { shop_no, domain_id, sector_id, category_ids } = req.query;
+  const { domain_ids, sector_ids, category_ids } = req.query;
 
   try {
-    let currentShopDomain;
-    let currentShopSector;
-    let currentShopCategories;
-
-    if (!domain_id || !sector_id || !category_ids) {
-      // Fallback: derive domain, sector and categories from current shop
-      if (!shop_no) {
-        return res
-          .status(400)
-          .json({ valid: false, message: "shop_no is required when domain / sector / category_ids are not provided." });
-      }
-
-      const currentShopQuery = `
-        SELECT domain, sector, category
-        FROM sell.eshop_form
-        WHERE shop_no = $1
-      `;
-      const currentShopResult = await ambarsariyaPool.query(currentShopQuery, [shop_no]);
-
-      if (currentShopResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ valid: false, message: "Current shop not found." });
-      }
-
-      currentShopDomain = domain_id || currentShopResult.rows[0].domain;
-      currentShopSector = sector_id || currentShopResult.rows[0].sector;
-      currentShopCategories = category_ids
-        ? JSON.parse(category_ids)
-        : currentShopResult.rows[0].category || [];
-    } else {
-      currentShopDomain = parseInt(domain_id, 10);
-      currentShopSector = parseInt(sector_id, 10);
-      currentShopCategories = JSON.parse(category_ids);
+    // Validate required parameters
+    if (!domain_ids || !sector_ids || !category_ids) {
+      return res
+        .status(400)
+        .json({ 
+          valid: false, 
+          message: "domain_ids, sector_ids, and category_ids are required." 
+        });
     }
 
-    // Find shops with same domain, same sector and at least one matching category
+    // Parse JSON arrays
+    let parsedDomainIds, parsedSectorIds, parsedCategoryIds;
+    try {
+      parsedDomainIds = JSON.parse(domain_ids);
+      parsedSectorIds = JSON.parse(sector_ids);
+      parsedCategoryIds = JSON.parse(category_ids);
+    } catch (parseError) {
+      return res
+        .status(400)
+        .json({ 
+          valid: false, 
+          message: "Invalid JSON format for domain_ids, sector_ids, or category_ids." 
+        });
+    }
+
+    // Ensure arrays are not empty
+    if (!Array.isArray(parsedDomainIds) || parsedDomainIds.length === 0 ||
+        !Array.isArray(parsedSectorIds) || parsedSectorIds.length === 0 ||
+        !Array.isArray(parsedCategoryIds) || parsedCategoryIds.length === 0) {
+      return res
+        .status(400)
+        .json({ 
+          valid: false, 
+          message: "domain_ids, sector_ids, and category_ids must be non-empty arrays." 
+        });
+    }
+
+    // Find shops matching any of the selected domains, sectors, and at least one matching category
     const query = `
       SELECT 
         ef.shop_no,
         ef.business_name,
         u.phone_no_1,
         u.full_name,
-        u.user_type,
+        CASE 
+          WHEN ef.is_merchant = true THEN 'merchant'
+          ELSE 'shop'
+        END AS user_type,
         d.domain_name,
         s.sector_name,
         ARRAY(
           SELECT c.category_name
           FROM categories c
           WHERE c.category_id = ANY(ef.category)
+          LIMIT 3
         ) AS category_name,
         ARRAY(
           SELECT p.product_name
@@ -198,19 +202,17 @@ const get_supplier_shops = async (req, res) => {
       JOIN sell.users u ON u.user_id = ef.user_id
       LEFT JOIN domains d ON d.domain_id = ef.domain
       LEFT JOIN sectors s ON s.sector_id = ef.sector
-      WHERE ($1::text IS NULL OR ef.shop_no::text != $1::text)
-        AND ef.shop_no IS NOT NULL
-        AND ef.domain = $2
-        AND ef.sector = $3
-        AND ef.category && $4::int[]
+      WHERE ef.shop_no IS NOT NULL
+        AND ef.domain = ANY($1::int[])
+        AND ef.sector = ANY($2::int[])
+        AND ef.category && $3::int[]
       ORDER BY ef.business_name
     `;
 
     const result = await ambarsariyaPool.query(query, [
-      shop_no || null,
-      currentShopDomain,
-      currentShopSector,
-      currentShopCategories,
+      parsedDomainIds,
+      parsedSectorIds,
+      parsedCategoryIds,
     ]);
 
     if (result.rows.length === 0) {

@@ -583,6 +583,40 @@ const get_staff_tasks = async (req, res) => {
   }
 };
 
+
+const get_sales_staff_tasks = async (req, res) => {
+  const { token } = req.params;
+
+  if (!token) {
+    return res.status(400).json({ message: "Token is required" });
+  }
+
+  try {
+    const query = `
+      SELECT 
+        st.*,
+        e.name AS "assigned_by_name",
+        ts.shop_no
+      FROM admin.sales_staff_tasks st
+      JOIN admin.sales_staff s 
+        ON s.id = st.assigned_to
+      JOIN admin.employees e 
+        ON e.id = st.assigned_by
+      JOIN admin.auth_credentials ac 
+        ON ac.id = s.credentials
+      LEFT JOIN admin.task_summaries ts
+        ON ts.id = st.task_summary_id      -- FK to summary
+      WHERE ac.access_token = $1
+    `;
+
+    const result = await ambarsariyaPool.query(query, [token]);
+    return res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching sales staff tasks:", err);
+    return res.status(500).json({ error: "Failed to fetch sales staff tasks" });
+  }
+};
+
 const get_staff_tasks_by_reporting_date = async (req, res) => {
   const { token, task_reporting_date } = req.params;
 
@@ -1413,6 +1447,135 @@ const create_staff_task = async (req, resp) => {
   } catch (err) {
     console.error(err);
     resp.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+const create_sales_staff_task = async (req, resp) => {
+  const {
+    assigned_by,
+    assigned_to,
+    assigned_task,
+    start_date,
+    end_date,
+    assign_area,
+    approx_shops,
+    approx_offices,
+    approx_hawkers,
+    assign_daily_task,
+    choose_date,
+    daily_location,
+    task_summary_id,
+  } = req.body;
+
+  try {
+    if (!assigned_by || !assigned_to || !assigned_task || !start_date || !end_date) {
+      return resp.status(400).json({ message: "Missing required fields" });
+    }
+
+    // 1️⃣ Fetch sales staff details
+    const staffRes = await ambarsariyaPool.query(
+      `SELECT s.name, ac.email 
+       FROM admin.sales_staff s
+       LEFT JOIN admin.auth_credentials ac ON ac.id = s.credentials
+       WHERE s.id = $1`,
+      [assigned_to]
+    );
+
+    if (staffRes.rowCount === 0) {
+      return resp.status(404).json({ message: "Sales staff not found" });
+    }
+
+    const { name, email } = staffRes.rows[0];
+
+    // 2️⃣ Insert task into sales_staff_tasks
+    const result = await ambarsariyaPool.query(
+      `INSERT INTO admin.sales_staff_tasks (
+        assigned_by,
+        assigned_to,
+        assigned_task,
+        start_date,
+        end_date,
+        assign_area,
+        approx_shops,
+        approx_offices,
+        approx_hawkers,
+        assign_daily_task,
+        choose_date,
+        daily_location,
+        task_summary_id
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+      ) RETURNING id`,
+      [
+        assigned_by,
+        assigned_to,
+        assigned_task,
+        start_date,
+        end_date,
+        JSON.stringify(assign_area),
+        approx_shops,
+        approx_offices,
+        approx_hawkers,
+        assign_daily_task,
+        choose_date,
+        JSON.stringify(daily_location),
+        task_summary_id
+      ]
+    );
+
+    const taskId = result.rows[0].id;
+
+    // 3️⃣ Send mail (optional, mirrors marketing staff flow)
+    if (email) {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT,
+        secure: process.env.SMTP_SECURE === "true",
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_USER,
+        to: email,
+        subject: "New Sales Task Assigned – Ambarsariya Mall",
+        html: `
+          <h2>Hello ${name},</h2>
+
+          <p>A new sales task has been assigned to you.</p>
+
+          <p><strong>Task:</strong> ${assigned_task}</p>
+          <p><strong>Duration:</strong> ${start_date.split('T')?.[0]} to ${end_date?.split('T')?.[0]}</p>
+
+          <p>
+            Please log in to your dashboard using this link:<br/>
+            <a href="https://ambarsariyamall.com" target="_blank">
+              https://ambarsariyamall.com
+            </a>
+          </p>
+
+          <br/>
+          <p>Regards,<br/>
+          <strong>Ambarsariya Mall Team</strong></p>
+        `,
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+    return resp.status(201).json({
+      success: true,
+      message: "Sales staff task assigned successfully",
+      task_id: taskId,
+    });
+  } catch (err) {
+    console.error("Error assigning sales staff task:", err);
+    return resp.status(500).json({
+      message: "Failed to assign sales staff task",
+      error: err.message,
+    });
   }
 };
 
@@ -2435,7 +2598,9 @@ module.exports = {
   create_staff,
   create_sales_staff,
   create_staff_task,
+  create_sales_staff_task,
   get_staff_tasks,
+  get_sales_staff_tasks,
   get_staff_tasks_by_reporting_date,
   get_staff_task_with_token,
   create_or_update_task_report,
